@@ -6,24 +6,14 @@ import { CheckIcon, ExclamationTriangleIcon } from '@heroicons/react/16/solid'
 import Spinner from './Spinner'
 import { usePersistedEmailStatus } from '../hooks/usePersistedEmailStatus'
 
-const EditableEmail = ({
-  htmlContent,
-  subject,
-  recipient,
-  onEmailSent,
-  fingerprint,
-  ...props
-}) => {
+const EditableEmail = ({ htmlContent, subject, recipient, onEmailSent, fingerprint, ...props }) => {
   const editorRef = useRef(null)
-  const [emailStatus, setEmailStatus, isLoading] =
-    usePersistedEmailStatus(fingerprint)
+  const [emailStatus, setEmailStatus, isLoading] = usePersistedEmailStatus(fingerprint)
 
   const disableToolbarButtons = (disable) => {
     const editor = editorRef.current
     if (editor) {
-      const toolbarGroups = editor.container.querySelectorAll(
-        '.tox-toolbar__group',
-      )
+      const toolbarGroups = editor.container.querySelectorAll('.tox-toolbar__group')
       toolbarGroups.forEach((group) => {
         const buttons = group.querySelectorAll('.tox-tbtn')
         buttons.forEach((button) => {
@@ -42,8 +32,7 @@ const EditableEmail = ({
       if (emailStatus === 'sending' || emailStatus === 'success') {
         editorRef.current.getBody().setAttribute('contenteditable', 'false')
         const styleElement = document.createElement('style')
-        styleElement.innerHTML =
-          'body { color: #999 !important; cursor: not-allowed; }'
+        styleElement.innerHTML = 'body { color: #999 !important; cursor: not-allowed; }'
         editorRef.current.getDoc().head.appendChild(styleElement)
         disableToolbarButtons(true)
       } else {
@@ -68,15 +57,17 @@ const EditableEmail = ({
       if (body && doc) {
         const bodyHeight = body.scrollHeight || body.offsetHeight
         const editorContainer = editor.container
-        const targetHeight =
-          bodyHeight + editorContainer.offsetHeight - body.offsetHeight + 37
+        const targetHeight = bodyHeight + editorContainer.offsetHeight - body.offsetHeight + 37
         editorContainer.style.height = `${targetHeight}px`
         editor.getWin().dispatchEvent(new Event('resize'))
       }
     }
   }
 
-  const sendEmail = async (reallySend = false) => {
+  const sendEmail = async () => {
+    const isProduction = process.env.NEXT_PUBLIC_NODE_ENV === 'production'
+    const reallySend = isProduction
+
     if (editorRef.current) {
       if (reallySend) {
         const content = editorRef.current.getContent()
@@ -120,14 +111,7 @@ const EditableEmail = ({
           height: 300,
           menubar: false,
           statusbar: false,
-          plugins: [
-            'lists',
-            'advlist',
-            'autoresize',
-            'autolink',
-            'anchor',
-            'searchreplace',
-          ],
+          plugins: ['lists', 'advlist', 'autoresize', 'autolink', 'anchor', 'searchreplace'],
           branding: false, // Disable "Powered by TinyMCE"
           toolbar: 'bold italic bullist numlist',
           autoresize_bottom_margin: 0,
@@ -142,7 +126,7 @@ const EditableEmail = ({
       <div className="mt-4 flex">
         <button
           onClick={() => {
-            ;(emailStatus === '' || emailStatus === 'error') && sendEmail(false)
+            ;(emailStatus === '' || emailStatus === 'error') && sendEmail()
           }}
           disabled={!(emailStatus === '' || emailStatus === 'error')}
           className={

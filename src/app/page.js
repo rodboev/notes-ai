@@ -17,14 +17,8 @@ export default function Home() {
   const [notesExist, setNotesExist] = useState(true)
   const emailEventSourceRef = useRef(null)
   const pairRefs = useRef([])
-  const [cachedEmails, setCachedEmails, syncCachedEmails] = useLocalStorage(
-    'emailsCache',
-    [],
-  )
-  const [cachedNotes, setCachedNotes, syncCachedNotes] = useLocalStorage(
-    'notesCache',
-    [],
-  )
+  const [cachedEmails, setCachedEmails, syncCachedEmails] = useLocalStorage('emailsCache', [])
+  const [cachedNotes, setCachedNotes, syncCachedNotes] = useLocalStorage('notesCache', [])
 
   const closeEventSource = () => {
     if (emailEventSourceRef.current) {
@@ -85,9 +79,7 @@ export default function Home() {
         const emails = parse(emailsJson)?.emails
 
         if (typeof emails !== 'undefined') {
-          const filteredEmails = emails.filter(
-            (email) => email?.fingerprint?.length === 40,
-          )
+          const filteredEmails = emails.filter((email) => email?.fingerprint?.length === 40)
 
           if (status === 'stop') {
             allEmails = merge(allEmails, filteredEmails)
@@ -182,10 +174,8 @@ export default function Home() {
                             className="mb-4"
                             htmlContent={pair.email.body}
                             subject={pair.email.subject}
-                            recipient="r.boev@libertypestnyc.com"
-                            onEmailSent={() =>
-                              handleSendEmailButtonClick(index)
-                            }
+                            recipient="a.dallas@libertypestnyc.com; r.boev@libertypestnyc.com"
+                            onEmailSent={() => handleSendEmailButtonClick(index)}
                             fingerprint={pair.note.fingerprint}
                           />
                         )}
