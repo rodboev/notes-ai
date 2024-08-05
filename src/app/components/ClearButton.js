@@ -1,6 +1,6 @@
 import { XMarkIcon } from '@heroicons/react/16/solid'
 
-export default function ClearButton({ fetchData, onClear }) {
+export default function ClearButton({ fetchData, onClear, pairRefs }) {
   async function handleClick() {
     try {
       const response = await fetch('/api/notes', { method: 'DELETE' })
@@ -13,6 +13,8 @@ export default function ClearButton({ fetchData, onClear }) {
         await fetchData(true)
         // Call onClear to update the parent component's state
         onClear()
+        // Scroll to the first note
+        pairRefs?.current[0]?.scrollIntoView({ behavior: 'smooth' })
       } else {
         console.error('Failed to clear data')
       }

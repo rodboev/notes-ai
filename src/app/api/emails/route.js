@@ -1,10 +1,9 @@
-// File: c:\Dropbox\Projects\Liberty\notes-ai\src\app\api\emails\route.js
-
 import dotenv from 'dotenv'
 import OpenAI from 'openai'
 import { parse } from 'best-effort-json-parser'
 import prompts from './prompts.js'
 import { firestore } from '../../../firebase.js'
+import { readFromDisk, writeToDisk } from '../../utils/diskStorage'
 import { collection, doc, writeBatch, getDocs } from 'firebase/firestore'
 
 dotenv.config()
@@ -14,20 +13,34 @@ const port = process.env.PORT
 let emailsToSave = []
 
 async function loadEmails() {
-  console.log(`Loading emails from Firestore`)
+  console.log(`Loading emails from disk`)
   try {
+    const diskEmails = await readFromDisk('emails.json')
+    if (diskEmails) {
+      return diskEmails
+    }
+
+    console.log(`Emails not found on disk, loading from Firestore`)
     const emailsCollection = collection(firestore, 'emails')
     const snapshot = await getDocs(emailsCollection)
     const emails = snapshot.docs.map((doc) => doc.data())
+    await writeToDisk('emails.json', emails)
     return emails
   } catch (error) {
-    console.error(`Error loading emails from Firestore:`, error)
+    console.error(`Error loading emails:`, error)
     return [] // Return empty array, client-side will use local storage
   }
 }
 
 async function saveEmails(emails) {
-  console.log(`Saving emails to Firestore`)
+  let logStr = ''
+  try {
+    await writeToDisk('emails.json', emails)
+    logStr += `Savied ${emails.length} emails to disk`
+  } catch (error) {
+    console.error(`Error saving emails to disk:`, error)
+  }
+
   if (!firestore) {
     console.error('Firestore is not initialized')
     return
@@ -49,12 +62,13 @@ async function saveEmails(emails) {
         return
       }
 
-      const docRef = doc(firestore, 'emails', email.fingerprint)
+      const docRef = doc(firestore, 'emails', email?.fingerprint)
       batch.set(docRef, email)
     })
 
     await batch.commit()
-    console.log(`Successfully saved ${emails.length} emails to Firestore`)
+    logStr += ' and Firestore'
+    console.log(logStr)
   } catch (error) {
     console.error(`Error saving emails to Firestore:`, error)
     console.error(`Error details:`, error.stack)
@@ -75,6 +89,7 @@ export async function GET(req) {
   // Delete documents if refresh is forced
   if (refresh === 'all') {
     try {
+      // Delete from Firestore
       const emailsCollection = collection(firestore, 'emails')
       const snapshot = await getDocs(emailsCollection)
       const batch = writeBatch(firestore)
@@ -82,9 +97,13 @@ export async function GET(req) {
         batch.delete(doc.ref)
       })
       await batch.commit()
-      console.log('All emails deleted from Firestore')
+
+      // Delete from disk
+      await writeToDisk('emails.json', [])
+
+      console.log('Emails deleted from Firestore and disk')
     } catch (error) {
-      console.error(`Error deleting emails from Firestore:`, error)
+      console.error(`Error deleting emails:`, error)
     }
   } else {
     storedEmails = await loadEmails()

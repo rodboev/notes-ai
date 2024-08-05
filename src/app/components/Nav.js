@@ -1,5 +1,3 @@
-// File: c:\Dropbox\Projects\Liberty\notes-ai\src\app\components\Nav.js
-
 import React, { useState, useEffect } from 'react'
 import UploadButton from './UploadButton'
 import RefreshButton from './RefreshButton'
@@ -29,7 +27,8 @@ export default function Nav({
 
       if (response.ok) {
         console.log('File uploaded and data saved successfully!')
-        fetchData(true)
+        await fetchData(true)
+        pairRefs?.current[0]?.scrollIntoView({ behavior: 'smooth' })
       } else {
         console.warn('Failed to upload the file.')
       }
@@ -84,11 +83,15 @@ export default function Nav({
             <span className="display-inline mx-1 text-2xl">notes ai</span>
           </div>
           <div className="right align-center flex items-center px-3">
-            <UploadButton handleUpload={handleUpload} />
+            <UploadButton handleUpload={handleUpload} pairRefs={pairRefs} />
             {notesExist && (
               <>
                 <RefreshButton pairRefs={pairRefs} fetchData={fetchData} />
-                <ClearButton fetchData={fetchData} onClear={onClear} />
+                <ClearButton
+                  fetchData={fetchData}
+                  onClear={onClear}
+                  pairRefs={pairRefs}
+                />
               </>
             )}
             <Cog6ToothIcon className="icon align-center flex cursor-pointer text-neutral-500" />

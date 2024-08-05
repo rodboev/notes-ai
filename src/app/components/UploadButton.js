@@ -1,8 +1,10 @@
+// src/app/components/UploadButton.js
+
 import { useRef } from 'react'
 import Papa from 'papaparse'
 import { CloudArrowUpIcon } from '@heroicons/react/24/solid'
 
-export default function UploadButton({ handleUpload }) {
+export default function UploadButton({ handleUpload, pairRefs }) {
   const fileInputRef = useRef(null)
 
   const handleFileUpload = (event) => {
@@ -14,7 +16,10 @@ export default function UploadButton({ handleUpload }) {
       Papa.parse(csv, {
         header: true,
         complete: function (results) {
-          handleUpload(results.data)
+          handleUpload(results.data).then(() => {
+            // Scroll to the first note after upload is complete
+            pairRefs?.current[0]?.scrollIntoView({ behavior: 'smooth' })
+          })
         },
       })
     }

@@ -1,28 +1,47 @@
+// src/app/api/status/route.js
+
+import { readFromDisk, writeToDisk } from '../../utils/diskStorage'
 import { firestore } from '../../../firebase.js'
 import { doc, getDoc, setDoc } from 'firebase/firestore'
 
 const STATUS_DOC_ID = 'emailStatuses'
 
 async function loadStatuses() {
-  console.log(`Loading email statuses from Firestore`)
+  console.log(`Loading email statuses from disk`)
   try {
+    const diskStatuses = await readFromDisk('status.json')
+    if (diskStatuses) {
+      return diskStatuses
+    }
+
+    console.log(`Statuses not found on disk, loading from Firestore`)
     const statusesRef = doc(firestore, 'emails', STATUS_DOC_ID)
     const statusesDoc = await getDoc(statusesRef)
-    return statusesDoc.exists() ? statusesDoc.data() : {}
+    const statuses = statusesDoc.exists() ? statusesDoc.data() : {}
+    await writeToDisk('status.json', statuses)
+    return statuses
   } catch (error) {
-    console.error(`Error loading email statuses from Firestore:`, error)
+    console.error(`Error loading email statuses:`, error)
     return {}
   }
 }
 
-async function saveStatuses(statuses) {
-  console.log(`Saving email statuses to Firestore`)
+async function saveStatuses(newStatuses) {
+  let logStr = ''
   try {
+    await writeToDisk('status.json', newStatuses)
+    logStr += 'Email statuses saved to disk'
+
     const statusesRef = doc(firestore, 'emails', STATUS_DOC_ID)
-    await setDoc(statusesRef, statuses, { merge: true })
-    console.log('Email statuses saved successfully')
+    await setDoc(statusesRef, newStatuses, { merge: true })
+    logStr += ' and Firestore'
+    console.log(logStr)
+
+    return newStatuses
   } catch (error) {
-    console.error(`Error saving email statuses to Firestore:`, error)
+    console.log(logStr)
+    console.error(`Error saving email statuses:`, error)
+    throw error
   }
 }
 
@@ -46,7 +65,10 @@ export async function POST(req) {
     const newStatuses = await req.json()
     await saveStatuses(newStatuses)
     return new Response(
-      JSON.stringify({ message: 'Statuses updated successfully' }),
+      JSON.stringify({
+        message: 'Statuses updated successfully',
+        statuses: newStatuses,
+      }),
       {
         headers: { 'Content-Type': 'application/json' },
       },

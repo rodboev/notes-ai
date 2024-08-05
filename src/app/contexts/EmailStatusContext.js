@@ -16,14 +16,16 @@ export function EmailStatusProvider({ children }) {
     const fetchAllStatuses = async () => {
       try {
         syncLocalStatuses() // Sync with local storage first
-        const response = await fetch('/api/status')
-        if (response.ok) {
-          const statuses = await response.json()
-          setAllStatuses(statuses)
+        if (Object.keys(allStatuses).length === 0) {
+          // Only fetch from API if there are no statuses in local storage
+          const response = await fetch('/api/status')
+          if (response.ok) {
+            const statuses = await response.json()
+            setAllStatuses(statuses)
+          }
         }
       } catch (error) {
         console.error('Error fetching email statuses:', error)
-        // If API fails, we're already using local storage data
       } finally {
         setIsLoading(false)
       }
@@ -42,7 +44,6 @@ export function EmailStatusProvider({ children }) {
       })
     } catch (error) {
       console.error('Error updating email status:', error)
-      // Even if API fails, local storage is updated
     }
   }
 

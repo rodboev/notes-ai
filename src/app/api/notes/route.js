@@ -1,6 +1,11 @@
 import { NextResponse } from 'next/server'
-import { firestore } from '../../../firebase' // Adjust the path to your firebase.js
 import hash from 'object-hash'
+import {
+  readFromDisk,
+  writeToDisk,
+  deleteFromDisk,
+} from '../../utils/diskStorage'
+import { firestore } from '../../../firebase'
 import {
   collection,
   getDocs,
@@ -12,7 +17,6 @@ import {
   orderBy,
 } from 'firebase/firestore'
 
-// Helper function to delete existing collections
 async function deletePreviousData() {
   try {
     const deleteCollection = async (collectionName) => {
@@ -20,14 +24,14 @@ async function deletePreviousData() {
       const querySnapshot = await getDocs(collectionRef)
 
       const batch = writeBatch(firestore)
-      querySnapshot.forEach((doc) => batch.delete(doc.ref))
+      querySnapshot.forEach((doc) => {
+        batch.delete(doc.ref)
+      })
       await batch.commit()
-      console.log(
-        `All documents from ${collectionName} collection successfully deleted`,
-      )
+      console.log(`Deleted ${collectionName} from Firestore`)
     }
 
-    // Delete documents from both 'notes' and 'emails' collections
+    // Delete notes and emails
     await deleteCollection('notes')
     await deleteCollection('emails')
   } catch (error) {
@@ -35,35 +39,45 @@ async function deletePreviousData() {
   }
 }
 
-// GET Handler
 export async function GET() {
   try {
-    // Fetch documents with code '911 EMER' in the 'notes' collection
-    const notesCollection = collection(firestore, 'notes')
-    const q = query(
-      notesCollection,
-      where('code', '==', '911 EMER'),
-      orderBy('date'),
-      orderBy('time'),
-    )
-    const querySnapshot = await getDocs(q)
-    const notes = querySnapshot.docs.map((doc) => doc.data())
+    let notes = await readFromDisk('notes.json')
+    if (!notes) {
+      // If not on disk, fetch from Firestore
+      const notesCollection = collection(firestore, 'notes')
+      const querySnapshot = await getDocs(notesCollection)
+      notes = querySnapshot.docs.map((doc) => doc.data())
 
-    return NextResponse.json(notes)
+      // Write to disk for future use
+      await writeToDisk('notes.json', notes)
+    }
+
+    // Filter and sort notes
+    const filteredNotes = notes
+      .filter((note) => note.code === '911 EMER')
+      .sort((a, b) => {
+        if (a.date !== b.date) return a.date.localeCompare(b.date)
+        return a.time.localeCompare(b.time)
+      })
+
+    return NextResponse.json(filteredNotes)
   } catch (error) {
-    console.error(`Error fetching notes from Firestore: ${error.message}`)
-    // Return empty array, client-side will use local storage
+    console.error(`Error fetching notes:`, error)
     return NextResponse.json([])
   }
 }
-
-// DELETE Handler
 export async function DELETE() {
   try {
+    // Delete files from disk
+    await deleteFromDisk('notes.json')
+    await deleteFromDisk('emails.json')
+
+    // Delete data from Firestore
     await deletePreviousData()
+
     return new NextResponse(null, { status: 204 }) // 204 No Content
   } catch (error) {
-    console.warn(`Error deleting documents from Firestore: ${error.message}`)
+    console.warn(`Error deleting data:`, error)
     return new NextResponse(null, {
       status: 500,
       statusText: 'Internal Server Error',
@@ -71,7 +85,6 @@ export async function DELETE() {
   }
 }
 
-// PUT Handler
 export async function PUT(req) {
   let notes
   try {
@@ -130,9 +143,14 @@ export async function PUT(req) {
 
   try {
     // Delete existing notes and emails before uploading new ones
-    await deletePreviousData()
+    await writeToDisk('notes.json', [])
+    await writeToDisk('emails.json', [])
+    await deletePreviousData() // Keep Firestore deletion
 
-    // Batch write notes to Firestore
+    // Write all notes to disk
+    await writeToDisk('notes.json', notes)
+
+    // Batch write all notes to Firestore
     const batch = writeBatch(firestore)
     notes.forEach((note) => {
       const docRef = doc(firestore, 'notes', note.fingerprint)
@@ -140,15 +158,15 @@ export async function PUT(req) {
     })
     await batch.commit()
 
-    console.log('Notes successfully updated in Firestore')
+    console.log('Notes successfully updated in disk and Firestore')
     return new Response(JSON.stringify(notes), {
       headers: {
         'Content-Type': 'application/json',
       },
     })
   } catch (error) {
-    console.warn(`Error writing to Firestore: ${error.message}`)
-    return new Response(`Error writing to Firestore: ${error.message}`, {
+    console.warn(`Error writing data:`, error)
+    return new Response(`Error writing data: ${error.message}`, {
       status: 500,
     })
   }
