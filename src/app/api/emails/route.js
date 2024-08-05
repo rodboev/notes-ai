@@ -12,8 +12,6 @@ dotenv.config()
 const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY })
 const port = process.env.PORT
 
-let emailsToSave = []
-
 async function loadEmails() {
   // console.log(`Loading emails from disk`)
   try {
@@ -125,7 +123,7 @@ export async function GET(req) {
       }
 
       if (storedEmailExist) {
-        sendData(JSON.stringify({ emails: storedEmails }))
+        sendData(JSON.stringify({ emails: storedEmails }), 'stop')
       }
 
       if (refresh === 'all' || !storedEmailExist) {
@@ -164,37 +162,40 @@ export async function GET(req) {
             })
           } catch (error) {
             console.warn(`API error:`, String(error))
+            sendData(JSON.stringify([]), 'error')
+            return []
           }
 
           let emailsJson = ''
+          let chunkEmails = []
 
           for await (const data of stream) {
             const chunk = data.choices[0].delta.content
             const status = data.choices[0].finish_reason
             if (!status) {
               emailsJson += chunk
-              sendData(chunk)
+              sendData(chunk, 'stream')
             } else if (status === 'stop') {
               const emails = parse(emailsJson.trim()).emails || []
-              for (const email of emails) {
-                emailsToSave = [...emailsToSave, email]
-              }
-              sendData('', status)
-            } else {
-              sendData(JSON.stringify([]), 'error')
+              chunkEmails = [...chunkEmails, ...emails]
+              sendData(JSON.stringify(emails), 'stop')
             }
           }
-          await saveEmails(emailsToSave)
+
+          return chunkEmails
         }
 
+        let allEmails = []
         for (const chunk of noteChunks) {
-          await processChunk(chunk)
+          const chunkEmails = await processChunk(chunk)
+          allEmails = [...allEmails, ...chunkEmails]
         }
+        await saveEmails(allEmails)
+
+        sendData('', 'stop') // Signal that all emails are processed
       }
 
-      req.signal.addEventListener('abort', () => {
-        controller.close()
-      })
+      controller.close()
     },
   })
 
