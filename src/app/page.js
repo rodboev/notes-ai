@@ -9,6 +9,7 @@ import { ExclamationTriangleIcon } from '@heroicons/react/24/solid'
 import { useLocalStorage } from './utils/useLocalStorage'
 import { merge, leftJoin } from './utils/mergingFns'
 import { formatElapsedTime } from './utils/formatElapsedTime'
+import Spinner from './components/Spinner'
 
 const CACHE_DURATION = ((hrs = 1) => hrs)() * 60 * 60 * 1000
 
@@ -233,9 +234,8 @@ export default function Home() {
                         )}
                       </>
                     ) : (
-                      <div className="inline-flex min-w-96 max-w-2xl flex-col items-center self-center rounded-lg border-2 border-dashed px-10 py-14 text-neutral-500">
-                        <ExclamationTriangleIcon className="m-4 w-10" />
-                        <div>Email not generated.</div>
+                      <div className="inline-flex min-w-96 max-w-2xl flex-col items-center self-center px-10 py-14 text-neutral-500">
+                        <Spinner className="scale-150 text-neutral-500" />
                       </div>
                     )}
                   </div>
