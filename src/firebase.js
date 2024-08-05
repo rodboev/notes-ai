@@ -1,12 +1,7 @@
 // src/firebase.js
 
 import { initializeApp } from 'firebase/app'
-import { initializeFirestore } from 'firebase/firestore'
-import {
-  persistentLocalCache,
-  persistentMultipleTabManager,
-} from 'firebase/firestore'
-
+import { getFirestore } from 'firebase/firestore'
 import dotenv from 'dotenv'
 
 dotenv.config()
@@ -18,16 +13,10 @@ const firebaseConfig = {
   storageBucket: process.env.FIREBASE_STORAGE_BUCKET,
   messagingSenderId: process.env.FIREBASE_MESSAGING_SENDER_ID,
   appId: process.env.FIREBASE_APP_ID,
-  // databaseURL: process.env.FIREBASE_DATABASE_URL,
+  databaseURL: process.env.FIREBASE_DATABASE_URL,
 }
 
 const app = initializeApp(firebaseConfig)
-
-const firestore = initializeFirestore(app, {
-  localCache: persistentLocalCache({
-    tabManager: persistentMultipleTabManager(),
-    cacheSize: 'CACHE_SIZE_UNLIMITED',
-  }),
-})
+const firestore = getFirestore(app)
 
 export { firestore }
