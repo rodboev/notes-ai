@@ -1,3 +1,5 @@
+// src/app/contexts/EmailStatusContext.js
+
 'use client'
 
 import React, { createContext, useState, useContext, useEffect } from 'react'
@@ -15,17 +17,19 @@ export function EmailStatusProvider({ children }) {
   useEffect(() => {
     const fetchAllStatuses = async () => {
       try {
-        syncLocalStatuses() // Sync with local storage first
-        if (Object.keys(allStatuses).length === 0) {
-          // Only fetch from API if there are no statuses in local storage
-          const response = await fetch('/api/status')
-          if (response.ok) {
-            const statuses = await response.json()
-            setAllStatuses(statuses)
-          }
+        // Try to fetch from /api/status (which should read from disk first)
+        const response = await fetch('/api/status')
+        if (response.ok) {
+          const statuses = await response.json()
+          setAllStatuses(statuses)
+        } else {
+          // If API fails, use local storage
+          syncLocalStatuses()
         }
       } catch (error) {
         console.error('Error fetching email statuses:', error)
+        // Use local storage as fallback
+        syncLocalStatuses()
       } finally {
         setIsLoading(false)
       }

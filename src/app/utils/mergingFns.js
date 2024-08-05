@@ -1,3 +1,5 @@
+// src/app/utils/mergingFns.js
+
 export const merge = (arrayList1, arrayList2) => [
   ...[]
     .concat(arrayList1, arrayList2)

@@ -1,3 +1,5 @@
+// src/app/api/notes/route.js
+
 import { NextResponse } from 'next/server'
 import hash from 'object-hash'
 import {

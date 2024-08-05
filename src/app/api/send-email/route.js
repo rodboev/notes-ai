@@ -1,3 +1,5 @@
+// src/app/api/send-email/route.js
+
 import nodemailer from 'nodemailer'
 import { google } from 'googleapis'
 import dotenv from 'dotenv'

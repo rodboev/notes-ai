@@ -1,3 +1,5 @@
+// src/app/api/emails/route.js
+
 import dotenv from 'dotenv'
 import OpenAI from 'openai'
 import { parse } from 'best-effort-json-parser'

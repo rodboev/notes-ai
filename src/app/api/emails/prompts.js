@@ -1,3 +1,5 @@
+// src/app/api/emails/prompts.js
+
 const email = `Dear Company Name,
 
 Thank you for choosing Liberty Pest Control for your pest management needs. On Friday, July 12th, our technician, Branton D., conducted a thorough inspection and maintenance throughout your basement areas. The following key points were addressed/observed:

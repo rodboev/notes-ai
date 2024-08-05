@@ -1,3 +1,5 @@
+// src/app/page.js
+
 'use client'
 
 import { Fragment, useEffect, useState, useRef } from 'react'
@@ -8,10 +10,7 @@ import { parse } from 'best-effort-json-parser'
 import { ExclamationTriangleIcon } from '@heroicons/react/24/solid'
 import { useLocalStorage } from './utils/useLocalStorage'
 import { merge, leftJoin } from './utils/mergingFns'
-import { formatElapsedTime } from './utils/formatElapsedTime'
 import Spinner from './components/Spinner'
-
-const CACHE_DURATION = ((hrs = 1) => hrs)() * 60 * 60 * 1000
 
 export default function Home() {
   const [pairs, setPairs] = useState([])
@@ -26,10 +25,6 @@ export default function Home() {
     'notesCache',
     [],
   )
-  const [cacheTimestamp, setCacheTimestamp] = useLocalStorage(
-    'cacheTimestamp',
-    0,
-  )
 
   const closeEventSource = () => {
     if (emailEventSourceRef.current) {
@@ -38,54 +33,26 @@ export default function Home() {
     }
   }
 
-  const isCacheValid = () => {
-    const now = Date.now()
-    const elapsed = now - cacheTimestamp
-    const isValid = elapsed < CACHE_DURATION
-
-    console.log(
-      `Cached notes: ${cachedNotes.length}, emails: ${cachedEmails.length}. Elapsed: ${formatElapsedTime(elapsed)}, isValid: ${isValid}`,
-    )
-    return isValid
-  }
-
   const fetchData = async (forceRefresh = false) => {
     let logStr = `Fetching data... forceRefresh: ${forceRefresh}`
-
-    // Sync with local storage first
-    syncCachedNotes()
-    syncCachedEmails()
-
-    // If cache is valid and not force refreshing, use cached data
-    if (
-      !forceRefresh &&
-      isCacheValid() &&
-      cachedNotes.length &&
-      cachedEmails.length
-    ) {
-      logStr += `, using cached data`
-      const joined = leftJoin({ notes: cachedNotes, emails: cachedEmails })
-      setPairs(joined)
-      return
-    }
-    logStr += `, proceeding without cache`
     console.log(logStr)
 
     // Fetch notes
     let notes = []
-    if (forceRefresh || !isCacheValid() || !cachedNotes.length) {
-      try {
-        notes = await fetch('/api/notes').then((res) => res.json())
-        setCachedNotes(notes)
-        setCacheTimestamp(Date.now())
-        console.log('Fetched new notes and saved to cache')
-      } catch (error) {
-        console.warn('Failed to fetch notes:', String(error).split('\n')[0])
-        notes = cachedNotes // Use cached notes if API fails
+    try {
+      // Try to fetch from /api/notes (which reads from disk first)
+      notes = await fetch('/api/notes').then((res) => res.json())
+      if (notes.length === 0) {
+        // If no notes from disk, use cached notes (which would be from Firestore or local storage)
+        notes = cachedNotes
       }
-    } else {
-      notes = cachedNotes
+    } catch (error) {
+      console.warn('Failed to fetch notes:', String(error).split('\n')[0])
+      notes = cachedNotes // Use cached notes if API fails
     }
+
+    // Update cached notes
+    setCachedNotes(notes)
 
     // Return if no notes
     if (notes.length === 0) {
@@ -126,8 +93,6 @@ export default function Home() {
             allEmails = merge(allEmails, filteredEmails)
             emailsJson = ''
             setCachedEmails(allEmails)
-            setCacheTimestamp(Date.now())
-            console.log('Fetched new emails and saved to cache')
           }
           allEmails = merge(allEmails, filteredEmails)
           setCachedEmails(allEmails)
@@ -167,7 +132,6 @@ export default function Home() {
     setNotesExist(false)
     setCachedNotes([])
     setCachedEmails([])
-    setCacheTimestamp(0)
   }
 
   useEffect(() => {
@@ -213,7 +177,7 @@ export default function Home() {
                             {pair.email.subject}
                           </h2>
                         )}
-                        {pair.email.body ? (
+                        {pair.email.body && (
                           <EditableEmail
                             className="mb-4"
                             htmlContent={pair.email.body}
@@ -224,17 +188,16 @@ export default function Home() {
                             }
                             fingerprint={pair.note.fingerprint}
                           />
-                        ) : (
+                        )}
+                        {pair.email.error && (
                           <div className="inline-flex min-w-96 max-w-2xl flex-col items-center self-center rounded-lg border-2 border-dashed px-10 py-14 text-neutral-500">
                             <ExclamationTriangleIcon className="m-4 w-10" />
-                            <div>
-                              {pair.email.error || 'Email not generated.'}
-                            </div>
+                            <div>{pair.email?.error}</div>
                           </div>
                         )}
                       </>
                     ) : (
-                      <div className="inline-flex min-w-96 max-w-2xl flex-col items-center self-center px-10 py-14 text-neutral-500">
+                      <div className="inline-flex flex-col items-center text-neutral-500">
                         <Spinner className="scale-150 text-neutral-500" />
                       </div>
                     )}

@@ -1,3 +1,5 @@
+// src/app/utils/formatElapsedTime.js
+
 export function formatElapsedTime(ms) {
   const totalSeconds = Math.floor(ms / 1000)
   const minutes = Math.floor(totalSeconds / 60)

@@ -1,3 +1,5 @@
+// src/app/Components/Note.js
+
 export default function Note({
   code,
   company,

@@ -1,3 +1,5 @@
+// src/app/Components/Spinner.js
+
 export default function Spinner(props) {
   return (
     <div className={[`loading-spinner`, props.className].join(' ')}>

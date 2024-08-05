@@ -1,3 +1,5 @@
+// src/app/hooks/usePersistedEmailStatus.js
+
 import { useEffect } from 'react'
 import { useEmailStatus } from '../contexts/EmailStatusContext'
 

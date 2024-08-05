@@ -1,3 +1,5 @@
+// src/app/Components/EditableEmail.js
+
 import { Editor } from '@tinymce/tinymce-react'
 import { useEffect, useRef, useState } from 'react'
 import { CheckIcon, ExclamationTriangleIcon } from '@heroicons/react/16/solid'
