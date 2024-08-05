@@ -34,9 +34,19 @@ async function loadEmails() {
 
 async function saveEmails(emails) {
   let logStr = ''
+
+  // This filtering may not be needed; if the object returns, it'll have a fingerprint
+  const validEmails = emails.filter(
+    (email) =>
+      email &&
+      typeof email === 'object' &&
+      email.fingerprint &&
+      typeof email.fingerprint === 'string',
+  )
+
   try {
-    await writeToDisk('emails.json', emails)
-    logStr += `Savied ${emails.length} emails to disk`
+    await writeToDisk('emails.json', validEmails)
+    logStr += `Saved ${validEmails.length} valid emails to disk`
   } catch (error) {
     console.error(`Error saving emails to disk:`, error)
   }
@@ -48,35 +58,21 @@ async function saveEmails(emails) {
 
   const batch = writeBatch(firestore)
   try {
-    emails.forEach((email, index) => {
-      if (!email || typeof email !== 'object') {
-        console.error(`Invalid email object at index ${index}:`, email)
-        return
-      }
-
-      if (!email.fingerprint || typeof email?.fingerprint !== 'string') {
-        console.error(
-          `Invalid or missing fingerprint for email at index ${index}:`,
-          email,
-        )
-        return
-      }
-
-      const docRef = doc(firestore, 'emails', email?.fingerprint)
+    validEmails.forEach((email) => {
+      const docRef = doc(firestore, 'emails', email.fingerprint)
       batch.set(docRef, email)
     })
 
     await batch.commit()
-    logStr += ' and Firestore'
+    logStr += ` and Firestore`
     console.log(logStr)
   } catch (error) {
     console.error(`Error saving emails to Firestore:`, error)
     console.error(`Error details:`, error.stack)
+  }
 
-    // Log the problematic emails
-    emails.forEach((email, index) => {
-      console.log(`Email ${index}:`, JSON.stringify(email))
-    })
+  if (validEmails.length < emails.length) {
+    console.warn(`Skipped ${emails.length - validEmails.length} invalid emails`)
   }
 }
 
