@@ -7,7 +7,7 @@ import { doc, getDoc, setDoc } from 'firebase/firestore'
 const STATUS_DOC_ID = 'emailStatuses'
 
 async function loadStatuses() {
-  console.log(`Loading email statuses from disk`)
+  // console.log(`Loading email statuses from disk`)
   try {
     const diskStatuses = await readFromDisk('status.json')
     if (diskStatuses) {
@@ -75,12 +75,9 @@ export async function POST(req) {
     )
   } catch (error) {
     console.error('Error updating statuses:', error)
-    return new Response(
-      JSON.stringify({ error: 'Failed to update statuses' }),
-      {
-        status: 500,
-        headers: { 'Content-Type': 'application/json' },
-      },
-    )
+    return new Response(JSON.stringify({ error: 'Failed to update statuses' }), {
+      status: 500,
+      headers: { 'Content-Type': 'application/json' },
+    })
   }
 }

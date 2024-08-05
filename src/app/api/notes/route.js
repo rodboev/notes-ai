@@ -2,22 +2,9 @@
 
 import { NextResponse } from 'next/server'
 import hash from 'object-hash'
-import {
-  readFromDisk,
-  writeToDisk,
-  deleteFromDisk,
-} from '../../utils/diskStorage'
+import { readFromDisk, writeToDisk, deleteFromDisk } from '../../utils/diskStorage'
 import { firestore } from '../../../firebase'
-import {
-  collection,
-  getDocs,
-  deleteDoc,
-  doc,
-  writeBatch,
-  query,
-  where,
-  orderBy,
-} from 'firebase/firestore'
+import { collection, getDocs, doc, writeBatch } from 'firebase/firestore'
 
 async function deletePreviousData() {
   try {
@@ -33,18 +20,26 @@ async function deletePreviousData() {
       console.log(`Deleted ${collectionName} from Firestore`)
     }
 
-    // Delete notes and emails
+    // Delete notes and emails from Firestore
     await deleteCollection('notes')
     await deleteCollection('emails')
+
+    // Delete notes and emails from disk
+    await deleteFromDisk('notes.json')
+    await deleteFromDisk('emails.json')
+
+    console.log('Notes and emails deleted from Firestore and disk')
   } catch (error) {
     console.warn(`Error deleting documents from Firestore: ${error.message}`)
   }
 }
 
 export async function GET() {
+  // console.log(`Loading notes from disk`)
   try {
     let notes = await readFromDisk('notes.json')
     if (!notes) {
+      console.log(`Notes not found on disk, loading from Firestore, saving to disk and returning`)
       // If not on disk, fetch from Firestore
       const notesCollection = collection(firestore, 'notes')
       const querySnapshot = await getDocs(notesCollection)
@@ -64,19 +59,14 @@ export async function GET() {
 
     return NextResponse.json(filteredNotes)
   } catch (error) {
-    console.error(`Error fetching notes:`, error)
+    console.error(`Error loading notes:`, error)
     return NextResponse.json([])
   }
 }
+
 export async function DELETE() {
   try {
-    // Delete files from disk
-    await deleteFromDisk('notes.json')
-    await deleteFromDisk('emails.json')
-
-    // Delete data from Firestore
     await deletePreviousData()
-
     return new NextResponse(null, { status: 204 }) // 204 No Content
   } catch (error) {
     console.warn(`Error deleting data:`, error)

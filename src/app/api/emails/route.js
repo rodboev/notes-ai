@@ -5,7 +5,7 @@ import OpenAI from 'openai'
 import { parse } from 'best-effort-json-parser'
 import prompts from './prompts.js'
 import { firestore } from '../../../firebase.js'
-import { readFromDisk, writeToDisk } from '../../utils/diskStorage'
+import { readFromDisk, writeToDisk, deleteFromDisk } from '../../utils/diskStorage'
 import { collection, doc, writeBatch, getDocs } from 'firebase/firestore'
 
 dotenv.config()
@@ -15,14 +15,14 @@ const port = process.env.PORT
 let emailsToSave = []
 
 async function loadEmails() {
-  console.log(`Loading emails from disk`)
+  // console.log(`Loading emails from disk`)
   try {
     const diskEmails = await readFromDisk('emails.json')
     if (diskEmails) {
       return diskEmails
     }
 
-    console.log(`Emails not found on disk, loading from Firestore`)
+    console.log(`Emails not found on disk, loading from Firestore, saving to disk and returning`)
     const emailsCollection = collection(firestore, 'emails')
     const snapshot = await getDocs(emailsCollection)
     const emails = snapshot.docs.map((doc) => doc.data())
@@ -78,6 +78,26 @@ async function saveEmails(emails) {
   }
 }
 
+async function deletePreviousEmails() {
+  try {
+    // Delete from Firestore
+    const emailsCollection = collection(firestore, 'emails')
+    const snapshot = await getDocs(emailsCollection)
+    const batch = writeBatch(firestore)
+    snapshot.forEach((doc) => {
+      batch.delete(doc.ref)
+    })
+    await batch.commit()
+
+    // Delete from disk
+    await deleteFromDisk('emails.json')
+
+    console.log('Emails deleted from Firestore and disk')
+  } catch (error) {
+    console.error(`Error deleting emails:`, error)
+  }
+}
+
 export async function GET(req) {
   const url = new URL(req.url)
   const refresh = url.searchParams.get('refresh')
@@ -86,23 +106,7 @@ export async function GET(req) {
 
   // Delete documents if refresh is forced
   if (refresh === 'all') {
-    try {
-      // Delete from Firestore
-      const emailsCollection = collection(firestore, 'emails')
-      const snapshot = await getDocs(emailsCollection)
-      const batch = writeBatch(firestore)
-      snapshot.forEach((doc) => {
-        batch.delete(doc.ref)
-      })
-      await batch.commit()
-
-      // Delete from disk
-      await writeToDisk('emails.json', [])
-
-      console.log('Emails deleted from Firestore and disk')
-    } catch (error) {
-      console.error(`Error deleting emails:`, error)
-    }
+    await deletePreviousEmails()
   } else {
     storedEmails = await loadEmails()
   }
@@ -125,9 +129,7 @@ export async function GET(req) {
       }
 
       if (refresh === 'all' || !storedEmailExist) {
-        const notes = await fetch(`http://localhost:${port}/api/notes`).then(
-          (res) => res.json(),
-        )
+        const notes = await fetch(`http://localhost:${port}/api/notes`).then((res) => res.json())
 
         const chunkArray = (array, chunkSize) => {
           const chunks = []
