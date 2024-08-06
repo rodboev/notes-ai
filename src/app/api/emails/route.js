@@ -156,19 +156,25 @@ export async function GET(req) {
         if (refresh === 'all' || !(storedEmails?.length > 0)) {
           const noteChunks = await fetch(`http://localhost:${port}/api/notes`)
             .then((res) => res.json())
-            .then((notes) => chunkArray(notes, 8))
+            .then((notes) =>
+              notes
+                .filter((note) => note.code === '911 EMER')
+                .sort((a, b) => new Date(a.date + 'T' + a.time) - new Date(b.date + 'T' + b.time)),
+            )
+            .then((sortedNotes) => chunkArray(sortedNotes, 8))
 
-          let allEmails = []
+          let emailsToSave = []
           for (const chunk of noteChunks) {
             const emailChunk = await streamChunkResponse(chunk)
-            allEmails = [...allEmails, ...emailChunk]
-            await saveEmails(emailChunk)
-
+            // emailsToSave = [...emailsToSave, ...emailChunk]
+            for (const email of emailChunk) {
+              emailsToSave = [...emailsToSave, email]
+            }
             // Not needed since we already streamed each email in the chunk:
             // sendData({ emails: emailChunk }, 'stream')
           }
-          // Needed to get more than {chunkLength} emails:
-          await saveEmails(allEmails)
+          // Needed to get more than 8 emails:
+          await saveEmails(emailsToSave)
         } else if (refresh?.length === 40) {
           // Refresh single email
           const noteToRefresh = await fetch(`http://localhost:${port}/api/notes`)
