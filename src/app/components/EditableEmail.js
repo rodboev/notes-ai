@@ -3,10 +3,19 @@
 import { Editor } from '@tinymce/tinymce-react'
 import { useEffect, useRef, useState } from 'react'
 import { CheckIcon, ExclamationTriangleIcon } from '@heroicons/react/16/solid'
-import Spinner from './Spinner'
+import SpinnerIcon from './Icons/SpinnerIcon'
+import RefreshIcon from './Icons/RefreshIcon-v4'
 import { usePersistedEmailStatus } from '../hooks/usePersistedEmailStatus'
 
-const EditableEmail = ({ htmlContent, subject, to, onEmailSent, fingerprint, ...props }) => {
+const EditableEmail = ({
+  htmlContent,
+  subject,
+  to,
+  onEmailSent,
+  fingerprint,
+  fetchData,
+  ...domProps
+}) => {
   const editorRef = useRef(null)
   const [emailStatus, setEmailStatus, isLoading] = usePersistedEmailStatus(fingerprint)
   const [editorReady, setEditorReady] = useState(false)
@@ -55,8 +64,10 @@ const EditableEmail = ({ htmlContent, subject, to, onEmailSent, fingerprint, ...
     if (editorRef.current) {
       editorRef.current.setContent(htmlContent || '')
     }
-    applyTextEditorEffects()
-  }, [htmlContent, emailStatus])
+    if (editorReady && !isLoading) {
+      applyTextEditorEffects()
+    }
+  }, [htmlContent, emailStatus, editorReady, isLoading])
 
   const autoResizeEditor = () => {
     const editor = editorRef.current
@@ -121,7 +132,7 @@ const EditableEmail = ({ htmlContent, subject, to, onEmailSent, fingerprint, ...
   }
 
   return (
-    <div {...props}>
+    <div {...domProps}>
       <Editor
         apiKey="1dfanp3sshjkkjouv1izh4fn0547seddg55evzdtep178l09"
         onInit={(evt, editor) => {
@@ -147,6 +158,11 @@ const EditableEmail = ({ htmlContent, subject, to, onEmailSent, fingerprint, ...
             'Inter=Inter, sans-serif; Arial=arial,helvetica,sans-serif; Courier New=courier new,courier; Times New Roman=times new roman,times',
         }}
       />
+      <button onClick={() => fetchData(fingerprint)} className="absolute z-10 m-6 self-end">
+        <span className="-mx-1 -my-0.5 flex items-center gap-1.5">
+          <RefreshIcon className="h-5 w-5" />
+        </span>
+      </button>
       <div className="mt-4 flex">
         <button
           onClick={() => {
@@ -170,7 +186,7 @@ const EditableEmail = ({ htmlContent, subject, to, onEmailSent, fingerprint, ...
             <span>Send email</span>
           ) : emailStatus.status === 'sending' ? (
             <>
-              <Spinner className="-m-1 mr-2" />
+              <SpinnerIcon className="-m-1 mr-2" />
               <span>Send email</span>
             </>
           ) : emailStatus.status === 'success' ? (

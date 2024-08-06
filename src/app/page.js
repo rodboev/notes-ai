@@ -10,7 +10,7 @@ import { parse } from 'best-effort-json-parser'
 import { ExclamationTriangleIcon } from '@heroicons/react/24/solid'
 import { useLocalStorage } from './utils/useLocalStorage'
 import { merge, leftJoin } from './utils/mergingFns'
-import Spinner from './components/Spinner'
+import Spinner from './components/Icons/SpinnerIcon'
 
 export default function Home() {
   const [pairs, setPairs] = useState([])
@@ -27,8 +27,8 @@ export default function Home() {
     }
   }
 
-  const fetchData = async (forceRefresh = false) => {
-    let logStr = `Fetching data... forceRefresh: ${forceRefresh}`
+  const fetchData = async (refresh = false) => {
+    let logStr = `Fetching data, refresh: ${refresh}`
     console.log(logStr)
 
     // Fetch notes
@@ -59,7 +59,12 @@ export default function Home() {
     // Fetch emails
     closeEventSource()
 
-    const url = forceRefresh ? '/api/emails?refresh=all' : '/api/emails'
+    let url = '/api/emails'
+    if (refresh === 'all') {
+      url += '?refresh=all'
+    } else if (refresh.length === 40) {
+      url += '?refresh=' + refresh
+    }
 
     try {
       // Get emails as SSE stream
@@ -171,12 +176,13 @@ export default function Home() {
                         )}
                         {pair.email.body && (
                           <EditableEmail
-                            className="mb-4"
+                            className="relative mb-4 flex flex-col"
                             htmlContent={pair.email.body}
                             subject={pair.email.subject}
                             to="a.dallas@libertypestnyc.com, r.boev@libertypestnyc.com"
                             onEmailSent={() => handleSendEmailButtonClick(index)}
                             fingerprint={pair.note.fingerprint}
+                            fetchData={fetchData}
                           />
                         )}
                         {pair.email.error && (

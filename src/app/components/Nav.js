@@ -23,7 +23,7 @@ export default function Nav({ fetchData, notesExist, pairRefs, onClear, ...props
 
       if (response.ok) {
         console.log('File uploaded and data saved successfully!')
-        await fetchData(true)
+        await fetchData('all')
         pairRefs?.current[0]?.scrollIntoView({ behavior: 'smooth' })
       } else {
         console.warn('Failed to upload the file.')

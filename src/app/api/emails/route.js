@@ -122,13 +122,56 @@ export async function GET(req) {
         )
       }
 
-      if (storedEmailExist) {
-        sendData(JSON.stringify({ emails: storedEmails }), 'stop')
+      async function processChunk(chunk) {
+        const userPrompt = prompts.base + JSON.stringify(chunk)
+        const messages = [
+          {
+            role: 'system',
+            content: prompts.system,
+          },
+          {
+            role: 'user',
+            content: userPrompt,
+          },
+        ]
+
+        let stream
+        try {
+          stream = await openai.chat.completions.create({
+            model: 'gpt-4o-mini',
+            stream: true,
+            response_format: { type: 'json_object' },
+            messages,
+            seed: 0,
+          })
+        } catch (error) {
+          console.warn(`API error:`, String(error))
+          sendData(JSON.stringify([]), 'error')
+          return []
+        }
+
+        let emailsJson = ''
+        let chunkEmails = []
+
+        for await (const data of stream) {
+          const chunk = data.choices[0].delta.content
+          const status = data.choices[0].finish_reason
+          if (!status) {
+            emailsJson += chunk
+            // Send token/chunk
+            sendData(chunk, 'stream')
+          } else if (status === 'stop') {
+            const emails = parse(emailsJson.trim()).emails || []
+            chunkEmails = [...chunkEmails, ...emails]
+            sendData(JSON.stringify(emails), 'stop') // Duplicate?
+          }
+        }
+
+        return chunkEmails
       }
 
-      if (refresh === 'all' || !storedEmailExist) {
+      if (refresh === 'all') {
         const notes = await fetch(`http://localhost:${port}/api/notes`).then((res) => res.json())
-
         const chunkArray = (array, chunkSize) => {
           const chunks = []
           for (let i = 0; i < array.length; i += chunkSize) {
@@ -138,61 +181,32 @@ export async function GET(req) {
         }
         const noteChunks = chunkArray(notes, 8)
 
-        async function processChunk(chunk) {
-          const userPrompt = prompts.base + JSON.stringify(chunk)
-          const messages = [
-            {
-              role: 'system',
-              content: prompts.system,
-            },
-            {
-              role: 'user',
-              content: userPrompt,
-            },
-          ]
-
-          let stream
-          try {
-            stream = await openai.chat.completions.create({
-              model: 'gpt-4o-mini',
-              stream: true,
-              response_format: { type: 'json_object' },
-              messages,
-              seed: 0,
-            })
-          } catch (error) {
-            console.warn(`API error:`, String(error))
-            sendData(JSON.stringify([]), 'error')
-            return []
-          }
-
-          let emailsJson = ''
-          let chunkEmails = []
-
-          for await (const data of stream) {
-            const chunk = data.choices[0].delta.content
-            const status = data.choices[0].finish_reason
-            if (!status) {
-              emailsJson += chunk
-              sendData(chunk, 'stream')
-            } else if (status === 'stop') {
-              const emails = parse(emailsJson.trim()).emails || []
-              chunkEmails = [...chunkEmails, ...emails]
-              sendData(JSON.stringify(emails), 'stop')
-            }
-          }
-
-          return chunkEmails
-        }
-
         let allEmails = []
         for (const chunk of noteChunks) {
           const chunkEmails = await processChunk(chunk)
           allEmails = [...allEmails, ...chunkEmails]
+          sendData(JSON.stringify({ emails: chunkEmails }), 'stream')
         }
         await saveEmails(allEmails)
-
         sendData('', 'stop') // Signal that all emails are processed
+      } else if (refresh?.length === 40) {
+        const notes = await fetch(`http://localhost:${port}/api/notes`).then((res) => res.json())
+        // Process single note
+        const noteToRefresh = notes.find((n) => n.fingerprint === refresh)
+        if (noteToRefresh) {
+          const refreshedEmail = await processChunk([noteToRefresh])
+          console.log('Refreshed email:', refreshedEmail)
+          const updatedEmails = storedEmails.map((email) =>
+            email.fingerprint === refresh ? refreshedEmail[0] : email,
+          )
+          await saveEmails(updatedEmails)
+          sendData(JSON.stringify({ emails: updatedEmails }), 'stream')
+          sendData('', 'stop')
+        } else {
+          sendData(JSON.stringify({ error: 'Note not found' }), 'error')
+        }
+      } else if (storedEmailExist) {
+        sendData(JSON.stringify({ emails: storedEmails }), 'stop')
       }
 
       controller.close()

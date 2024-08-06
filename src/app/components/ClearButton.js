@@ -12,7 +12,7 @@ export default function ClearButton({ fetchData, onClear, pairRefs }) {
         localStorage.removeItem('notesCache')
         localStorage.removeItem('emailsCache')
         // Fetch data to update the state
-        await fetchData(true)
+        await fetchData('all')
         // Call onClear to update the parent component's state
         onClear()
         // Scroll to the first note
@@ -27,10 +27,7 @@ export default function ClearButton({ fetchData, onClear, pairRefs }) {
 
   return (
     <>
-      <button
-        className="btn-teal group m-2 inline-block overflow-hidden"
-        onClick={handleClick}
-      >
+      <button className="btn-teal group m-2 inline-block overflow-hidden" onClick={handleClick}>
         <XMarkIcon className="relative -top-0.5 -mx-2 -my-4 inline-block h-8 w-8" />
         <span className="invisible">&nbsp;</span>
       </button>

@@ -4,7 +4,7 @@ export default function UploadButton({ fetchData, pairRefs }) {
     <button
       className="btn-teal group m-2"
       onClick={() => {
-        fetchData(true)
+        fetchData('all')
         pairRefs?.current[0]?.scrollIntoView({ behavior: 'smooth' })
       }}
     >
