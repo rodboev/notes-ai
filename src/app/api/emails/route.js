@@ -91,9 +91,8 @@ export async function GET(req) {
     await deletePreviousEmails()
   } else {
     storedEmails = await loadEmails()
+    console.log(`storedEmails.length:`, storedEmails.length)
   }
-
-  const storedEmailExist = storedEmails.length > 0
 
   const encoder = new TextEncoder()
   const readableStream = new ReadableStream({
@@ -107,7 +106,7 @@ export async function GET(req) {
         )
       }
 
-      async function processChunk(chunk) {
+      async function streamChunkResponse(chunk) {
         const userPrompt = prompts.base + JSON.stringify(chunk)
         const messages = [
           { role: 'system', content: prompts.system },
@@ -151,17 +150,17 @@ export async function GET(req) {
 
       try {
         console.log(
-          `Processing request. ${refresh ? `?refresh=${refresh}, ` : ''}Stored emails: ${storedEmailExist}`,
+          `Processing request. ${refresh ? `?refresh=${refresh}, ` : ''}Stored emails: ${storedEmails?.length || 0}`,
         )
 
-        if (refresh === 'all' || !storedEmailExist) {
+        if (refresh === 'all' || !(storedEmails?.length > 0)) {
           const noteChunks = await fetch(`http://localhost:${port}/api/notes`)
             .then((res) => res.json())
             .then((notes) => chunkArray(notes, 8))
 
           let allEmails = []
           for (const chunk of noteChunks) {
-            const emailChunk = await processChunk(chunk)
+            const emailChunk = await streamChunkResponse(chunk)
             allEmails = [...allEmails, ...emailChunk]
             await saveEmails(emailChunk)
 
@@ -177,7 +176,7 @@ export async function GET(req) {
             .then((notes) => notes.find((n) => n.fingerprint === refresh))
 
           if (noteToRefresh) {
-            const singleEmail = await processChunk([noteToRefresh])
+            const singleEmail = await streamChunkResponse([noteToRefresh])
             // Sent just the one in procesChunk, so save + send them all here
             const updatedEmails = storedEmails.map((email) =>
               email.fingerprint === refresh ? singleEmail[0] : email,
@@ -190,11 +189,11 @@ export async function GET(req) {
           } else {
             sendData({ error: 'Note not found' }, 'error')
           }
-        } else if (storedEmailExist) {
+        } else if (storedEmails?.length > 0) {
           sendData({ emails: storedEmails }, 'stop')
         }
       } catch (error) {
-        console.error('Error processing emails:', error)
+        console.error('Error processing emails:', error.split('\n')[0])
         sendData({ error: 'Internal server error' }, 'error')
       } finally {
         console.log('Closing controller')
