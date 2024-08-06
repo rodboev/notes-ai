@@ -10,7 +10,8 @@ import { parse } from 'best-effort-json-parser'
 import { ExclamationTriangleIcon } from '@heroicons/react/24/solid'
 import { useLocalStorage } from './utils/useLocalStorage'
 import { merge, leftJoin } from './utils/arrayUtils'
-import Spinner from './components/Icons/SpinnerIcon'
+import SpinnerIcon from './components/Icons/SpinnerIcon'
+import RefreshIcon from './components/Icons/RefreshIcon-v4'
 
 export default function Home() {
   const [pairs, setPairs] = useState([])
@@ -74,16 +75,25 @@ export default function Home() {
       let allEmails = []
 
       emailEvents.addEventListener('message', (event) => {
-        const data = parse(event.data)?.chunk
-        const status = parse(event.data)?.status
-        if (status !== 'stream') {
-          console.log(`Received { status: "${status}" }`)
-        }
-        emailsJson += data
+        const data = parse(event.data)
+        const chunk = data.chunk // Object
+        console.log(`chunk`, chunk)
+
+        emailsJson += JSON.stringify(data) // String
+        console.log(`emailsJson`, emailsJson.length)
+
+        // const emails = chunk?.emails
         const emails = parse(emailsJson)?.emails
+        console.log(`emails`, emails)
+
+        const status = data?.status
+        console.log(
+          `{ data (${data?.length}): { chunk (${chunk?.length}): emails (${emails?.length}) } }, status: "${status}" }`,
+        )
 
         if (typeof emails !== 'undefined') {
           const filteredEmails = emails.filter((email) => email?.fingerprint?.length === 40)
+          console.log(`filteredEmails`, filteredEmails)
 
           if (status === 'stop') {
             allEmails = merge(allEmails, filteredEmails)
@@ -186,7 +196,15 @@ export default function Home() {
                           />
                         )}
                         {pair.email.error && (
-                          <div className="inline-flex min-w-96 max-w-2xl flex-col items-center self-center rounded-lg border-2 border-dashed px-10 py-14 text-neutral-500">
+                          <div className="relative inline-flex min-w-96 max-w-2xl flex-col items-center self-center rounded-lg border-2 border-dashed px-10 py-14 text-neutral-500">
+                            <button
+                              onClick={() => fetchData(pair.note.fingerprint)}
+                              className="refresh absolute right-0 top-0 z-10 m-6 self-end"
+                            >
+                              <span className="-mx-1 -my-0.5 flex items-center gap-1.5">
+                                <RefreshIcon className="h-5 w-5" />
+                              </span>
+                            </button>
                             <ExclamationTriangleIcon className="m-4 w-10" />
                             <div>{pair.email?.error}</div>
                           </div>
@@ -194,7 +212,7 @@ export default function Home() {
                       </>
                     ) : (
                       <div className="inline-flex flex-col items-center text-neutral-500">
-                        <Spinner className="scale-150 text-neutral-500" />
+                        <SpinnerIcon className="scale-150 text-neutral-500" />
                       </div>
                     )}
                   </div>
