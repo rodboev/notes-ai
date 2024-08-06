@@ -39,7 +39,10 @@ export function EmailStatusProvider({ children }) {
   }, [])
 
   const updateStatus = async (fingerprint, newStatus) => {
-    setAllStatuses((prev) => ({ ...prev, [fingerprint]: newStatus }))
+    setAllStatuses((prev) => ({
+      ...prev,
+      [fingerprint]: { ...prev[fingerprint], ...newStatus },
+    }))
     try {
       await fetch('/api/status', {
         method: 'POST',
@@ -67,7 +70,7 @@ export function useEmailStatus(fingerprint) {
   }
   const { allStatuses, updateStatus, isLoading } = context
   return [
-    allStatuses[fingerprint] || '',
+    allStatuses[fingerprint] || {},
     (newStatus) => updateStatus(fingerprint, newStatus),
     isLoading,
   ]

@@ -8,13 +8,7 @@ import UploadComponent from './UploadComponent'
 import { CloudArrowUpIcon } from '@heroicons/react/24/outline'
 import { Cog6ToothIcon } from '@heroicons/react/20/solid'
 
-export default function Nav({
-  fetchData,
-  notesExist,
-  pairRefs,
-  onClear,
-  ...props
-}) {
+export default function Nav({ fetchData, notesExist, pairRefs, onClear, ...props }) {
   const [showUploadZone, setShowUploadZone] = useState(false)
 
   const handleUpload = async (data) => {
@@ -79,9 +73,7 @@ export default function Nav({
       <nav {...props}>
         <div className="container flex w-full max-w-screen-2xl items-center justify-between">
           <div className="left tracking-tighter">
-            <span className="display-inline mx-1 text-5xl font-bold text-teal">
-              liberty
-            </span>
+            <span className="display-inline mx-1 text-5xl font-bold text-teal">liberty</span>
             <span className="display-inline mx-1 text-2xl">notes ai</span>
           </div>
           <div className="right align-center flex items-center px-3">
@@ -89,11 +81,7 @@ export default function Nav({
             {notesExist && (
               <>
                 <RefreshButton pairRefs={pairRefs} fetchData={fetchData} />
-                <ClearButton
-                  fetchData={fetchData}
-                  onClear={onClear}
-                  pairRefs={pairRefs}
-                />
+                <ClearButton fetchData={fetchData} onClear={onClear} pairRefs={pairRefs} />
               </>
             )}
             <Cog6ToothIcon className="icon align-center flex cursor-pointer text-neutral-500" />

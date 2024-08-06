@@ -6,9 +6,10 @@ import { CheckIcon, ExclamationTriangleIcon } from '@heroicons/react/16/solid'
 import Spinner from './Spinner'
 import { usePersistedEmailStatus } from '../hooks/usePersistedEmailStatus'
 
-const EditableEmail = ({ htmlContent, subject, recipient, onEmailSent, fingerprint, ...props }) => {
+const EditableEmail = ({ htmlContent, subject, to, onEmailSent, fingerprint, ...props }) => {
   const editorRef = useRef(null)
   const [emailStatus, setEmailStatus, isLoading] = usePersistedEmailStatus(fingerprint)
+  const [editorReady, setEditorReady] = useState(false)
 
   const disableToolbarButtons = (disable) => {
     const editor = editorRef.current
@@ -29,13 +30,22 @@ const EditableEmail = ({ htmlContent, subject, recipient, onEmailSent, fingerpri
 
   const applyTextEditorEffects = () => {
     if (editorRef.current) {
-      if (emailStatus === 'sending' || emailStatus === 'success') {
+      if (emailStatus.status === 'sending' || emailStatus.status === 'success') {
         editorRef.current.getBody().setAttribute('contenteditable', 'false')
-        const styleElement = document.createElement('style')
-        styleElement.innerHTML = 'body { color: #999 !important; cursor: not-allowed; }'
-        editorRef.current.getDoc().head.appendChild(styleElement)
+        const styleElement = editorRef.current.getDoc().getElementById('custom-styles')
+        if (!styleElement) {
+          const newStyleElement = editorRef.current.getDoc().createElement('style')
+          newStyleElement.id = 'custom-styles'
+          newStyleElement.innerHTML = 'body { color: #999 !important; cursor: not-allowed; }'
+          editorRef.current.getDoc().head.appendChild(newStyleElement)
+        }
         disableToolbarButtons(true)
       } else {
+        editorRef.current.getBody().setAttribute('contenteditable', 'true')
+        const styleElement = editorRef.current.getDoc().getElementById('custom-styles')
+        if (styleElement) {
+          styleElement.remove()
+        }
         disableToolbarButtons(false)
       }
     }
@@ -69,32 +79,44 @@ const EditableEmail = ({ htmlContent, subject, recipient, onEmailSent, fingerpri
     const reallySend = isProduction
 
     if (editorRef.current) {
+      const content = editorRef.current.getContent()
+      setEmailStatus({ status: 'sending' })
       if (reallySend) {
-        const content = editorRef.current.getContent()
-        console.log({ recipient, subject, content })
-        const response = await fetch('/api/send-email', {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify({ recipient, subject, content }),
-        })
-        if (response.ok) {
-          console.log('Email sent successfully!')
-          setEmailStatus('success')
-          onEmailSent()
-          applyTextEditorEffects()
-        } else {
-          console.warn('Failed to send email.')
-          setEmailStatus('error')
+        try {
+          const response = await fetch('/api/send-email', {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({ email: to, subject, content, fingerprint }),
+          })
+          if (response.ok) {
+            const data = await response.json()
+            console.log('Email sent successfully!')
+            setEmailStatus(data.status)
+            onEmailSent()
+          } else {
+            console.warn('Failed to send email.')
+            setEmailStatus({ status: 'error' })
+          }
+        } catch (error) {
+          console.error('Error sending email:', error)
+          setEmailStatus({ status: 'error', error: error.message })
         }
       } else {
-        setEmailStatus('sending')
+        // Simulate sending for non-production environments
         setTimeout(() => {
-          setEmailStatus('success')
+          setEmailStatus({
+            status: 'success',
+            sentAt: new Date().toISOString(),
+            subject,
+            content,
+            to,
+          })
           onEmailSent()
         }, 800)
       }
+      applyTextEditorEffects()
     }
   }
 
@@ -104,7 +126,10 @@ const EditableEmail = ({ htmlContent, subject, recipient, onEmailSent, fingerpri
         apiKey="1dfanp3sshjkkjouv1izh4fn0547seddg55evzdtep178l09"
         onInit={(evt, editor) => {
           editorRef.current = editor
-          setTimeout(autoResizeEditor, 0)
+          setTimeout(() => {
+            autoResizeEditor()
+            setEditorReady(true)
+          }, 0)
         }}
         initialValue={htmlContent}
         init={{
@@ -112,48 +137,48 @@ const EditableEmail = ({ htmlContent, subject, recipient, onEmailSent, fingerpri
           menubar: false,
           statusbar: false,
           plugins: ['lists', 'advlist', 'autoresize', 'autolink', 'anchor', 'searchreplace'],
-          branding: false, // Disable "Powered by TinyMCE"
+          branding: false,
           toolbar: 'bold italic bullist numlist',
           autoresize_bottom_margin: 0,
           autoresize_min_height: 300,
           content_style:
-            "@import url('https://fonts.googleapis.com/css2?family=Inter:wght@100..900&display=swap'); body { font-family: /*'Inter',*/ sans-serif; }",
+            "@import url('https://fonts.googleapis.com/css2?family=Inter:wght@100..900&display=swap'); body { font-family: sans-serif; }",
           font_formats:
             'Inter=Inter, sans-serif; Arial=arial,helvetica,sans-serif; Courier New=courier new,courier; Times New Roman=times new roman,times',
-          readonly: true,
         }}
       />
       <div className="mt-4 flex">
         <button
           onClick={() => {
-            ;(emailStatus === '' || emailStatus === 'error') && sendEmail()
+            ;(Object.keys(emailStatus).length === 0 || emailStatus.status === 'error') &&
+              sendEmail()
           }}
-          disabled={!(emailStatus === '' || emailStatus === 'error')}
+          disabled={!(Object.keys(emailStatus).length === 0 || emailStatus.status === 'error')}
           className={
-            emailStatus === ''
+            Object.keys(emailStatus).length === 0
               ? 'btn-teal flex'
-              : emailStatus === 'sending'
+              : emailStatus.status === 'sending'
                 ? 'btn-teal flex cursor-not-allowed'
-                : emailStatus === 'success'
+                : emailStatus.status === 'success'
                   ? 'btn flex cursor-not-allowed border-2 border-green-600 bg-white !py-0'
-                  : emailStatus === 'error'
+                  : emailStatus.status === 'error'
                     ? 'btn flex border-2 border-red-600'
                     : null
           }
         >
-          {emailStatus === '' ? (
+          {Object.keys(emailStatus).length === 0 ? (
             <span>Send email</span>
-          ) : emailStatus === 'sending' ? (
+          ) : emailStatus.status === 'sending' ? (
             <>
               <Spinner className="-m-1 mr-2" />
               <span>Send email</span>
             </>
-          ) : emailStatus === 'success' ? (
+          ) : emailStatus.status === 'success' ? (
             <>
               <CheckIcon className="-m-2 mr-1.5 h-8 w-8 text-green-600" />
               <span>Email sent</span>
             </>
-          ) : emailStatus === 'error' ? (
+          ) : emailStatus.status === 'error' ? (
             <>
               <ExclamationTriangleIcon className="-m-2 mr-1 h-8 w-8 !py-0 text-red-600" />
               <span>Try again</span>

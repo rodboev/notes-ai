@@ -174,7 +174,7 @@ export default function Home() {
                             className="mb-4"
                             htmlContent={pair.email.body}
                             subject={pair.email.subject}
-                            recipient="a.dallas@libertypestnyc.com; r.boev@libertypestnyc.com"
+                            to="a.dallas@libertypestnyc.com, r.boev@libertypestnyc.com"
                             onEmailSent={() => handleSendEmailButtonClick(index)}
                             fingerprint={pair.note.fingerprint}
                           />

@@ -1,12 +1,12 @@
 // src/app/api/status/route.js
 
-import { readFromDisk, writeToDisk } from '../../utils/diskStorage'
+import { readFromDisk, writeToDisk, deleteFromDisk } from '../../utils/diskStorage'
 import { firestore } from '../../../firebase.js'
-import { doc, getDoc, setDoc } from 'firebase/firestore'
+import { doc, getDoc, setDoc, deleteDoc } from 'firebase/firestore'
 
 const STATUS_DOC_ID = 'emailStatuses'
 
-async function loadStatuses() {
+export async function loadStatuses() {
   // console.log(`Loading email statuses from disk`)
   try {
     const diskStatuses = await readFromDisk('status.json')
@@ -26,7 +26,7 @@ async function loadStatuses() {
   }
 }
 
-async function saveStatuses(newStatuses) {
+export async function saveStatuses(newStatuses) {
   let logStr = ''
   try {
     await writeToDisk('status.json', newStatuses)
@@ -47,6 +47,11 @@ async function saveStatuses(newStatuses) {
 
 export async function GET(req) {
   try {
+    const url = new URL(req.url)
+    if (url.searchParams.has('delete')) {
+      return await DELETE(req)
+    }
+
     const statuses = await loadStatuses()
     return new Response(JSON.stringify(statuses), {
       headers: { 'Content-Type': 'application/json' },
@@ -62,12 +67,20 @@ export async function GET(req) {
 
 export async function POST(req) {
   try {
-    const newStatuses = await req.json()
-    await saveStatuses(newStatuses)
+    const newStatus = await req.json()
+    const existingStatuses = await loadStatuses()
+
+    // Merge the new status with existing statuses
+    const updatedStatuses = { ...existingStatuses, ...newStatus }
+
+    await saveStatuses(updatedStatuses)
+
+    console.log('Updated statuses:', JSON.stringify(updatedStatuses, null, 2))
+
     return new Response(
       JSON.stringify({
         message: 'Statuses updated successfully',
-        statuses: newStatuses,
+        statuses: updatedStatuses,
       }),
       {
         headers: { 'Content-Type': 'application/json' },
@@ -76,6 +89,27 @@ export async function POST(req) {
   } catch (error) {
     console.error('Error updating statuses:', error)
     return new Response(JSON.stringify({ error: 'Failed to update statuses' }), {
+      status: 500,
+      headers: { 'Content-Type': 'application/json' },
+    })
+  }
+}
+
+export async function DELETE(req) {
+  try {
+    // Delete from disk
+    await deleteFromDisk('status.json')
+
+    // Delete from Firestore
+    const statusesRef = doc(firestore, 'emails', STATUS_DOC_ID)
+    await deleteDoc(statusesRef)
+
+    return new Response(JSON.stringify({ message: 'Statuses deleted successfully' }), {
+      headers: { 'Content-Type': 'application/json' },
+    })
+  } catch (error) {
+    console.error('Error deleting statuses:', error)
+    return new Response(JSON.stringify({ error: 'Failed to delete statuses' }), {
       status: 500,
       headers: { 'Content-Type': 'application/json' },
     })

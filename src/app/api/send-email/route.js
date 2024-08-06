@@ -1,21 +1,12 @@
 // src/app/api/send-email/route.js
 
+import { NextResponse } from 'next/server'
 import nodemailer from 'nodemailer'
 import { google } from 'googleapis'
 import dotenv from 'dotenv'
+import { loadStatuses, saveStatuses } from './status/route' // Import these functions
 
 dotenv.config()
-
-async function parseRequestBody(req) {
-  const chunks = []
-
-  for await (const chunk of req.body) {
-    chunks.push(chunk)
-  }
-
-  const data = Buffer.concat(chunks).toString()
-  return JSON.parse(data)
-}
 
 export async function POST(req) {
   const {
@@ -25,105 +16,99 @@ export async function POST(req) {
     SERVICE_ACCOUNT_CLIENT_ID,
   } = process.env
 
-  // Log retrieved GMAIL_USER for verification
   console.log('GMAIL_USER:', GMAIL_USER)
 
-  let email, subject, content
-
+  let email, subject, content, fingerprint
   try {
-    const body = await parseRequestBody(req)
-    ;({ email, subject, content } = body)
+    const body = await req.json()
+    ;({ email, subject, content, fingerprint } = body)
   } catch (error) {
     console.error('Error parsing request body:', error)
-    return new Response(JSON.stringify({ error: 'Invalid request body' }), {
-      status: 400,
-      headers: {
-        'Content-Type': 'application/json',
+    return NextResponse.json({ error: 'Invalid request body' }, { status: 400 })
+  }
+
+  console.log('Received parameters:', {
+    email,
+    subject,
+    content: content.substring(0, 100) + '...',
+    fingerprint,
+  })
+
+  if (!email || !subject || !content || !fingerprint) {
+    const missingFields = ['email', 'subject', 'content', 'fingerprint'].filter(
+      (field) => !eval(field),
+    )
+    console.error('Missing fields:', missingFields.join(', '))
+    return NextResponse.json({ error: 'Missing field', details: missingFields }, { status: 400 })
+  }
+
+  try {
+    const oAuth2Client = new google.auth.JWT(
+      SERVICE_ACCOUNT_CLIENT_EMAIL,
+      null,
+      SERVICE_ACCOUNT_PRIVATE_KEY.replace(/\\n/gm, '\n'),
+      ['https://mail.google.com/'],
+      GMAIL_USER,
+    )
+
+    await oAuth2Client.authorize()
+    const accessToken = await (await oAuth2Client.getAccessToken()).token
+
+    const transporter = nodemailer.createTransport({
+      service: 'gmail',
+      auth: {
+        type: 'OAuth2',
+        user: GMAIL_USER,
+        clientId: SERVICE_ACCOUNT_CLIENT_ID,
+        accessToken: accessToken,
       },
     })
-  }
 
-  console.log('Received parameters:', { email, subject, content })
+    const mailOptions = {
+      from: GMAIL_USER,
+      to: email,
+      subject: subject,
+      html: content,
+    }
 
-  if (!email || !subject || !content) {
-    const missingFields = []
-    if (!email) missingFields.push('email')
-    if (!subject) missingFields.push('subject')
-    if (!content) missingFields.push('content')
+    await transporter.sendMail(mailOptions)
+    console.log('Email sent successfully')
 
-    console.error('Missing fields:', missingFields.join(', '))
-    return new Response(
-      JSON.stringify({ error: 'Missing field', details: missingFields }),
-      {
-        status: 400,
-        headers: {
-          'Content-Type': 'application/json',
-        },
-      },
+    const emailData = {
+      status: 'success',
+      sentAt: new Date().toISOString(),
+      subject,
+      content,
+      to: email,
+    }
+
+    // Update status directly using functions from status/route.js
+    const existingStatuses = await loadStatuses()
+    const updatedStatuses = { ...existingStatuses, [fingerprint]: emailData }
+    await saveStatuses(updatedStatuses)
+
+    console.log('Updated statuses:', JSON.stringify(updatedStatuses, null, 2))
+
+    return NextResponse.json({ message: 'Email sent successfully', status: emailData })
+  } catch (error) {
+    console.error('Error sending email:', error)
+
+    // Update status to error
+    const existingStatuses = await loadStatuses()
+    const errorStatus = {
+      status: 'error',
+      sentAt: new Date().toISOString(),
+      subject,
+      content,
+      to: email,
+      error: error.message,
+    }
+    const updatedStatuses = { ...existingStatuses, [fingerprint]: errorStatus }
+    await saveStatuses(updatedStatuses)
+
+    return NextResponse.json(
+      { error: 'Error sending email', details: error.message, status: errorStatus },
+      { status: 500 },
     )
   }
-
-  async function sendEmail() {
-    try {
-      const oAuth2Client = new google.auth.JWT(
-        SERVICE_ACCOUNT_CLIENT_EMAIL,
-        null,
-        SERVICE_ACCOUNT_PRIVATE_KEY.replace(/\\n/gm, '\n'), // Correctly format private key
-        ['https://mail.google.com/'],
-        GMAIL_USER,
-      )
-
-      await oAuth2Client.authorize()
-
-      const accessToken = await (await oAuth2Client.getAccessToken()).token
-
-      const transporter = nodemailer.createTransport({
-        service: 'gmail',
-        auth: {
-          type: 'OAuth2',
-          user: GMAIL_USER,
-          clientId: SERVICE_ACCOUNT_CLIENT_ID,
-          accessToken: accessToken,
-        },
-        // debug: true,
-        // logger: true,
-      })
-
-      const mailOptions = {
-        from: GMAIL_USER,
-        to: email,
-        subject: subject,
-        html: content,
-      }
-
-      await transporter.sendMail(mailOptions)
-      console.log('Email sent successfully')
-
-      return new Response(
-        JSON.stringify({ message: 'Email sent successfully' }),
-        {
-          status: 200,
-          headers: {
-            'Content-Type': 'application/json',
-          },
-        },
-      )
-    } catch (error) {
-      console.error('Error sending email:', error)
-      return new Response(
-        JSON.stringify({
-          error: 'Error sending email',
-          details: error.message,
-        }),
-        {
-          status: 500,
-          headers: {
-            'Content-Type': 'application/json',
-          },
-        },
-      )
-    }
-  }
-
-  return sendEmail()
 }
