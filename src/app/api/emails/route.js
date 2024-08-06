@@ -150,24 +150,26 @@ export async function GET(req) {
       }
 
       try {
-        console.log(`Processing request. Refresh: ${refresh}, Stored emails: ${storedEmailExist}`)
+        console.log(
+          `Processing request. ${refresh ? `?refresh=${refresh}, ` : ''}Stored emails: ${storedEmailExist}`,
+        )
 
         if (refresh === 'all' || !storedEmailExist) {
           const noteChunks = await fetch(`http://localhost:${port}/api/notes`)
             .then((res) => res.json())
             .then((notes) => chunkArray(notes, 8))
 
-          // let allEmails = []
+          let allEmails = []
           for (const chunk of noteChunks) {
-            const emailsToSave = await processChunk(chunk)
-            // allEmails = [...allEmails, ...emailsToSave]
-            await saveEmails(emailsToSave)
+            const emailChunk = await processChunk(chunk)
+            allEmails = [...allEmails, ...emailChunk]
+            await saveEmails(emailChunk)
 
-            // Happens in processChunk:
-            console.log(`// sendData({ emails: emailsToSave }, 'stream')`)
-            // sendData({ emails: emailsToSave }, 'stream')
+            // Not needed since we already streamed each email in the chunk:
+            // sendData({ emails: emailChunk }, 'stream')
           }
-          // await saveEmails(allEmails)
+          // Needed to get more than {chunkLength} emails:
+          await saveEmails(allEmails)
         } else if (refresh?.length === 40) {
           // Refresh single email
           const noteToRefresh = await fetch(`http://localhost:${port}/api/notes`)
@@ -176,13 +178,15 @@ export async function GET(req) {
 
           if (noteToRefresh) {
             const singleEmail = await processChunk([noteToRefresh])
+            // Sent just the one in procesChunk, so save + send them all here
             const updatedEmails = storedEmails.map((email) =>
               email.fingerprint === refresh ? singleEmail[0] : email,
             )
             await saveEmails(updatedEmails)
-            // Happens in processChunk:
-            console.log(`// sendData({ emails: singleEmail }, 'stop')`)
-            // sendData({ emails: singleEmail }, 'stop')
+            console.log(
+              `sendData({ emails: singleEmail }, 'stop'), storedEmails.length: ${storedEmails.length}, updatedEmails.length: ${storedEmails.length}`,
+            )
+            sendData({ emails: updatedEmails }, 'stop')
           } else {
             sendData({ error: 'Note not found' }, 'error')
           }
