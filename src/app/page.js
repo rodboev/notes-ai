@@ -9,7 +9,7 @@ import Nav from './components/Nav'
 import { parse } from 'best-effort-json-parser'
 import { ExclamationTriangleIcon } from '@heroicons/react/24/solid'
 import { useLocalStorage } from './utils/useLocalStorage'
-import { merge, leftJoin } from './utils/mergingFns'
+import { merge, leftJoin } from './utils/arrayUtils'
 import Spinner from './components/Icons/SpinnerIcon'
 
 export default function Home() {
@@ -28,8 +28,7 @@ export default function Home() {
   }
 
   const fetchData = async (refresh = false) => {
-    let logStr = `Fetching data, refresh: ${refresh}`
-    console.log(logStr)
+    console.log(`Fetching data, refresh: ${refresh}`)
 
     // Fetch notes
     let notes = []
@@ -102,7 +101,7 @@ export default function Home() {
       emailEvents.addEventListener('error', (event) => {
         emailEvents.close()
         emailEventSourceRef.current = null
-        console.log('Error fetching emails:', event)
+        console.log('Using cached emails due to API failure:', event)
         // Use cached emails if API fails
         const joined = leftJoin({ notes, emails: cachedEmails })
         setPairs(joined)
@@ -179,7 +178,8 @@ export default function Home() {
                             className="relative mb-4 flex flex-col"
                             htmlContent={pair.email.body}
                             subject={pair.email.subject}
-                            to="a.dallas@libertypestnyc.com, r.boev@libertypestnyc.com"
+                            // to="a.dallas@libertypestnyc.com, r.boev@libertypestnyc.com"
+                            to="r.boev@libertypestnyc.com"
                             onEmailSent={() => handleSendEmailButtonClick(index)}
                             fingerprint={pair.note.fingerprint}
                             fetchData={fetchData}

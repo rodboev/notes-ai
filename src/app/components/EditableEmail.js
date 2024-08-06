@@ -33,6 +33,14 @@ const EditableEmail = ({
             button.classList.remove('tox-tbtn--disabled')
           }
         })
+
+        // const refreshButton = editor.parentNode.querySelector('button.refresh')
+        // if (disable) {
+        //   refreshButton.classList.add('.text-neutral-500')
+        // }
+        // else {
+        //   refreshButton.classList.remove('.text-neutral-500')
+        // }
       })
     }
   }
@@ -158,7 +166,7 @@ const EditableEmail = ({
             'Inter=Inter, sans-serif; Arial=arial,helvetica,sans-serif; Courier New=courier new,courier; Times New Roman=times new roman,times',
         }}
       />
-      <button onClick={() => fetchData(fingerprint)} className="absolute z-10 m-6 self-end">
+      <button onClick={() => fetchData(fingerprint)} className="refresh absolute z-10 m-6 self-end">
         <span className="-mx-1 -my-0.5 flex items-center gap-1.5">
           <RefreshIcon className="h-5 w-5" />
         </span>
