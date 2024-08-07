@@ -1,6 +1,5 @@
 // src/app/api/emails/route.js
 
-import dotenv from 'dotenv'
 import OpenAI from 'openai'
 import { parse } from 'best-effort-json-parser'
 import prompts from './prompts.js'
@@ -9,8 +8,10 @@ import { readFromDisk, writeToDisk, deleteFromDisk } from '../../utils/diskStora
 import { collection, doc, writeBatch, getDocs } from 'firebase/firestore'
 import { chunkArray } from '../../utils/arrayUtils'
 import { timestamp } from '../../utils/timestamp'
+import dotenv from 'dotenv'
 
 dotenv.config()
+const isProduction = process.env.NEXT_PUBLIC_NODE_ENV === 'production'
 const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY })
 const port = process.env.PORT
 
@@ -193,7 +194,7 @@ export async function GET(req) {
             //     .sort((a, b) => new Date(a.date + 'T' + a.time) - new Date(b.date + 'T' + b.time))
             //     .slice(0, 5),
             // )
-            .then((sortedNotes) => chunkArray(sortedNotes, 1))
+            .then((sortedNotes) => chunkArray(sortedNotes, isProduction ? 8 : 1))
 
           let emailsToSave = []
           for (const chunk of noteChunks) {

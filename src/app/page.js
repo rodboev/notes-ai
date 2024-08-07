@@ -73,7 +73,7 @@ export default function Home() {
       emailEventSourceRef.current = emailEvents
 
       let emailsJson = ''
-      let allEmails = []
+      let allEmails = refresh.length === 40 ? [...cachedEmails] : []
 
       emailEvents.addEventListener('message', (event) => {
         const data = parse(event.data)
@@ -84,8 +84,6 @@ export default function Home() {
         if (typeof chunk === 'object') {
           // Full response
           emails = chunk?.emails
-          if (status === 'stop') {
-          }
         } else {
           // Streaming response
           emailsJson += chunk

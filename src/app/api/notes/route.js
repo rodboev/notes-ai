@@ -5,6 +5,10 @@ import hash from 'object-hash'
 import { readFromDisk, writeToDisk, deleteFromDisk } from '../../utils/diskStorage'
 import { firestore } from '../../../firebase'
 import { collection, getDocs, doc, writeBatch } from 'firebase/firestore'
+import dotenv from 'dotenv'
+
+dotenv.config()
+const isProduction = process.env.NEXT_PUBLIC_NODE_ENV === 'production'
 
 async function deletePreviousData() {
   try {
@@ -50,15 +54,16 @@ export async function GET() {
     }
 
     // Filter and sort notes
-    const filteredNotes = notes
+    notes = notes
       .filter((note) => note.code === '911 EMER')
       .sort((a, b) => {
         if (a.date !== b.date) return a.date.localeCompare(b.date)
         return a.time.localeCompare(b.time)
       })
-      .slice(0, 2)
 
-    return NextResponse.json(filteredNotes)
+    if (!isProduction) notes = notes.slice(0, 2)
+
+    return NextResponse.json(notes)
   } catch (error) {
     console.error(`Error loading notes:`, error)
     return NextResponse.json([])
