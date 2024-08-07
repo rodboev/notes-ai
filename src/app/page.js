@@ -12,6 +12,7 @@ import { useLocalStorage } from './utils/useLocalStorage'
 import { merge, leftJoin } from './utils/arrayUtils'
 import SpinnerIcon from './components/Icons/SpinnerIcon'
 import RefreshIcon from './components/Icons/RefreshIcon-v4'
+import { timestamp } from './utils/timestamp'
 
 export default function Home() {
   const [pairs, setPairs] = useState([])
@@ -29,7 +30,7 @@ export default function Home() {
   }
 
   const fetchData = async (refresh = false) => {
-    console.log(`Fetching data, refresh: ${refresh}`)
+    console.log(`${timestamp()} Fetching data, refresh: ${refresh}`)
 
     // Fetch notes
     let notes = []
@@ -41,7 +42,7 @@ export default function Home() {
         notes = cachedNotes
       }
     } catch (error) {
-      console.warn('Failed to fetch notes:', String(error).split('\n')[0])
+      console.warn(`${timestamp()} Failed to fetch notes:`, String(error).split('\n')[0])
       notes = cachedNotes // Use cached notes if API fails
     }
 
@@ -77,23 +78,27 @@ export default function Home() {
       emailEvents.addEventListener('message', (event) => {
         const data = parse(event.data)
         const chunk = data?.chunk // string when streaming, object when full response
-        console.log(`chunk is `, typeof chunk)
-
-        emailsJson += chunk
-        const emails = parse(emailsJson)?.emails // Take emails key if there is one?
-
         const status = data?.status
 
-        if (chunk.hasOwnProperty('emails')) {
-          console.log(
-            `Full response: { data (${data?.length}): { chunk (${chunk?.length}): emails (${emails?.length}) } }, status: "${status}" }`,
-          )
+        let emails = []
+        if (typeof chunk === 'object') {
+          // Full response
+          emails = chunk?.emails
+          if (status === 'stop') {
+          }
+        } else {
+          // Streaming response
+          emailsJson += chunk
+          emails = parse(emailsJson)?.emails
         }
 
         if (typeof emails !== 'undefined') {
+          // Only process emails key if it exists
           const filteredEmails = emails.filter((email) => email?.fingerprint?.length === 40)
 
           if (status === 'stop') {
+            // 'stop' refers to the current chunk
+            // Combine contents of this streamed chunk with previous
             allEmails = merge(allEmails, filteredEmails)
             emailsJson = ''
             setCachedEmails(allEmails)
@@ -104,18 +109,25 @@ export default function Home() {
           const joined = leftJoin({ notes, emails: allEmails })
           setPairs(joined)
         }
+
+        if (status === 'complete') {
+          console.log(`${timestamp()} Received complete message, closing event source`)
+          closeEventSource()
+        }
+
+        //
       })
 
-      emailEvents.addEventListener('error', (event) => {
-        emailEvents.close()
-        emailEventSourceRef.current = null
-        console.log('Using cached emails due to API failure:', event)
-        // Use cached emails if API fails
-        const joined = leftJoin({ notes, emails: cachedEmails })
-        setPairs(joined)
-      })
+      // emailEvents.addEventListener('error', (event) => {
+      //   closeEventSource()
+      //	console.log(`${timestamp()} Closed event source`)
+      //   // Use cached emails if API fails
+      //   console.log('${timestamp()} Using cached emails due to API failure:', event)
+      //   const joined = leftJoin({ notes, emails: cachedEmails })
+      //   setPairs(joined)
+      // })
     } catch (error) {
-      console.error('Error fetching emails:', String(error).split('\n')[0])
+      console.warn('${timestamp()} Error fetching emails:', String(error).split('\n')[0])
 
       // Utilize the cached emails if API call fails
       const joined = leftJoin({ notes, emails: cachedEmails })

@@ -8,56 +8,78 @@ import { firestore } from '../../../firebase.js'
 import { readFromDisk, writeToDisk, deleteFromDisk } from '../../utils/diskStorage'
 import { collection, doc, writeBatch, getDocs } from 'firebase/firestore'
 import { chunkArray } from '../../utils/arrayUtils'
+import { timestamp } from '../../utils/timestamp'
 
 dotenv.config()
 const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY })
 const port = process.env.PORT
 
 async function loadEmails() {
-  // console.log(`Loading emails from disk`)
+  // console.log(`${timestamp()} Loading emails from disk`)
   try {
     const diskEmails = await readFromDisk('emails.json')
     if (diskEmails) {
       return diskEmails
     }
 
-    console.log(`Emails not found on disk, loading from Firestore, saving to disk and returning`)
+    console.log(
+      `${timestamp()} Emails not on disk, loading from Firestore, saving to disk, returning`,
+    )
     const emailsCollection = collection(firestore, 'emails')
     const snapshot = await getDocs(emailsCollection)
     const emails = snapshot.docs.map((doc) => doc.data())
     await writeToDisk('emails.json', emails)
     return emails
   } catch (error) {
-    console.error(`Error loading emails:`, error)
+    console.warn(`${timestamp()} Error loading emails:`, error)
     return [] // Return empty array, client-side will use local storage
   }
 }
 
 async function saveEmails(emails) {
-  console.log(`Saving emails to Firestore`)
+  console.warn(`${timestamp()} Saving emails to disk and Firestore`)
 
+  // Log the total number of emails and any empty ones
+  console.log(`${timestamp()} Total emails: ${emails.length}`)
+  const emptyEmails = emails.filter((email) => Object.keys(email).length === 0)
+  console.log(`${timestamp()} Number of empty emails: ${emptyEmails.length}`)
+
+  // Save to disk
   try {
     await writeToDisk('emails.json', emails)
-    console.log(`Saved ${emails.length} emails to disk`)
+    console.log(`${timestamp()} Saved ${emails.length} emails to disk`)
   } catch (error) {
-    console.error(`Error saving emails to disk:`, error)
+    console.warn(`${timestamp()} Error saving emails to disk:`, error)
   }
 
+  // Save to Firestore
   if (!firestore) {
-    console.error('Firestore is not initialized')
+    console.warn('${timestamp()} Firestore is not initialized')
     return
   }
 
   const batch = writeBatch(firestore)
+  const emailsCollection = collection(firestore, 'emails')
+
+  let savedCount = 0
   try {
     emails.forEach((email, index) => {
-      const docRef = doc(firestore, 'emails', email.fingerprint)
-      batch.set(docRef, email)
+      if (Object.keys(email).length === 0) {
+        console.warn(`${timestamp()} Empty email object at index ${index}`)
+        return
+      }
+      if (email.fingerprint) {
+        const docRef = doc(emailsCollection, email.fingerprint)
+        batch.set(docRef, email)
+        savedCount++
+      } else {
+        console.warn(`${timestamp()} Email without fingerprint at index ${index}:`, email)
+      }
     })
     await batch.commit()
-    console.log(`Saved ${emails.length} emails to Firestore`)
+    console.log(`${timestamp()} Saved ${savedCount} emails to Firestore`)
   } catch (error) {
-    console.error(`Error saving emails to Firestore:`, error)
+    console.warn(`${timestamp()} Error saving emails to Firestore:`, error)
   }
 }
 
@@ -75,9 +97,9 @@ async function deletePreviousEmails() {
     // Delete from disk
     await deleteFromDisk('emails.json')
 
-    console.log('Emails deleted from Firestore and disk')
+    console.log(`${timestamp()} Emails deleted from Firestore and disk`)
   } catch (error) {
-    console.error(`Error deleting emails:`, error)
+    console.warn(`${timestamp()} Error deleting emails:`, error)
   }
 }
 
@@ -91,12 +113,13 @@ export async function GET(req) {
     await deletePreviousEmails()
   } else {
     storedEmails = await loadEmails()
-    console.log(`storedEmails.length:`, storedEmails.length)
   }
 
   const encoder = new TextEncoder()
   const readableStream = new ReadableStream({
     async start(controller) {
+      let responseComplete = false
+
       function sendData(data, status = 'stream') {
         // console.log(JSON.stringify(data), status)
         controller.enqueue(
@@ -104,9 +127,14 @@ export async function GET(req) {
             `data: { "chunk": ${JSON.stringify(data)}, "status": ${JSON.stringify(status)} }\n\n`,
           ),
         )
+
+        if (responseComplete) {
+          console.log(`${timestamp()} Response complete, sending complete message`)
+          controller.enqueue(encoder.encode(`data: { "status": "complete" }\n\n`))
+        }
       }
 
-      async function streamChunkResponse(chunk) {
+      async function streamResponse(chunk) {
         const userPrompt = prompts.base + JSON.stringify(chunk)
         const messages = [
           { role: 'system', content: prompts.system },
@@ -123,7 +151,7 @@ export async function GET(req) {
             seed: 0,
           })
         } catch (error) {
-          console.warn(`API error:`, String(error))
+          console.warn(`${timestamp()} API error:`, String(error))
         }
 
         let emailsJson = ''
@@ -133,15 +161,17 @@ export async function GET(req) {
           const chunk = data.choices[0].delta.content
           const status = data.choices[0].finish_reason
           if (!status) {
+            // Streaming response
             emailsJson += chunk
-            sendData(chunk) // Intentional double stringify
+            sendData(chunk)
           } else if (status === 'stop') {
+            // Full response end of this streaming chunk
             const emails = parse(emailsJson.trim()).emails || []
             emailsToSave = [...emailsToSave, ...emails]
-            // console.log(`// sendData(emails, 'stop')`)
+            // console.log(`${timestamp()} // sendData(emails, 'stop')`)
             sendData('', 'stop')
           } else {
-            sendData(status, status)
+            sendData('', status)
           }
         }
         return emailsToSave
@@ -149,65 +179,70 @@ export async function GET(req) {
 
       try {
         console.log(
-          `Processing request. ${refresh ? `?refresh=${refresh}, ` : ''}Stored emails: ${storedEmails?.length || 0}`,
+          `${timestamp()} GET /api/emails${refresh ? `?refresh=${refresh}` : ''}, stored emails: ${storedEmails?.length || 0}`,
         )
 
         if (refresh === 'all' || !(storedEmails?.length > 0)) {
-          console.log(
-            `Refreshing all emails (storedEmails?.length > 0 === ${storedEmails?.length > 0})`,
-          )
+          console.log(`${timestamp()} Refreshing all emails`)
 
           const noteChunks = await fetch(`http://localhost:${port}/api/notes`)
             .then((res) => res.json())
-            .then((notes) =>
-              notes
-                .filter((note) => note.code === '911 EMER')
-                .sort((a, b) => new Date(a.date + 'T' + a.time) - new Date(b.date + 'T' + b.time)),
-            )
-            .then((sortedNotes) => chunkArray(sortedNotes, 8))
+            // .then((notes) =>
+            //   notes
+            //     .filter((note) => note.code === '911 EMER')
+            //     .sort((a, b) => new Date(a.date + 'T' + a.time) - new Date(b.date + 'T' + b.time))
+            //     .slice(0, 5),
+            // )
+            .then((sortedNotes) => chunkArray(sortedNotes, 1))
 
           let emailsToSave = []
           for (const chunk of noteChunks) {
-            const emailChunk = await streamChunkResponse(chunk)
-            // emailsToSave = [...emailsToSave, ...emailChunk]
-            for (const email of emailChunk) {
-              emailsToSave = [...emailsToSave, email]
-            }
-            // Not needed since we already streamed each email in the chunk:
-            // sendData({ emails: emailChunk }, 'stream')
+            const emailChunk = await streamResponse(chunk)
+            emailsToSave = [...emailsToSave, ...emailChunk]
           }
+          responseComplete = true
+          sendData('', 'stop')
+
+          console.log(`${timestamp()} Closing controller`)
+          controller.close()
+
           // Needed to get more than 8 emails:
           await saveEmails(emailsToSave)
         } else if (refresh?.length === 40) {
-          console.log(`Refreshing single email`)
+          console.log(`${timestamp()} Refreshing single email`)
 
           const noteToRefresh = await fetch(`http://localhost:${port}/api/notes`)
             .then((res) => res.json())
             .then((notes) => notes.find((n) => n.fingerprint === refresh))
 
           if (noteToRefresh) {
-            const singleEmail = await streamChunkResponse([noteToRefresh])
+            const singleEmail = await streamResponse([noteToRefresh])
             // Sent just the one in procesChunk, so save + send them all here
             const updatedEmails = storedEmails.map((email) =>
               email.fingerprint === refresh ? singleEmail[0] : email,
             )
             await saveEmails(updatedEmails)
             console.log(
-              `sendData({ emails: singleEmail }, 'stop'), storedEmails.length: ${storedEmails.length}, updatedEmails.length: ${storedEmails.length}`,
+              `${timestamp()} sendData({ emails: singleEmail }, 'stop'), storedEmails.length: ${storedEmails.length}, updatedEmails.length: ${storedEmails.length}`,
             )
             sendData({ emails: updatedEmails }, 'stop')
           } else {
             sendData({ error: 'Note not found' }, 'error')
           }
         } else if (storedEmails?.length > 0) {
+          responseComplete = true
+          // Full resonses get 'stop' with them
           sendData({ emails: storedEmails }, 'stop')
+          console.log(`${timestamp()} Closing controller`)
+          controller.close()
         }
       } catch (error) {
-        console.error('Error processing emails:', error.split('\n')[0])
+        console.error('${timestamp()} Error processing emails:', error.split('\n')[0])
         sendData({ error: 'Internal server error' }, 'error')
       } finally {
-        console.log('Closing controller')
-        controller.close()
+        // Terminal 0 length chunk, signaling the end of the stream to the client
+        // Avoids ERR_INCOMPLETE_CHUNKED_ENCODING or ERR_CONNECTION_RESET
+        // controller.enqueue(encoder.encode(''))
       }
     },
   })

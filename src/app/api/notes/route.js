@@ -56,6 +56,7 @@ export async function GET() {
         if (a.date !== b.date) return a.date.localeCompare(b.date)
         return a.time.localeCompare(b.time)
       })
+      .slice(0, 2)
 
     return NextResponse.json(filteredNotes)
   } catch (error) {
