@@ -91,7 +91,7 @@ export async function GET(req) {
     await deletePreviousEmails()
   } else {
     storedEmails = await loadEmails()
-    console.log(`Stored emails:`, storedEmails.length)
+    console.log(`storedEmails.length:`, storedEmails.length)
   }
 
   const encoder = new TextEncoder()
@@ -99,14 +99,6 @@ export async function GET(req) {
     async start(controller) {
       function sendData(data, status = 'stream') {
         // console.log(JSON.stringify(data), status)
-        if (data.hasOwnProperty('emails')) {
-          console.log(
-            `Sending full response:  { chunk: { emails (${data?.emails?.length}) }, status: "${status}"`,
-          )
-        } else {
-          // Streaming response
-        }
-
         controller.enqueue(
           encoder.encode(
             `data: { "chunk": ${JSON.stringify(data)}, "status": ${JSON.stringify(status)} }\n\n`,
@@ -140,17 +132,13 @@ export async function GET(req) {
         for await (const data of stream) {
           const chunk = data.choices[0].delta.content
           const status = data.choices[0].finish_reason
-
           if (!status) {
-            // Streaming response
-            // console.log(`// sendData(chunk, 'stream')`)
             emailsJson += chunk
-            sendData(chunk)
+            sendData(chunk) // Intentional double stringify
           } else if (status === 'stop') {
-            // Full response
             const emails = parse(emailsJson.trim()).emails || []
             emailsToSave = [...emailsToSave, ...emails]
-            console.log(`// sendData(emails, 'stop')`)
+            // console.log(`// sendData(emails, 'stop')`)
             sendData('', 'stop')
           } else {
             sendData(status, status)
@@ -165,6 +153,10 @@ export async function GET(req) {
         )
 
         if (refresh === 'all' || !(storedEmails?.length > 0)) {
+          console.log(
+            `Refreshing all emails (storedEmails?.length > 0 === ${storedEmails?.length > 0})`,
+          )
+
           const noteChunks = await fetch(`http://localhost:${port}/api/notes`)
             .then((res) => res.json())
             .then((notes) =>
@@ -177,41 +169,38 @@ export async function GET(req) {
           let emailsToSave = []
           for (const chunk of noteChunks) {
             const emailChunk = await streamChunkResponse(chunk)
-            emailsToSave = [...emailsToSave, ...emailChunk]
+            // emailsToSave = [...emailsToSave, ...emailChunk]
             for (const email of emailChunk) {
               emailsToSave = [...emailsToSave, email]
             }
             // Not needed since we already streamed each email in the chunk:
-            sendData({ emails: emailChunk }, 'stream')
+            // sendData({ emails: emailChunk }, 'stream')
           }
           // Needed to get more than 8 emails:
           await saveEmails(emailsToSave)
         } else if (refresh?.length === 40) {
-          // Refresh single email
+          console.log(`Refreshing single email`)
+
           const noteToRefresh = await fetch(`http://localhost:${port}/api/notes`)
             .then((res) => res.json())
             .then((notes) => notes.find((n) => n.fingerprint === refresh))
 
-          console.log(`Note to refresh: `, noteToRefresh.company)
           if (noteToRefresh) {
             const singleEmail = await streamChunkResponse([noteToRefresh])
-            console.log(`singleEmail: `, singleEmail)
-
             // Sent just the one in procesChunk, so save + send them all here
             const updatedEmails = storedEmails.map((email) =>
               email.fingerprint === refresh ? singleEmail[0] : email,
             )
-            console.log(
-              `send updatedEmails, stop. storedEmails: ${storedEmails.length}, updatedEmails: ${storedEmails.length}`,
-            )
             await saveEmails(updatedEmails)
+            console.log(
+              `sendData({ emails: singleEmail }, 'stop'), storedEmails.length: ${storedEmails.length}, updatedEmails.length: ${storedEmails.length}`,
+            )
             sendData({ emails: updatedEmails }, 'stop')
           } else {
             sendData({ error: 'Note not found' }, 'error')
           }
         } else if (storedEmails?.length > 0) {
-          console.log(`Sending ${storedEmails.length} stored emails`)
-          sendData({ emails: storedEmails })
+          sendData({ emails: storedEmails }, 'stop')
         }
       } catch (error) {
         console.error('Error processing emails:', error.split('\n')[0])

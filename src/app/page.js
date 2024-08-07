@@ -76,24 +76,22 @@ export default function Home() {
 
       emailEvents.addEventListener('message', (event) => {
         const data = parse(event.data)
-        const chunk = data.chunk // Object
-        console.log(`chunk`, chunk)
+        const chunk = data?.chunk // string when streaming, object when full response
+        console.log(`chunk is `, typeof chunk)
 
-        emailsJson += JSON.stringify(data) // String
-        console.log(`emailsJson`, emailsJson.length)
-
-        // const emails = chunk?.emails
-        const emails = parse(emailsJson)?.emails
-        console.log(`emails`, emails)
+        emailsJson += chunk
+        const emails = parse(emailsJson)?.emails // Take emails key if there is one?
 
         const status = data?.status
-        console.log(
-          `{ data (${data?.length}): { chunk (${chunk?.length}): emails (${emails?.length}) } }, status: "${status}" }`,
-        )
+
+        if (chunk.hasOwnProperty('emails')) {
+          console.log(
+            `Full response: { data (${data?.length}): { chunk (${chunk?.length}): emails (${emails?.length}) } }, status: "${status}" }`,
+          )
+        }
 
         if (typeof emails !== 'undefined') {
           const filteredEmails = emails.filter((email) => email?.fingerprint?.length === 40)
-          console.log(`filteredEmails`, filteredEmails)
 
           if (status === 'stop') {
             allEmails = merge(allEmails, filteredEmails)
