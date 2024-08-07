@@ -4,7 +4,7 @@ import { NextResponse } from 'next/server'
 import nodemailer from 'nodemailer'
 import { google } from 'googleapis'
 import dotenv from 'dotenv'
-import { loadStatuses, saveStatuses } from './status/route' // Import these functions
+import { loadStatuses, saveStatuses } from '../status/route' // Import these functions
 
 dotenv.config()
 
