@@ -222,10 +222,10 @@ export async function GET(req) {
               email.fingerprint === refresh ? singleEmail[0] : email,
             )
             await saveEmails(updatedEmails)
-            console.log(
-              `${timestamp()} sendData({ emails: singleEmail }, 'stop'), storedEmails.length: ${storedEmails.length}, updatedEmails.length: ${storedEmails.length}`,
-            )
+            responseComplete = true
             sendData({ emails: updatedEmails }, 'stop')
+            console.log(`${timestamp()} Closing controller`)
+            controller.close()
           } else {
             sendData({ error: 'Note not found' }, 'error')
           }
@@ -239,10 +239,6 @@ export async function GET(req) {
       } catch (error) {
         console.error('${timestamp()} Error processing emails:', error.split('\n')[0])
         sendData({ error: 'Internal server error' }, 'error')
-      } finally {
-        // Terminal 0 length chunk, signaling the end of the stream to the client
-        // Avoids ERR_INCOMPLETE_CHUNKED_ENCODING or ERR_CONNECTION_RESET
-        // controller.enqueue(encoder.encode(''))
       }
     },
   })
