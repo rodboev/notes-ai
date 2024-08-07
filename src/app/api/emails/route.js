@@ -98,14 +98,15 @@ export async function GET(req) {
   const readableStream = new ReadableStream({
     async start(controller) {
       function sendData(data, status = 'stream') {
-        console.log(data)
+        // console.log(JSON.stringify(data), status)
         if (data.hasOwnProperty('emails')) {
-          console.log(`Sending full response`)
+          console.log(
+            `Sending full response:  { chunk: { emails (${data?.emails?.length}) }, status: "${status}"`,
+          )
         } else {
           // Streaming response
         }
 
-        console.log(`Sending { chunk: { emails (${data.emails.length}) }, status: "${status}"`)
         controller.enqueue(
           encoder.encode(
             `data: { "chunk": ${JSON.stringify(data)}, "status": ${JSON.stringify(status)} }\n\n`,
@@ -140,17 +141,13 @@ export async function GET(req) {
           const chunk = data.choices[0].delta.content
           const status = data.choices[0].finish_reason
 
-          if (chunk.length === 0) {
-            console.log(`WARNING: API Error:`)
-            console.dir(data, { depth: null })
-          }
-
           if (!status) {
-            // Legit streaming response
+            // Streaming response
+            // console.log(`// sendData(chunk, 'stream')`)
             emailsJson += chunk
-            console.log(`// sendData(chunk, 'stream')`)
             sendData(chunk)
           } else if (status === 'stop') {
+            // Full response
             const emails = parse(emailsJson.trim()).emails || []
             emailsToSave = [...emailsToSave, ...emails]
             console.log(`// sendData(emails, 'stop')`)
