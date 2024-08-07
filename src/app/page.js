@@ -164,7 +164,6 @@ export default function Home() {
           notesExist={notesExist}
           pairRefs={pairRefs}
           onClear={handleClear}
-          className="fixed left-0 z-10 flex w-full justify-center border-b bg-white/50 p-3 backdrop-blur-md"
         />
         {notesExist &&
           pairs.map((pair, index) => (
