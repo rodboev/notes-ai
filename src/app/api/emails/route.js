@@ -7,8 +7,6 @@ import { readFromDisk, writeToDisk, deleteFromDisk } from '../../utils/diskStora
 import { collection, doc, writeBatch, getDocs } from 'firebase/firestore'
 import { chunkArray } from '../../utils/arrayUtils'
 import { timestamp } from '../../utils/timestamp'
-import { readFile } from 'fs/promises'
-import { join } from 'path'
 import dotenv from 'dotenv'
 import { getPrompts } from '../../utils/getPrompts.js'
 

@@ -17,6 +17,18 @@ function expand(template, variables) {
   })
 }
 
+async function getPromptsFromFirestore() {
+  try {
+    const promptsDoc = await getDoc(doc(firestore, 'prompts', 'current'))
+    if (promptsDoc.exists()) {
+      return promptsDoc.data()
+    }
+  } catch (error) {
+    console.warn('Failed to read prompts from Firestore:', error)
+  }
+  return null
+}
+
 export async function getPrompts() {
   try {
     const data = await readFile(promptsPath, 'utf8')
@@ -29,7 +41,7 @@ export async function getPrompts() {
       { role: 'user', content: prompts.user },
     ]
   } catch (error) {
-    console.warn('Failed to read prompts:', error)
+    console.warn('Failed to read prompts from local file:', error)
 
     // Attempt to log the contents of the prompts file
     try {
@@ -41,6 +53,19 @@ export async function getPrompts() {
       console.warn('Failed to log prompts file contents:', logError)
     }
 
+    // If local file read fails, try to get prompts from Firebase
+    const firestorePrompts = await getPromptsFromFirestore()
+
+    if (firestorePrompts) {
+      const systemContent = expand(firestorePrompts.system.current, firestorePrompts)
+
+      return [
+        { role: 'system', content: systemContent },
+        { role: 'user', content: firestorePrompts.user },
+      ]
+    }
+
+    // If both local file and Firestore fail, throw the original error
     throw error
   }
 }
