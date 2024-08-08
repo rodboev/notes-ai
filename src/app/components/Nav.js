@@ -157,11 +157,11 @@ export default function Nav({ fetchData, notesExist, pairRefs, onClear, ...props
               <UploadButton handleUpload={handleUpload} pairRefs={pairRefs} />
               {notesExist && (
                 <>
-                  <RefreshButton pairRefs={pairRefs} fetchData={fetchData} />
+                  {/* <RefreshButton pairRefs={pairRefs} fetchData={fetchData} /> */}
                   <ClearButton fetchData={fetchData} onClear={onClear} pairRefs={pairRefs} />
                 </>
               )}
-              <div className="relative">
+              <div className="relative m-1 mr-2">
                 <Cog6ToothIcon
                   className="icon align-center flex cursor-pointer text-neutral-500"
                   onClick={toggleSettings}
