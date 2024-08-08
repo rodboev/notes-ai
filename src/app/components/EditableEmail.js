@@ -95,8 +95,7 @@ const EditableEmail = ({
 
   const sendEmail = async () => {
     const isProduction = process.env.NEXT_PUBLIC_NODE_ENV === 'production'
-    // const reallySend = isProduction
-    const reallySend = false
+    const reallySend = isProduction
 
     if (editorRef.current) {
       const content = editorRef.current.getContent()
