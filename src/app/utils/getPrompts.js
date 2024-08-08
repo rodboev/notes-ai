@@ -1,5 +1,7 @@
-import { readFile } from 'fs/promises'
-import { join } from 'path'
+import { readFile, writeFile, mkdir } from 'fs/promises'
+import { join, dirname } from 'path'
+import { getDoc, doc } from 'firebase/firestore'
+import { firestore } from '../../firebase.js'
 
 const promptsPath = join(process.cwd(), 'data', 'prompts.json')
 
@@ -27,6 +29,15 @@ async function getPromptsFromFirestore() {
     console.warn('Failed to read prompts from Firestore:', error)
   }
   return null
+}
+
+async function writePromptsToDisk(prompts) {
+  try {
+    await writeFile(promptsPath, JSON.stringify(prompts, null, 2), 'utf8')
+    console.log('Successfully wrote prompts to disk')
+  } catch (error) {
+    console.warn('Failed to write prompts to disk:', error)
+  }
 }
 
 export async function getPrompts() {
@@ -58,6 +69,7 @@ export async function getPrompts() {
 
     if (firestorePrompts) {
       const systemContent = expand(firestorePrompts.system.current, firestorePrompts)
+      await writePromptsToDisk(firestorePrompts)
 
       return [
         { role: 'system', content: systemContent },

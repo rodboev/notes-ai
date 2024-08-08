@@ -80,6 +80,10 @@ export default function Home() {
         const chunk = data?.chunk // string when streaming, object when full response
         const status = data?.status
 
+        if (chunk && chunk.error) {
+          console.warn(`${timestamp()} Error from server:`, chunk.error)
+        }
+
         let emails = []
         if (typeof chunk === 'object') {
           // Full response
@@ -113,18 +117,15 @@ export default function Home() {
           console.log(`${timestamp()} Received complete message, closing event source`)
           closeEventSource()
         }
-
-        //
       })
 
-      // emailEvents.addEventListener('error', (event) => {
-      //   closeEventSource()
-      //	console.log(`${timestamp()} Closed event source`)
-      //   // Use cached emails if API fails
-      //   console.log('${timestamp()} Using cached emails due to API failure:', event)
-      //   const joined = leftJoin({ notes, emails: cachedEmails })
-      //   setPairs(joined)
-      // })
+      emailEvents.addEventListener('error', (event) => {
+        console.error(`${timestamp()} EventSource error:`, event)
+        closeEventSource()
+        // Use cached emails if API fails
+        const joined = leftJoin({ notes, emails: cachedEmails })
+        setPairs(joined)
+      })
     } catch (error) {
       console.warn('${timestamp()} Error fetching emails:', String(error).split('\n')[0])
 
