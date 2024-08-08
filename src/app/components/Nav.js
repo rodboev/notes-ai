@@ -13,7 +13,8 @@ export default function Nav({ fetchData, notesExist, pairRefs, onClear, ...props
   const [showUploadZone, setShowUploadZone] = useState(false)
   const [showSettings, setShowSettings] = useState(false)
   const [systemPrompt, setSystemPrompt] = useState('')
-  const [emailTemplatePrompt, setEmailTemplatePrompt] = useState('')
+  const [emailPrompt, setEmailPrompt] = useState('')
+  const [isSaving, setIsSaving] = useState(false) // Settings
 
   const handleUpload = async (data) => {
     try {
@@ -45,7 +46,7 @@ export default function Nav({ fetchData, notesExist, pairRefs, onClear, ...props
       if (response.ok) {
         const data = await response.json()
         setSystemPrompt(data.system)
-        setEmailTemplatePrompt(data.emailTemplate)
+        setEmailPrompt(data.email)
       } else {
         console.error('Failed to fetch prompts')
       }
@@ -55,21 +56,41 @@ export default function Nav({ fetchData, notesExist, pairRefs, onClear, ...props
   }
 
   const savePrompts = async () => {
+    setIsSaving(true)
     try {
       const response = await fetch('/api/prompts', {
         method: 'PUT',
         headers: {
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify({ system: systemPrompt, emailTemplate: emailTemplatePrompt }),
+        body: JSON.stringify({ system: systemPrompt, email: emailPrompt }),
       })
       if (response.ok) {
         console.log('Prompts saved successfully')
+        setShowSettings(false)
       } else {
         console.error('Failed to save prompts')
       }
     } catch (error) {
       console.error('Error saving prompts:', error)
+    } finally {
+      setIsSaving(false)
+    }
+  }
+
+  const resetPrompts = async () => {
+    try {
+      const response = await fetch('/api/prompts')
+      if (response.ok) {
+        const data = await response.json()
+        setSystemPrompt(data.system)
+        setEmailPrompt(data.email)
+        console.log('Prompts reverted to defaults')
+      } else {
+        console.error('Failed to fetch default prompts')
+      }
+    } catch (error) {
+      console.error('Error fetching default prompts:', error)
     }
   }
 
@@ -99,7 +120,7 @@ export default function Nav({ fetchData, notesExist, pairRefs, onClear, ...props
     window.addEventListener('dragleave', handleDragLeave)
     window.addEventListener('drop', handleDrop)
 
-    // System prompt and email emailTemplate
+    // System prompt and email email
     fetchPrompts()
 
     return () => {
@@ -140,27 +161,45 @@ export default function Nav({ fetchData, notesExist, pairRefs, onClear, ...props
           </div>
         </nav>
         {showSettings && (
-          <div className="z-20 flex justify-center bg-gray-500 p-3 pt-2 text-white">
-            <div class="container flex max-w-screen-2xl gap-6 p-3">
-              <div className="left flex flex-1 flex-col gap-2">
-                <label for="system">System prompt:</label>
+          <div className="z-20 flex h-screen flex-col items-center bg-gradient-to-b from-neutral-700/50 to-black/75 p-6 pb-24 text-white backdrop-blur-md">
+            <div className="container flex max-w-screen-2xl justify-center gap-6 p-3">
+              <div className="left flex flex-1 flex-col gap-4">
+                <label htmlFor="system" className="text-base">
+                  System prompt:
+                </label>
                 <TextareaAutosize
                   id="system"
                   rows="4"
-                  className="w-full rounded-lg border border-gray-300 bg-gray-50 p-2.5 text-sm text-gray-900"
+                  className="w-full rounded-lg border border-gray-300 bg-gray-50 p-2.5 font-sans text-base text-gray-900"
                   value={systemPrompt}
                   onChange={(e) => setSystemPrompt(e.target.value)}
                 />
               </div>
-              <div className="right flex flex-1 flex-col gap-2">
-                <label for="emailTemplate">Email emailTemplate:</label>
+              <div className="right flex flex-1 flex-col gap-4">
+                <label htmlFor="email">Email template:</label>
                 <TextareaAutosize
-                  id="emailTemplate"
+                  id="email"
                   rows="4"
-                  className="w-full rounded-lg border border-gray-300 bg-gray-50 p-2.5 text-sm text-gray-900"
-                  value={emailTemplatePrompt}
-                  onChange={(e) => setEmailTemplatePrompt(e.target.value)}
+                  className="w-full rounded-lg border border-gray-300 bg-gray-50 p-2.5 font-sans text-base text-gray-900"
+                  value={emailPrompt}
+                  onChange={(e) => setEmailPrompt(e.target.value)}
                 />
+              </div>
+            </div>
+            <div className="container flex max-w-screen-2xl justify-center gap-6 p-6">
+              <div className="left flex flex-1 justify-end">
+                <button
+                  className="btn-teal rounded px-4 py-2"
+                  onClick={savePrompts}
+                  disabled={isSaving}
+                >
+                  {isSaving ? 'Saving' : 'Save prompts'}
+                </button>
+              </div>
+              <div className="right flex flex-1">
+                <button className="btn bg-neutral-500 px-4 py-2" onClick={resetPrompts}>
+                  Revert to originals
+                </button>
               </div>
             </div>
           </div>

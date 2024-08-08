@@ -6,6 +6,9 @@ module.exports = {
     './src/app/**/*.{js,ts,jsx,tsx,mdx}',
   ],
   theme: {
+    fontFamily: {
+      sans: 'Helvetica, Arial, sans-serif',
+    },
     extend: {
       spacing: { full: '100%' },
       flex: {

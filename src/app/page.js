@@ -106,6 +106,7 @@ export default function Home() {
 
           const joined = leftJoin({ notes, emails: allEmails })
           setPairs(joined)
+          console.log(joined)
         }
 
         if (status === 'complete') {
@@ -195,8 +196,8 @@ export default function Home() {
                             className="relative mb-4 flex flex-col"
                             htmlContent={pair.email.body}
                             subject={pair.email.subject}
-                            // to="a.dallas@libertypestnyc.com, r.boev@libertypestnyc.com"
-                            to="r.boev@libertypestnyc.com"
+                            to="a.dallas@libertypestnyc.com, r.boev@libertypestnyc.com"
+                            // to="r.boev@libertypestnyc.com"
                             onEmailSent={() => handleSendEmailButtonClick(index)}
                             fingerprint={pair.note.fingerprint}
                             fetchData={fetchData}

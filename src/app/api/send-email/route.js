@@ -87,8 +87,6 @@ export async function POST(req) {
     const updatedStatuses = { ...existingStatuses, [fingerprint]: emailData }
     await saveStatuses(updatedStatuses)
 
-    console.log('Updated statuses:', JSON.stringify(updatedStatuses, null, 2))
-
     return NextResponse.json({ message: 'Email sent successfully', status: emailData })
   } catch (error) {
     console.error('Error sending email:', error)

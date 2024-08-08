@@ -2,13 +2,15 @@
 
 import OpenAI from 'openai'
 import { parse } from 'best-effort-json-parser'
-import prompts from './prompts.js'
 import { firestore } from '../../../firebase.js'
 import { readFromDisk, writeToDisk, deleteFromDisk } from '../../utils/diskStorage'
 import { collection, doc, writeBatch, getDocs } from 'firebase/firestore'
 import { chunkArray } from '../../utils/arrayUtils'
 import { timestamp } from '../../utils/timestamp'
+import { readFile } from 'fs/promises'
+import { join } from 'path'
 import dotenv from 'dotenv'
+import { getPrompts } from '../../utils/getPrompts.js'
 
 dotenv.config()
 const isProduction = process.env.NEXT_PUBLIC_NODE_ENV === 'production'
@@ -136,11 +138,16 @@ export async function GET(req) {
       }
 
       async function streamResponse(chunk) {
-        const userPrompt = prompts.base + JSON.stringify(chunk)
-        const messages = [
-          { role: 'system', content: prompts.system },
-          { role: 'user', content: userPrompt },
-        ]
+        const messages = await getPrompts()
+
+        const systemPrompt = messages.find((message) => message.role === 'system')
+        const userPrompt = messages.find((message) => message.role === 'user')
+
+        if (!systemPrompt || !userPrompt) {
+          throw new Error('Required prompts not found in messages')
+        }
+
+        userPrompt.content += JSON.stringify(chunk)
 
         let stream
         try {
@@ -148,11 +155,11 @@ export async function GET(req) {
             model: 'gpt-4o-mini',
             stream: true,
             response_format: { type: 'json_object' },
-            messages,
+            messages: [systemPrompt, userPrompt],
             seed: 0,
           })
         } catch (error) {
-          console.warn(`${timestamp()} API error:`, String(error))
+          console.warn(`${timestamp()} OpenAI API error in streamResponse:`, String(error))
         }
 
         let emailsJson = ''
@@ -238,8 +245,8 @@ export async function GET(req) {
           controller.close()
         }
       } catch (error) {
-        console.error('${timestamp()} Error processing emails:', error.split('\n')[0])
-        sendData({ error: 'Internal server error' }, 'error')
+        console.error(`${timestamp()} Error processing emails:`, error)
+        sendData({ error: error.message || 'Internal server error' }, 'error')
       }
     },
   })

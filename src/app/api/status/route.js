@@ -75,8 +75,6 @@ export async function POST(req) {
 
     await saveStatuses(updatedStatuses)
 
-    console.log('Updated statuses:', JSON.stringify(updatedStatuses, null, 2))
-
     return new Response(
       JSON.stringify({
         message: 'Statuses updated successfully',
