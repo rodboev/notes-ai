@@ -150,7 +150,7 @@ export async function GET(req) {
         let stream
         try {
           stream = await openai.chat.completions.create({
-            model: 'gpt-4o-mini',
+            model: isProduction ? 'gpt-4o' : 'gpt-4o-mini',
             stream: true,
             response_format: { type: 'json_object' },
             messages: [systemPrompt, userPrompt],
