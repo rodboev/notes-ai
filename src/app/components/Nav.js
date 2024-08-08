@@ -8,13 +8,18 @@ import UploadComponent from './UploadComponent'
 import { CloudArrowUpIcon } from '@heroicons/react/24/outline'
 import { Cog6ToothIcon } from '@heroicons/react/20/solid'
 import TextareaAutosize from 'react-textarea-autosize'
+import { useLocalStorage } from '../utils/useLocalStorage'
 
 export default function Nav({ fetchData, notesExist, pairRefs, onClear, ...props }) {
   const [showUploadZone, setShowUploadZone] = useState(false)
   const [showSettings, setShowSettings] = useState(false)
   const [systemPrompt, setSystemPrompt] = useState('')
   const [emailPrompt, setEmailPrompt] = useState('')
-  const [isSaving, setIsSaving] = useState(false) // Settings
+  const [cachedPrompts, setCachedPrompts] = useLocalStorage('promptsCache', {
+    system: '',
+    email: '',
+  })
+  const [savingPrompts, setSavingPrompts] = useState(false) // Settings
 
   const handleUpload = async (data) => {
     try {
@@ -42,24 +47,29 @@ export default function Nav({ fetchData, notesExist, pairRefs, onClear, ...props
 
   const fetchPrompts = async () => {
     try {
+      // Fetch from /api/prompts (reads from disk, then Firestore)
       const response = await fetch('/api/prompts')
       if (response.ok) {
         const data = await response.json()
         setSystemPrompt(data.system)
         setEmailPrompt(data.email)
+        setCachedPrompts({ system: data.system, email: data.email })
       } else {
-        console.error('Failed to fetch prompts')
+        throw new Error('Failed to fetch prompts from API')
       }
     } catch (error) {
-      console.error('Error fetching prompts:', error)
+      // Fall back to local storage
+      setSystemPrompt(cachedPrompts.system)
+      setEmailPrompt(cachedPrompts.email)
+      console.warn('Using cached prompts:', error.message)
     }
   }
 
   const savePrompts = async () => {
-    setIsSaving(true)
+    setSavingPrompts(true)
     try {
       const response = await fetch('/api/prompts', {
-        method: 'PUT',
+        method: 'PATCH',
         headers: {
           'Content-Type': 'application/json',
         },
@@ -74,7 +84,7 @@ export default function Nav({ fetchData, notesExist, pairRefs, onClear, ...props
     } catch (error) {
       console.error('Error saving prompts:', error)
     } finally {
-      setIsSaving(false)
+      setSavingPrompts(false)
     }
   }
 
@@ -191,9 +201,9 @@ export default function Nav({ fetchData, notesExist, pairRefs, onClear, ...props
                 <button
                   className="btn-teal rounded px-4 py-2"
                   onClick={savePrompts}
-                  disabled={isSaving}
+                  disabled={savingPrompts}
                 >
-                  {isSaving ? 'Saving' : 'Save prompts'}
+                  {savingPrompts ? 'Saving' : 'Save prompts'}
                 </button>
               </div>
               <div className="right flex flex-1">
