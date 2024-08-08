@@ -5,7 +5,9 @@ import { useEffect, useRef, useState } from 'react'
 import { CheckIcon, ExclamationTriangleIcon } from '@heroicons/react/16/solid'
 import SpinnerIcon from './Icons/SpinnerIcon'
 import RefreshIcon from './Icons/RefreshIcon-v4'
+import SendIcon from './Icons/SendIcon-v1'
 import { usePersistedEmailStatus } from '../hooks/usePersistedEmailStatus'
+import { motion, AnimatePresence } from 'framer-motion'
 
 const EditableEmail = ({
   htmlContent,
@@ -19,6 +21,8 @@ const EditableEmail = ({
   const editorRef = useRef(null)
   const [emailStatus, setEmailStatus, isLoading] = usePersistedEmailStatus(fingerprint)
   const [editorReady, setEditorReady] = useState(false)
+  const [feedbackFieldVisible, setFeedbackFieldVisible] = useState(false)
+  const [feedbackText, setFeedbackText] = useState('')
 
   const disableToolbarButtons = (disable) => {
     const editor = editorRef.current
@@ -33,14 +37,6 @@ const EditableEmail = ({
             button.classList.remove('tox-tbtn--disabled')
           }
         })
-
-        // const refreshButton = editor.parentNode.querySelector('button.refresh')
-        // if (disable) {
-        //   refreshButton.classList.add('.text-neutral-500')
-        // }
-        // else {
-        //   refreshButton.classList.remove('.text-neutral-500')
-        // }
       })
     }
   }
@@ -139,6 +135,32 @@ const EditableEmail = ({
     }
   }
 
+  const handleFeedbackClick = async () => {
+    if (!feedbackFieldVisible) {
+      setFeedbackFieldVisible(true)
+    } else {
+      // Send feedback
+      try {
+        const response = await fetch('/api/send-feedback', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({ feedback: feedbackText, fingerprint }),
+        })
+        if (response.ok) {
+          console.log('Feedback sent successfully!')
+          setFeedbackFieldVisible(false)
+          setFeedbackText('')
+        } else {
+          console.warn('Failed to send feedback.')
+        }
+      } catch (error) {
+        console.error('Error sending feedback:', error)
+      }
+    }
+  }
+
   return (
     <div {...domProps}>
       <Editor
@@ -171,14 +193,14 @@ const EditableEmail = ({
           <RefreshIcon className="h-5 w-5" />
         </span>
       </button>
-      <div className="mt-4 flex">
+      <div className="mt-4 flex items-center justify-between">
         <button
           onClick={() => {
             ;(Object.keys(emailStatus).length === 0 || emailStatus.status === 'error') &&
               sendEmail()
           }}
           disabled={!(Object.keys(emailStatus).length === 0 || emailStatus.status === 'error')}
-          className={
+          className={`mr-2 ${
             Object.keys(emailStatus).length === 0
               ? 'btn-teal flex'
               : emailStatus.status === 'sending'
@@ -188,7 +210,7 @@ const EditableEmail = ({
                   : emailStatus.status === 'error'
                     ? 'btn flex border-2 border-red-600'
                     : null
-          }
+          }`}
         >
           {Object.keys(emailStatus).length === 0 ? (
             <span>Send email</span>
@@ -209,9 +231,36 @@ const EditableEmail = ({
             </>
           ) : null}
         </button>
-        <button className="btn mx-4 inline-block w-fit bg-neutral-500 text-white">
-          Send feedback
-        </button>
+        {/* feedbackFieldVisible && (
+          <div className="pl h-[90%] border-l-[2px] border-solid border-neutral-300"></div>
+        ) */}
+        <div className="mx-2 flex items-center justify-between">
+          <AnimatePresence>
+            {feedbackFieldVisible && (
+              <motion.div
+                initial={{ width: 0, opacity: 0 }}
+                animate={{ width: 'auto', opacity: 1 }}
+                exit={{ width: 0, opacity: 0 }}
+                transition={{ duration: 0.3 }}
+                style={{ overflow: 'hidden' }}
+              >
+                <input
+                  type="text"
+                  value={feedbackText}
+                  onChange={(e) => setFeedbackText(e.target.value)}
+                  className="mr-2 rounded border p-2"
+                  placeholder="Enter feedback"
+                />
+              </motion.div>
+            )}
+          </AnimatePresence>
+          <button
+            onClick={handleFeedbackClick}
+            className="btn inline-block w-fit justify-end bg-neutral-500 text-white"
+          >
+            {feedbackFieldVisible ? <SendIcon className="h-6 w-6" /> : 'Send feedback'}
+          </button>
+        </div>
       </div>
     </div>
   )

@@ -10,7 +10,7 @@
 
 /* Button */
 .btn {
-  @apply w-fit items-center overflow-hidden rounded px-4 py-2 font-bold hover:bg-opacity-95 active:bg-opacity-100;
+  @apply flex w-fit items-center overflow-hidden rounded px-4 py-2 font-bold hover:bg-opacity-95 active:bg-opacity-100;
 }
 .btn-teal {
   @apply btn bg-teal text-white;

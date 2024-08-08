@@ -25,5 +25,8 @@ module.exports = {
       },
     },
   },
+  corePlugins: {
+    divideStyle: true,
+  },
   plugins: [],
 }
