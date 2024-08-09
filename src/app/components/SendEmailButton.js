@@ -2,16 +2,14 @@
 
 import { CheckIcon, ExclamationTriangleIcon } from '@heroicons/react/16/solid'
 import SpinnerIcon from './Icons/SpinnerIcon'
-import { useEffect } from 'react'
 
 const SendEmailButton = ({
   fingerprint,
   subject,
   editorRef,
   emailStatus,
-  setEmailStatus,
+  onEmailStatusChange,
   onEmailSent,
-  updateEditorState,
 }) => {
   const isProduction = process.env.NEXT_PUBLIC_NODE_ENV === 'production'
   const to = isProduction
@@ -24,7 +22,7 @@ const SendEmailButton = ({
 
     if (editorRef.current) {
       const content = editorRef.current.getContent()
-      setEmailStatus({ status: 'sending' })
+      onEmailStatusChange({ status: 'sending' })
       if (reallySend) {
         try {
           const response = await fetch('/api/send-email', {
@@ -37,20 +35,20 @@ const SendEmailButton = ({
           if (response.ok) {
             const data = await response.json()
             console.log('Email sent successfully!')
-            setEmailStatus(data.status)
+            onEmailStatusChange(data.status)
             onEmailSent()
           } else {
             console.warn('Failed to send email.')
-            setEmailStatus({ status: 'error' })
+            onEmailStatusChange({ status: 'error' })
           }
         } catch (error) {
           console.error('Error sending email:', error)
-          setEmailStatus({ status: 'error', error: error.message })
+          onEmailStatusChange({ status: 'error', error: error.message })
         }
       } else {
         // Simulate sending for non-production environments
         setTimeout(() => {
-          setEmailStatus({
+          onEmailStatusChange({
             status: 'success',
             sentAt: new Date().toISOString(),
             subject,
@@ -60,7 +58,6 @@ const SendEmailButton = ({
           onEmailSent()
         }, 800)
       }
-      updateEditorState('success')
     }
   }
 

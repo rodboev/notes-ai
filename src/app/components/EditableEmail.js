@@ -44,6 +44,12 @@ const EditableEmail = ({
     }
   }
 
+  const handleEmailStatusChange = (newStatus) => {
+    setEmailStatus(newStatus)
+    const isDisabled = ['sending', 'success'].includes(newStatus.status)
+    updateEditorState(isDisabled)
+  }
+
   const updateEditorState = (isDisabled) => {
     const editor = editorRef.current
     if (!editor) return
@@ -119,10 +125,9 @@ const EditableEmail = ({
           fingerprint={fingerprint}
           subject={subject}
           emailStatus={emailStatus}
-          setEmailStatus={setEmailStatus}
+          onEmailStatusChange={handleEmailStatusChange}
           editorRef={editorRef}
           onEmailSent={handleSendEmailButtonClick}
-          updateEditorState={updateEditorState}
         />
         <FeedbackButton
           noteContent={body}
