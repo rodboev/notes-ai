@@ -21,8 +21,10 @@ const EditableEmail = ({
   const editorRef = useRef(null)
   const [emailStatus, setEmailStatus, isLoading] = usePersistedEmailStatus(fingerprint)
   const [editorReady, setEditorReady] = useState(false)
+
   const [feedbackFieldVisible, setFeedbackFieldVisible] = useState(false)
   const [feedbackText, setFeedbackText] = useState('')
+  const [feedbackStatus, setFeedbackStatus] = useState('idle')
 
   const disableToolbarButtons = (disable) => {
     const editor = editorRef.current
@@ -138,8 +140,8 @@ const EditableEmail = ({
   const handleFeedbackClick = async () => {
     if (!feedbackFieldVisible) {
       setFeedbackFieldVisible(true)
-    } else {
-      // Send feedback
+    } else if (feedbackStatus !== 'sending' && feedbackStatus !== 'success') {
+      setFeedbackStatus('sending')
       try {
         const response = await fetch('/api/send-feedback', {
           method: 'POST',
@@ -150,13 +152,14 @@ const EditableEmail = ({
         })
         if (response.ok) {
           console.log('Feedback sent successfully!')
-          setFeedbackFieldVisible(false)
-          setFeedbackText('')
+          setFeedbackStatus('success')
         } else {
           console.warn('Failed to send feedback.')
+          setFeedbackStatus('error')
         }
       } catch (error) {
         console.error('Error sending feedback:', error)
+        setFeedbackStatus('error')
       }
     }
   }
@@ -182,17 +185,23 @@ const EditableEmail = ({
           toolbar: 'bold italic bullist numlist',
           autoresize_bottom_margin: 0,
           autoresize_min_height: 300,
+          autoresize_min_height: 300,
           content_style:
             "@import url('https://fonts.googleapis.com/css2?family=Inter:wght@100..900&display=swap'); body { font-family: sans-serif; }",
           font_formats:
             'Inter=Inter, sans-serif; Arial=arial,helvetica,sans-serif; Courier New=courier new,courier; Times New Roman=times new roman,times',
         }}
       />
-      <button onClick={() => fetchData(fingerprint)} className="refresh absolute z-10 m-6 self-end">
-        <span className="-mx-1 -my-0.5 flex items-center gap-1.5">
-          <RefreshIcon className="h-5 w-5" />
-        </span>
-      </button>
+      {!(emailStatus.status === 'sending' || emailStatus.status === 'success') && (
+        <button
+          onClick={() => fetchData(fingerprint)}
+          className="refresh absolute z-10 m-6 self-end"
+        >
+          <span className="-mx-1 -my-0.5 flex items-center gap-1.5">
+            <RefreshIcon className="h-5 w-5" />
+          </span>
+        </button>
+      )}
       <div className="mt-4 flex items-center justify-between">
         <button
           onClick={() => {
@@ -231,34 +240,67 @@ const EditableEmail = ({
             </>
           ) : null}
         </button>
-        {/* feedbackFieldVisible && (
-          <div className="pl h-[90%] border-l-[2px] border-solid border-neutral-300"></div>
-        ) */}
-        <div className="mx-2 flex items-center justify-between">
+        <div className="mx-2 flex items-center justify-end">
           <AnimatePresence>
             {feedbackFieldVisible && (
               <motion.div
                 initial={{ width: 0, opacity: 0 }}
                 animate={{ width: 'auto', opacity: 1 }}
                 exit={{ width: 0, opacity: 0 }}
-                transition={{ duration: 0.3 }}
+                transition={{ duration: 0.2 }}
                 style={{ overflow: 'hidden' }}
               >
                 <input
                   type="text"
                   value={feedbackText}
                   onChange={(e) => setFeedbackText(e.target.value)}
-                  className="mr-2 rounded border p-2"
+                  className={`mr-2 w-[calc(8rem+11vw)] rounded border-2 p-1.5 px-3 ${
+                    feedbackStatus === 'success' || feedbackStatus === 'sending'
+                      ? 'cursor-not-allowed'
+                      : ''
+                  }`}
                   placeholder="Enter feedback"
+                  disabled={feedbackStatus === 'sending' || feedbackStatus === 'success'}
                 />
               </motion.div>
             )}
           </AnimatePresence>
           <button
             onClick={handleFeedbackClick}
-            className="btn inline-block w-fit justify-end bg-neutral-500 text-white"
+            className={`btn inline-block w-fit ${
+              feedbackStatus === 'success'
+                ? 'cursor-not-allowed border-2 border-green-600 bg-white'
+                : feedbackStatus === 'sending'
+                  ? 'cursor-not-allowed bg-neutral-500 text-white'
+                  : feedbackStatus === 'error'
+                    ? 'border-2 border-red-600'
+                    : 'bg-neutral-500 text-white'
+            }`}
+            disabled={feedbackStatus === 'sending' || feedbackStatus === 'success'}
           >
-            {feedbackFieldVisible ? <SendIcon className="h-6 w-6" /> : 'Send feedback'}
+            {!feedbackFieldVisible ? (
+              'Send feedback'
+            ) : feedbackStatus === 'sending' ? (
+              <>
+                <SpinnerIcon className="mr-3 h-6 w-6" />
+                <span>Sending</span>
+              </>
+            ) : feedbackStatus === 'success' ? (
+              <>
+                <CheckIcon className="-ml-2 mr-1.5 h-8 w-8 text-green-600" />
+                <span>Sent</span>
+              </>
+            ) : feedbackStatus === 'error' ? (
+              <>
+                <ExclamationTriangleIcon className="-ml-0.5 mr-2.5 h-6 w-6 text-red-600" />
+                <span>Try again</span>
+              </>
+            ) : (
+              <>
+                <SendIcon className="mr-3 h-5 w-5" />
+                <span>Send</span>
+              </>
+            )}
           </button>
         </div>
       </div>

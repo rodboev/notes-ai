@@ -192,7 +192,7 @@ export default function Home() {
                             {pair.email.subject}
                           </h2>
                         )}
-                        {pair.email.body && (
+                        {pair.email.body ? (
                           <EditableEmail
                             className="relative mb-4 flex flex-col"
                             htmlContent={pair.email.body}
@@ -203,20 +203,21 @@ export default function Home() {
                             fingerprint={pair.note.fingerprint}
                             fetchData={fetchData}
                           />
-                        )}
-                        {pair.email.error && (
-                          <div className="relative inline-flex min-w-96 max-w-2xl flex-col items-center self-center rounded-lg border-2 border-dashed px-10 py-14 text-neutral-500">
-                            <button
-                              onClick={() => fetchData(pair.note.fingerprint)}
-                              className="refresh absolute right-0 top-0 z-10 m-6 self-end"
-                            >
-                              <span className="-mx-1 -my-0.5 flex items-center gap-1.5">
-                                <RefreshIcon className="h-5 w-5" />
-                              </span>
-                            </button>
-                            <ExclamationTriangleIcon className="m-4 w-10" />
-                            <div>{pair.email?.error}</div>
-                          </div>
+                        ) : (
+                          pair.email.error && (
+                            <div className="relative inline-flex min-w-96 max-w-2xl flex-col items-center self-center rounded-lg border-2 border-dashed px-10 py-14 text-neutral-500">
+                              <button
+                                onClick={() => fetchData(pair.note.fingerprint)}
+                                className="refresh absolute right-0 top-0 z-10 m-6 self-end"
+                              >
+                                <span className="-mx-1 -my-0.5 flex items-center gap-1.5">
+                                  <RefreshIcon className="h-5 w-5" />
+                                </span>
+                              </button>
+                              <ExclamationTriangleIcon className="m-4 w-10" />
+                              <div>{pair.email?.error}</div>
+                            </div>
+                          )
                         )}
                       </>
                     ) : (

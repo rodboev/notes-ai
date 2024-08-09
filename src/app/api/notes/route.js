@@ -61,7 +61,7 @@ export async function GET() {
         return a.time.localeCompare(b.time)
       })
 
-    if (!isProduction) notes = notes.slice(0, 2)
+    if (!isProduction) notes = notes.slice(0, 6)
 
     return NextResponse.json(notes)
   } catch (error) {

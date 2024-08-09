@@ -147,8 +147,8 @@ export default function Nav({ fetchData, notesExist, pairRefs, onClear }) {
 
   return (
     <>
-      <div className="align-center fixed left-0 z-20 flex w-full flex-col">
-        <nav className="flex justify-center border-b bg-white/50 p-3 backdrop-blur-md">
+      <div className="align-center fixed z-20 -ml-4 flex w-full flex-col">
+        <nav className="ml-4 flex justify-center border-b bg-white/50 p-3 backdrop-blur-md">
           <div className="container flex w-full max-w-screen-2xl items-center justify-between">
             <div className="left tracking-tighter">
               <span className="display-inline mx-1 text-5xl font-bold text-teal">liberty</span>
@@ -164,7 +164,7 @@ export default function Nav({ fetchData, notesExist, pairRefs, onClear }) {
               )}
               <div className="relative m-1 mr-2">
                 <SettingsIcon
-                  className="icon align-center flex cursor-pointer text-neutral-500"
+                  className="icon align-center flex cursor-pointer text-neutral-500 hover:opacity-85"
                   onClick={toggleSettings}
                 />
               </div>

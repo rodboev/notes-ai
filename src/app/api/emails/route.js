@@ -199,7 +199,7 @@ export async function GET(req) {
             //     .sort((a, b) => new Date(a.date + 'T' + a.time) - new Date(b.date + 'T' + b.time))
             //     .slice(0, 5),
             // )
-            .then((sortedNotes) => chunkArray(sortedNotes, isProduction ? 8 : 1))
+            .then((sortedNotes) => chunkArray(sortedNotes, isProduction ? 8 : 2))
 
           let emailsToSave = []
           for (const chunk of noteChunks) {

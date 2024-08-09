@@ -28,5 +28,5 @@ module.exports = {
   corePlugins: {
     divideStyle: true,
   },
-  plugins: [],
+  plugins: [require('tailwindcss-safe-area')],
 }
