@@ -6,7 +6,7 @@ import { doc, getDoc, setDoc } from 'firebase/firestore'
 
 const promptsPath = join(process.cwd(), 'data', 'prompts.json')
 
-async function loadPromptsFromDisk() {
+export async function loadPromptsFromDisk() {
   try {
     const data = await readFile(promptsPath, 'utf8')
     return JSON.parse(data)
@@ -20,7 +20,7 @@ async function loadPromptsFromDisk() {
   }
 }
 
-async function loadPromptsFromFirestore() {
+export async function loadPromptsFromFirestore() {
   try {
     const promptsDoc = await getDoc(doc(firestore, 'prompts', 'current'))
     if (promptsDoc.exists()) {
@@ -50,11 +50,7 @@ async function savePromptsToFirestore(prompts) {
   }
 }
 
-export async function GET(request) {
-  const { searchParams } = new URL(request.url)
-  const all = searchParams.has('all')
-  console.log(searchParams)
-
+export async function GET() {
   let prompts = await loadPromptsFromDisk()
 
   if (!prompts) {
@@ -72,14 +68,10 @@ export async function GET(request) {
     }
   }
 
-  if (all) {
-    return NextResponse.json(prompts)
-  } else {
-    return NextResponse.json({
-      system: prompts.system?.current,
-      email: prompts.email?.current,
-    })
-  }
+  return NextResponse.json({
+    system: prompts.system?.current,
+    email: prompts.email?.current,
+  })
 }
 
 export async function PATCH(req) {
