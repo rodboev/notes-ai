@@ -4,7 +4,7 @@ import { join, dirname } from 'path'
 import { firestore } from '../../../firebase'
 import { doc, getDoc, setDoc } from 'firebase/firestore'
 
-const promptsPath = join(process.cwd(), 'data', 'prompts.json')
+export const promptsPath = join(process.cwd(), 'data', 'prompts.json')
 
 export async function loadPromptsFromDisk() {
   try {
