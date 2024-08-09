@@ -47,7 +47,7 @@ export default function Nav({ fetchData, notesExist, pairRefs, onClear }) {
               <span className="display-inline mx-1 text-2xl">notes ai</span>
             </div>
             <div className="right align-center flex items-center px-3">
-              <UploadButton handleUpload={handleUpload} pairRefs={pairRefs} />
+              <UploadButton onUpload={handleUpload} pairRefs={pairRefs} />
               {notesExist && (
                 <ClearButton fetchData={fetchData} onClear={onClear} pairRefs={pairRefs} />
               )}
