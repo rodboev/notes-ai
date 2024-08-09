@@ -19,8 +19,8 @@ export default function Home() {
   const [notesExist, setNotesExist] = useState(true)
   const emailEventSourceRef = useRef(null)
   const pairRefs = useRef([])
-  const [cachedEmails, setCachedEmails, syncCachedEmails] = useLocalStorage('emailsCache', [])
-  const [cachedNotes, setCachedNotes, syncCachedNotes] = useLocalStorage('notesCache', [])
+  const [cachedEmails, setCachedEmails] = useLocalStorage('emailsCache', [])
+  const [cachedNotes, setCachedNotes] = useLocalStorage('notesCache', [])
 
   const closeEventSource = () => {
     if (emailEventSourceRef.current) {
@@ -135,14 +135,6 @@ export default function Home() {
     }
   }
 
-  const handleSendEmailButtonClick = (index) => {
-    setTimeout(() => {
-      if (index + 1 < pairRefs.current.length) {
-        pairRefs.current[index + 1].scrollIntoView({ behavior: 'smooth' })
-      }
-    }, 100)
-  }
-
   const handleClear = () => {
     setPairs([])
     setNotesExist(false)
@@ -195,12 +187,8 @@ export default function Home() {
                         {pair.email.body ? (
                           <EditableEmail
                             className="relative mb-4 flex flex-col"
-                            htmlContent={pair.email.body}
-                            subject={pair.email.subject}
-                            to="a.dallas@libertypestnyc.com, r.boev@libertypestnyc.com"
-                            // to="r.boev@libertypestnyc.com"
+                            {...pair.email}
                             onEmailSent={() => handleSendEmailButtonClick(index)}
-                            fingerprint={pair.note.fingerprint}
                             fetchData={fetchData}
                           />
                         ) : (

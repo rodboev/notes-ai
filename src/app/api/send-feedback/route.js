@@ -12,14 +12,14 @@ export async function POST(req) {
   let feedback, fingerprint
   try {
     const body = await req.json()
-    ;({ feedback, fingerprint } = body)
+    ;({ feedback, note, email } = body)
   } catch (error) {
     console.error('Error parsing request body:', error)
     return NextResponse.json({ error: 'Invalid request body' }, { status: 400 })
   }
 
-  if (!feedback || !fingerprint) {
-    const missingFields = ['feedback', 'fingerprint'].filter((field) => !eval(field))
+  if (!feedback) {
+    const missingFields = ['feedback'].filter((field) => !eval(field))
     console.error('Missing fields:', missingFields.join(', '))
     return NextResponse.json({ error: 'Missing field', details: missingFields }, { status: 400 })
   }
@@ -33,7 +33,8 @@ export async function POST(req) {
       subject: 'New Feedback Received',
       html: `
         <h2>New Feedback</h2>
-        <p><strong>Fingerprint:</strong> ${fingerprint}</p>
+        <p><strong>Note:</strong> ${note}</p>
+        <p><strong>Email:</strong> ${email}</p>
         <p><strong>Feedback:</strong> ${feedback}</p>
       `,
     }
