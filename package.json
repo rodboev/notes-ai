@@ -6,7 +6,8 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "lint": "next lint"
+    "lint": "next lint",
+    "postinstall": "if not exist src\\app\\tinymce mkdir src\\app\\tinymce && xcopy /E /I /Y node_modules\\tinymce src\\app\\tinymce"
   },
   "dependencies": {
     "@heroicons/react": "^2.1.5",
@@ -25,7 +26,8 @@
     "react-dom": "^19.0.0-rc-f994737d14-20240522",
     "react-dropzone": "^14.2.3",
     "react-textarea-autosize": "^8.5.3",
-    "tiktoken": "^1.0.15"
+    "tiktoken": "^1.0.15",
+    "tinymce": "^7.3.0"
   },
   "devDependencies": {
     "@types/react": "^18.3.3",
