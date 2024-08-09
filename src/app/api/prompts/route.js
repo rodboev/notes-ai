@@ -18,6 +18,10 @@ async function loadPromptsFromDisk(path) {
     const data = await readFile(path, 'utf8')
     return JSON.parse(data)
   } catch (error) {
+    if (error.code === 'ENOENT') {
+      console.log(`File not found: ${path}`)
+      return null
+    }
     console.warn(`Failed to read prompts from ${path}:`, error)
     return null
   }
@@ -65,7 +69,10 @@ export async function getPrompts() {
       await savePrompts(currentPrompts)
     } else {
       console.log('No current prompts found in Firestore, using defaults')
-      currentPrompts = defaultPrompts
+      currentPrompts = {
+        email: { current: defaultPrompts.email.default },
+        system: { current: defaultPrompts.system.default },
+      }
       await savePrompts(currentPrompts)
     }
   }

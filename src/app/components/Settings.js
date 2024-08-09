@@ -23,19 +23,26 @@ export default function Settings({ onClose }) {
       const response = await fetch('/api/prompts')
       if (response.ok) {
         const data = await response.json()
-        setSystemPrompt(data.system.current)
-        setEmailPrompt(data.email.current)
+        setSystemPrompt(data.system.current || data.system.default)
+        setEmailPrompt(data.email.current || data.email.default)
         setCachedPrompts({
-          system: { current: data.system.current, default: data.system.default },
-          email: { current: data.email.current, default: data.email.default },
+          system: {
+            current: data.system.current || data.system.default,
+            default: data.system.default,
+          },
+          email: {
+            current: data.email.current || data.email.default,
+            default: data.email.default,
+          },
         })
       } else {
         throw new Error('Failed to fetch prompts from API')
       }
     } catch (error) {
-      setSystemPrompt(cachedPrompts.system.current)
-      setEmailPrompt(cachedPrompts.email.current)
-      console.warn('Using cached prompts:', error.message)
+      console.warn('Error fetching prompts:', error.message)
+      // Fall back to cached prompts if available, otherwise use empty strings
+      setSystemPrompt(cachedPrompts.system.current || '')
+      setEmailPrompt(cachedPrompts.email.current || '')
     }
   }
 
@@ -54,6 +61,12 @@ export default function Settings({ onClose }) {
       })
       if (response.ok) {
         console.log('Prompts saved successfully')
+        // Update the cached prompts
+        setCachedPrompts((prev) => ({
+          ...prev,
+          system: { ...prev.system, current: systemPrompt },
+          email: { ...prev.email, current: emailPrompt },
+        }))
         onClose()
       } else {
         console.error('Failed to save prompts')
@@ -66,8 +79,8 @@ export default function Settings({ onClose }) {
   }
 
   const resetPrompts = () => {
-    setSystemPrompt(cachedPrompts.system.default)
-    setEmailPrompt(cachedPrompts.email.default)
+    setSystemPrompt(cachedPrompts.system.default || '')
+    setEmailPrompt(cachedPrompts.email.default || '')
     console.log('Prompts reverted to defaults')
   }
 
