@@ -187,9 +187,11 @@ export default function Home() {
                         {pair.email.body ? (
                           <EditableEmail
                             className="relative mb-4 flex flex-col"
-                            {...pair.email}
-                            onEmailSent={() => handleSendEmailButtonClick(index)}
                             fetchData={fetchData}
+                            pairIndex={index}
+                            pairsLength={pairs.length}
+                            pairRefs={pairRefs}
+                            {...pair.email}
                           />
                         ) : (
                           pair.email.error && (
