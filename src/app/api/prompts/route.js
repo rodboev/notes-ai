@@ -66,6 +66,7 @@ export async function getPrompts() {
     console.log('Current prompts not found on disk, fetching from Firestore')
     currentPrompts = await loadPromptsFromFirestore()
     if (currentPrompts) {
+      console.log('Prompts found in Firestore, saving to disk')
       await savePrompts(currentPrompts)
     } else {
       console.log('No current prompts found in Firestore, using defaults')
@@ -73,8 +74,11 @@ export async function getPrompts() {
         email: { current: defaultPrompts.email.default },
         system: { current: defaultPrompts.system.default },
       }
+      console.log('Saving default prompts as current')
       await savePrompts(currentPrompts)
     }
+  } else {
+    console.log('Current prompts loaded from disk')
   }
 
   const mergedPrompts = {
