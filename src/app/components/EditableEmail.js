@@ -108,6 +108,7 @@ const EditableEmail = ({
           autoresize_bottom_margin: 0,
           autoresize_min_height: 300,
           content_style: 'body { font-family: sans-serif; }',
+          base_url: '/api/tinymce',
         }}
       />
       {!(emailStatus.status === 'sending' || emailStatus.status === 'success') && (
