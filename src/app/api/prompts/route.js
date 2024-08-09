@@ -11,7 +11,7 @@ const __filename = fileURLToPath(import.meta.url)
 const __dirname = dirname(__filename)
 
 const promptsCurrent = join(process.cwd(), 'data', 'prompts-current.json')
-const promptsDefault = join(__dirname, 'prompts-default.json')
+const promptsDefault = join(process.cwd(), 'src', 'app', 'api', 'prompts', 'prompts-default.json')
 
 async function loadPromptsFromDisk(path) {
   try {
