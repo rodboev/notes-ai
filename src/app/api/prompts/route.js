@@ -59,11 +59,14 @@ export async function getPrompts() {
   }
 
   if (!currentPrompts) {
+    console.log('Current prompts not found on disk, fetching from Firestore')
     currentPrompts = await loadPromptsFromFirestore()
     if (currentPrompts) {
       await savePrompts(currentPrompts)
     } else {
-      currentPrompts = {}
+      console.log('No current prompts found in Firestore, using defaults')
+      currentPrompts = defaultPrompts
+      await savePrompts(currentPrompts)
     }
   }
 
