@@ -50,7 +50,11 @@ async function savePromptsToFirestore(prompts) {
   }
 }
 
-export async function GET() {
+export async function GET(request) {
+  const { searchParams } = new URL(request.url)
+  const all = searchParams.has('all')
+  console.log(searchParams)
+
   let prompts = await loadPromptsFromDisk()
 
   if (!prompts) {
@@ -68,10 +72,14 @@ export async function GET() {
     }
   }
 
-  return NextResponse.json({
-    system: prompts.system?.current,
-    email: prompts.email?.current,
-  })
+  if (all) {
+    return NextResponse.json(prompts)
+  } else {
+    return NextResponse.json({
+      system: prompts.system?.current,
+      email: prompts.email?.current,
+    })
+  }
 }
 
 export async function PATCH(req) {
