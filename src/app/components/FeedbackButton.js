@@ -6,7 +6,7 @@ import SpinnerIcon from './Icons/SpinnerIcon'
 import SendIcon from './Icons/SendIcon-v1'
 import { motion, AnimatePresence } from 'framer-motion'
 
-const FeedbackButton = ({ noteContent, emailContent }) => {
+const FeedbackButton = ({ note, email, subject }) => {
   const [feedbackFieldVisible, setFeedbackFieldVisible] = useState(false)
   const [feedbackText, setFeedbackText] = useState('')
   const [feedbackStatus, setFeedbackStatus] = useState('idle')
@@ -23,10 +23,10 @@ const FeedbackButton = ({ noteContent, emailContent }) => {
             'Content-Type': 'application/json',
           },
           body: JSON.stringify({
-            to: email,
             feedback: feedbackText,
-            noteContent,
-            emailContent,
+            note,
+            subject,
+            email,
           }),
         })
         if (response.ok) {

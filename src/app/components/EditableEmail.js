@@ -129,10 +129,13 @@ const EditableEmail = ({
           editorRef={editorRef}
           onEmailSent={handleSendEmailButtonClick}
         />
-        <FeedbackButton
-          noteContent={body}
-          emailContent={editorRef.current ? editorRef.current.getContent() : ''}
-        />
+        {!(emailStatus.status === 'sending' || emailStatus.status === 'success') && (
+          <FeedbackButton
+            note={body}
+            subject={subject}
+            email={editorRef.current ? editorRef.current.getContent() : ''}
+          />
+        )}
       </div>
     </div>
   )

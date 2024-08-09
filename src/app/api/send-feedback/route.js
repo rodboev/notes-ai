@@ -7,21 +7,12 @@ import { createTransporter, sendEmail } from '../../utils/emailUtils'
 dotenv.config()
 
 export async function POST(req) {
+  const { feedback, note, email, subject } = await req.json()
   const { GMAIL_USER, FEEDBACK_RECIPIENT_EMAIL } = process.env
 
-  let feedback, fingerprint
-  try {
-    const body = await req.json()
-    ;({ feedback, note, email } = body)
-  } catch (error) {
-    console.error('Error parsing request body:', error)
-    return NextResponse.json({ error: 'Invalid request body' }, { status: 400 })
-  }
-
   if (!feedback) {
-    const missingFields = ['feedback'].filter((field) => !eval(field))
-    console.error('Missing fields:', missingFields.join(', '))
-    return NextResponse.json({ error: 'Missing field', details: missingFields }, { status: 400 })
+    console.error('Missing field: feedback')
+    return NextResponse.json({ error: 'Missing field', details: ['feedback'] }, { status: 400 })
   }
 
   try {
@@ -32,10 +23,13 @@ export async function POST(req) {
       to: FEEDBACK_RECIPIENT_EMAIL,
       subject: 'New Feedback Received',
       html: `
-        <h2>New Feedback</h2>
-        <p><strong>Note:</strong> ${note}</p>
-        <p><strong>Email:</strong> ${email}</p>
         <p><strong>Feedback:</strong> ${feedback}</p>
+				<hr />
+        <p><strong>Email:</strong><p>
+				<p>Subject: ${subject || ''}<p>
+				<p>${email || ''}</p>
+				<hr />
+        <p><strong>Note:</strong> ${note || ''}</p>
       `,
     }
 
