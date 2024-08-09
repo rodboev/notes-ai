@@ -9,8 +9,8 @@ export default function Settings({ onClose }) {
   const [systemPrompt, setSystemPrompt] = useState('')
   const [emailPrompt, setEmailPrompt] = useState('')
   const [cachedPrompts, setCachedPrompts] = useLocalStorage('promptsCache', {
-    system: '',
-    email: '',
+    system: { current: '', default: '' },
+    email: { current: '', default: '' },
   })
   const [savingPrompts, setSavingPrompts] = useState(false)
 
@@ -23,15 +23,18 @@ export default function Settings({ onClose }) {
       const response = await fetch('/api/prompts')
       if (response.ok) {
         const data = await response.json()
-        setSystemPrompt(data.system)
-        setEmailPrompt(data.email)
-        setCachedPrompts({ system: data.system, email: data.email })
+        setSystemPrompt(data.system.current)
+        setEmailPrompt(data.email.current)
+        setCachedPrompts({
+          system: { current: data.system.current, default: data.system.default },
+          email: { current: data.email.current, default: data.email.default },
+        })
       } else {
         throw new Error('Failed to fetch prompts from API')
       }
     } catch (error) {
-      setSystemPrompt(cachedPrompts.system)
-      setEmailPrompt(cachedPrompts.email)
+      setSystemPrompt(cachedPrompts.system.current)
+      setEmailPrompt(cachedPrompts.email.current)
       console.warn('Using cached prompts:', error.message)
     }
   }
@@ -44,7 +47,10 @@ export default function Settings({ onClose }) {
         headers: {
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify({ system: systemPrompt, email: emailPrompt }),
+        body: JSON.stringify({
+          system: { current: systemPrompt },
+          email: { current: emailPrompt },
+        }),
       })
       if (response.ok) {
         console.log('Prompts saved successfully')
@@ -59,20 +65,10 @@ export default function Settings({ onClose }) {
     }
   }
 
-  const resetPrompts = async () => {
-    try {
-      const response = await fetch('/api/prompts')
-      if (response.ok) {
-        const data = await response.json()
-        setSystemPrompt(data.system)
-        setEmailPrompt(data.email)
-        console.log('Prompts reverted to defaults')
-      } else {
-        console.error('Failed to fetch default prompts')
-      }
-    } catch (error) {
-      console.error('Error fetching default prompts:', error)
-    }
+  const resetPrompts = () => {
+    setSystemPrompt(cachedPrompts.system.default)
+    setEmailPrompt(cachedPrompts.email.default)
+    console.log('Prompts reverted to defaults')
   }
 
   return (

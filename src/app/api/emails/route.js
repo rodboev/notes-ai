@@ -8,7 +8,7 @@ import { collection, doc, writeBatch, getDocs } from 'firebase/firestore'
 import { chunkArray } from '../../utils/arrayUtils'
 import { timestamp } from '../../utils/timestamp'
 import dotenv from 'dotenv'
-import { getPrompts } from '../../utils/getPrompts.js'
+import { getPrompts } from '../prompts/route.js'
 
 dotenv.config()
 const isProduction = process.env.NEXT_PUBLIC_NODE_ENV === 'production'
@@ -104,6 +104,20 @@ async function deletePreviousEmails() {
   }
 }
 
+function expand(template, variables) {
+  if (typeof template !== 'string') {
+    console.warn('Template is not a string:', template)
+    return ''
+  }
+  return template.replace(/{{([^}]+)}}/g, (match, key) => {
+    const value = key.split('.').reduce((obj, k) => obj?.[k], variables)
+    if (typeof value === 'object' && value.object) {
+      return expand(value.object, variables)
+    }
+    return typeof value === 'string' ? expand(value, variables) : (value ?? match)
+  })
+}
+
 export async function GET(req) {
   const url = new URL(req.url)
   const refresh = url.searchParams.get('refresh')
@@ -136,16 +150,21 @@ export async function GET(req) {
       }
 
       async function streamResponse(chunk) {
-        const messages = await getPrompts()
+        const prompts = await getPrompts()
 
-        const systemPrompt = messages.find((message) => message.role === 'system')
-        const userPrompt = messages.find((message) => message.role === 'user')
-
-        if (!systemPrompt || !userPrompt) {
-          throw new Error('Required prompts not found in messages')
+        if (!prompts.system || !prompts.user) {
+          throw new Error('Required prompts not found')
         }
 
-        userPrompt.content += JSON.stringify(chunk)
+        const systemContent = expand(prompts.system.current || prompts.system.default, prompts)
+        const userContent = prompts.user + JSON.stringify(chunk)
+
+        const messages = [
+          { role: 'system', content: systemContent },
+          { role: 'user', content: userContent },
+        ]
+        // console.dir(messages)
+        // debugger
 
         let stream
         try {
@@ -153,7 +172,7 @@ export async function GET(req) {
             model: isProduction ? 'gpt-4o' : 'gpt-4o-mini',
             stream: true,
             response_format: { type: 'json_object' },
-            messages: [systemPrompt, userPrompt],
+            messages,
             seed: 0,
           })
         } catch (error) {

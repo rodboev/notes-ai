@@ -1,26 +1,29 @@
+// src/app/api/prompts/route.js
+
 import { NextResponse } from 'next/server'
 import { readFile, writeFile } from 'fs/promises'
 import { join, dirname } from 'path'
-import { firestore } from '../../../firebase'
-import { doc, getDoc, setDoc } from 'firebase/firestore'
+import { fileURLToPath } from 'url'
+import { getDoc, setDoc, doc } from 'firebase/firestore'
+import { firestore } from '../../../firebase.js'
 
-export const promptsPath = join(process.cwd(), 'data', 'prompts.json')
+const __filename = fileURLToPath(import.meta.url)
+const __dirname = dirname(__filename)
 
-export async function loadPromptsFromDisk() {
+const promptsCurrent = join(process.cwd(), 'data', 'prompts-current.json')
+const promptsDefault = join(__dirname, 'prompts-default.json')
+
+async function loadPromptsFromDisk(path) {
   try {
-    const data = await readFile(promptsPath, 'utf8')
+    const data = await readFile(path, 'utf8')
     return JSON.parse(data)
   } catch (error) {
-    if (error.code === 'ENOENT') {
-      console.warn('Prompts file not found on disk')
-    } else {
-      console.warn('Failed to read prompts from disk:', error)
-    }
+    console.warn(`Failed to read prompts from ${path}:`, error)
     return null
   }
 }
 
-export async function loadPromptsFromFirestore() {
+async function loadPromptsFromFirestore() {
   try {
     const promptsDoc = await getDoc(doc(firestore, 'prompts', 'current'))
     if (promptsDoc.exists()) {
@@ -32,81 +35,67 @@ export async function loadPromptsFromFirestore() {
   return null
 }
 
-async function savePromptsToDisk(prompts) {
+async function savePrompts(prompts) {
   try {
-    await writeFile(promptsPath, JSON.stringify(prompts, null, 2))
-    console.log('Saved prompts to disk')
+    // Write to disk
+    await writeFile(promptsCurrent, JSON.stringify(prompts, null, 2), 'utf8')
+    console.log('Successfully wrote prompts to disk')
+
+    // Write to Firestore
+    await setDoc(doc(firestore, 'prompts', 'current'), prompts)
+    console.log('Successfully wrote prompts to Firestore')
   } catch (error) {
-    console.error('Failed to save prompts to disk:', error)
+    console.warn('Failed to save prompts:', error)
   }
 }
 
-async function savePromptsToFirestore(prompts) {
-  try {
-    await setDoc(doc(firestore, 'prompts', 'current'), prompts)
-    console.log('Saved prompts to Firestore')
-  } catch (error) {
-    console.error('Failed to save prompts to Firestore:', error)
+export async function getPrompts() {
+  const defaultPrompts = await loadPromptsFromDisk(promptsDefault)
+  let currentPrompts = await loadPromptsFromDisk(promptsCurrent)
+
+  if (!defaultPrompts) {
+    console.error(`Default prompts not found at ${promptsDefault}`)
+    return { error: 'Default prompts not found' }
   }
+
+  if (!currentPrompts) {
+    currentPrompts = await loadPromptsFromFirestore()
+    if (currentPrompts) {
+      await savePrompts(currentPrompts)
+    } else {
+      currentPrompts = {}
+    }
+  }
+
+  const mergedPrompts = {
+    email: {
+      object: defaultPrompts.email?.object || '',
+      default: defaultPrompts.email?.default || '',
+      current: currentPrompts.email?.current || defaultPrompts.email?.default || '',
+    },
+    system: {
+      default: defaultPrompts.system?.default || '',
+      current: currentPrompts.system?.current || defaultPrompts.system?.default || '',
+    },
+    user: defaultPrompts.user || '',
+    error: defaultPrompts.error || '',
+  }
+
+  return mergedPrompts
 }
 
 export async function GET() {
-  let prompts = await loadPromptsFromDisk()
-
-  if (!prompts) {
-    prompts = await loadPromptsFromFirestore()
-
-    if (prompts) {
-      await savePromptsToDisk(prompts)
-      console.log('Created prompts file from Firestore data')
-      prompts = await loadPromptsFromDisk()
-    } else {
-      return NextResponse.json(
-        { error: 'Failed to load prompts from disk and Firestore' },
-        { status: 500 },
-      )
-    }
-  }
-
-  return NextResponse.json({
-    system: prompts.system?.current,
-    email: prompts.email?.current,
-  })
+  const prompts = await getPrompts()
+  return NextResponse.json(prompts)
 }
 
-export async function PATCH(req) {
-  try {
-    const updates = await req.json()
-    let prompts = await loadPromptsFromDisk()
-
-    if (!prompts) {
-      prompts = await loadPromptsFromFirestore()
-      if (prompts) {
-        await savePromptsToDisk(prompts)
-        prompts = await loadPromptsFromDisk()
-      } else {
-        return NextResponse.json(
-          { error: 'Failed to load prompts from disk and Firestore' },
-          { status: 500 },
-        )
-      }
-    }
-
-    if (updates.system) {
-      prompts.system = prompts.system || {}
-      prompts.system.current = updates.system
-    }
-    if (updates.email) {
-      prompts.email = prompts.email || {}
-      prompts.email.current = updates.email
-    }
-
-    await savePromptsToDisk(prompts)
-    await savePromptsToFirestore(prompts)
-
-    return NextResponse.json({ message: 'Prompts updated successfully' })
-  } catch (error) {
-    console.error('Error updating prompts:', error)
-    return NextResponse.json({ error: 'Failed to update prompts' }, { status: 500 })
+export async function PATCH(request) {
+  const updatedPrompts = await request.json()
+  const toSave = {
+    email: { current: updatedPrompts.email.current },
+    system: { current: updatedPrompts.system.current },
   }
+  await savePrompts(toSave)
+  const newPrompts = await getPrompts()
+  return NextResponse.json(newPrompts)
 }
