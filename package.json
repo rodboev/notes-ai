@@ -7,7 +7,7 @@
     "build": "next build",
     "start": "next start",
     "lint": "next lint",
-    "postinstall": "if not exist src\\app\\tinymce mkdir src\\app\\tinymce && xcopy /E /I /Y node_modules\\tinymce src\\app\\tinymce"
+    "postinstall": "node scripts/copyTinyMCE.js"
   },
   "dependencies": {
     "@heroicons/react": "^2.1.5",
@@ -37,6 +37,7 @@
     "eslint-config-prettier": "^9.1.0",
     "eslint-plugin-react-compiler": "^0.0.0-experimental-9ed098e-20240725",
     "eslint-plugin-react-hooks": "^4.6.2",
+    "fs-extra": "^11.2.0",
     "postcss": "^8",
     "prettier": "^3.3.3",
     "prettier-plugin-tailwindcss": "^0.6.5",

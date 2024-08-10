@@ -89,7 +89,7 @@ const EditableEmail = ({
   return (
     <div className="relative mb-4 flex flex-col">
       <Editor
-        apiKey="1dfanp3sshjkkjouv1izh4fn0547seddg55evzdtep178l09"
+        tinymceScriptSrc="/api/tinymce/tinymce.min.js"
         onInit={(evt, editor) => {
           editorRef.current = editor
           setTimeout(() => {
@@ -109,6 +109,8 @@ const EditableEmail = ({
           autoresize_min_height: 300,
           content_style: 'body { font-family: sans-serif; }',
           base_url: '/api/tinymce',
+          suffix: '.min',
+          license_key: 'gpl',
         }}
       />
       {!(emailStatus.status === 'sending' || emailStatus.status === 'success') && (

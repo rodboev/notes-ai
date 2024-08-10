@@ -4,6 +4,7 @@ import { join } from 'path'
 
 export async function GET(request, { params }) {
   const filePath = join(process.cwd(), 'src', 'app', 'tinymce', ...params.path)
+  console.log('Requested TinyMCE file:', filePath)
 
   try {
     const fileContent = await readFile(filePath)
@@ -15,6 +16,7 @@ export async function GET(request, { params }) {
       },
     })
   } catch (error) {
+    console.error('Error serving TinyMCE file:', error)
     return new NextResponse('File not found', { status: 404 })
   }
 }
