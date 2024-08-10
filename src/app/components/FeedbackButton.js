@@ -16,29 +16,40 @@ const FeedbackButton = ({ note, email, subject }) => {
       setFeedbackFieldVisible(true)
     } else if (feedbackStatus !== 'sending' && feedbackStatus !== 'success') {
       setFeedbackStatus('sending')
-      try {
-        const response = await fetch('/api/send-feedback', {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify({
-            feedback: feedbackText,
-            note,
-            subject,
-            email,
-          }),
-        })
-        if (response.ok) {
-          console.log('Feedback sent successfully!')
-          setFeedbackStatus('success')
-        } else {
-          console.warn('Failed to send feedback.')
+
+      const isProduction = process.env.NEXT_PUBLIC_NODE_ENV === 'production'
+      const reallySend = isProduction
+
+      if (reallySend) {
+        try {
+          const response = await fetch('/api/send-feedback', {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+              feedback: feedbackText,
+              note,
+              subject,
+              email,
+            }),
+          })
+          if (response.ok) {
+            console.log('Feedback sent successfully!')
+            setFeedbackStatus('success')
+          } else {
+            console.warn('Failed to send feedback.')
+            setFeedbackStatus('error')
+          }
+        } catch (error) {
+          console.error('Error sending feedback:', error)
           setFeedbackStatus('error')
         }
-      } catch (error) {
-        console.error('Error sending feedback:', error)
-        setFeedbackStatus('error')
+      } else {
+        // Simulate sending for non-production environments
+        setTimeout(() => {
+          setFeedbackStatus('success')
+        }, 800)
       }
     }
   }

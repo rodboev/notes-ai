@@ -14,11 +14,11 @@ export const metadata = {
 
 export default function RootLayout({ children }) {
   return (
-    <EmailStatusProvider>
-      <html lang="en">
-        <title>Liberty Notes AI</title>
+    <html lang="en">
+      <title>Liberty Notes AI</title>
+      <EmailStatusProvider>
         <body className={inter.className}>{children}</body>
-      </html>
-    </EmailStatusProvider>
+      </EmailStatusProvider>
+    </html>
   )
 }
