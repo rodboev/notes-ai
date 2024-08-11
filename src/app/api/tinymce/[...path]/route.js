@@ -4,7 +4,7 @@ import { join } from 'path'
 
 export async function GET(request, { params }) {
   const filePath = join(process.cwd(), 'src', 'app', 'tinymce', ...params.path)
-  console.log('Requested TinyMCE file:', filePath)
+  // console.log('Requested TinyMCE file:', filePath)
 
   try {
     const fileContent = await readFile(filePath)
