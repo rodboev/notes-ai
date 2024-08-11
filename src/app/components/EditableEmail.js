@@ -1,24 +1,11 @@
-// src/app/Components/EditableEmail.js
+// src/app/components/EditableEmail.js
 
 import { Editor } from '@tinymce/tinymce-react'
-import { useEffect, useRef, useState } from 'react'
-import RefreshIcon from './Icons/RefreshIcon-v4'
-import FeedbackButton from './FeedbackButton'
-import SendEmailButton from './SendEmailButton'
-import { usePersistedEmailStatus } from '../hooks/usePersistedEmailStatus'
+import { useState, useEffect } from 'react'
+import RefreshButton from './RefreshButton'
 
-const EditableEmail = ({
-  subject,
-  body,
-  fingerprint,
-  fetchData,
-  pairRefs,
-  pairIndex,
-  pairsLength,
-}) => {
-  const editorRef = useRef(null)
+const EditableEmail = ({ email, emailStatus, editorRef, children, onRefresh }) => {
   const [editorReady, setEditorReady] = useState(false)
-  const [emailStatus, setEmailStatus] = usePersistedEmailStatus(fingerprint)
 
   const autoResizeEditor = () => {
     const editor = editorRef.current
@@ -34,20 +21,6 @@ const EditableEmail = ({
         editor.getWin().dispatchEvent(new Event('resize'))
       }
     }
-  }
-
-  const handleSendEmailButtonClick = () => {
-    if (pairRefs && pairRefs.current && pairIndex < pairsLength - 1) {
-      setTimeout(() => {
-        pairRefs.current[pairIndex + 1].scrollIntoView({ behavior: 'smooth' })
-      }, 100)
-    }
-  }
-
-  const handleEmailStatusChange = (newStatus) => {
-    setEmailStatus(newStatus)
-    const isDisabled = ['sending', 'success'].includes(newStatus.status)
-    updateEditorState(isDisabled)
   }
 
   const updateEditorState = (isDisabled) => {
@@ -78,13 +51,13 @@ const EditableEmail = ({
 
   useEffect(() => {
     if (editorRef.current) {
-      editorRef.current.setContent(body || '')
+      editorRef.current.setContent(email.body || '')
     }
     if (editorReady) {
       const isDisabled = ['sending', 'success'].includes(emailStatus.status)
       updateEditorState(isDisabled)
     }
-  }, [emailStatus, editorReady])
+  }, [emailStatus, editorReady, email.body])
 
   return (
     <div className="relative mb-4 flex flex-col">
@@ -97,7 +70,7 @@ const EditableEmail = ({
             setEditorReady(true)
           }, 0)
         }}
-        initialValue={body}
+        initialValue={email.body}
         init={{
           height: 300,
           menubar: false,
@@ -114,32 +87,9 @@ const EditableEmail = ({
         }}
       />
       {!(emailStatus.status === 'sending' || emailStatus.status === 'success') && (
-        <button
-          onClick={() => fetchData(fingerprint)}
-          className="refresh absolute z-10 m-6 self-end"
-        >
-          <span className="-mx-1 -my-0.5 flex items-center gap-1.5">
-            <RefreshIcon className="h-5 w-5" />
-          </span>
-        </button>
+        <RefreshButton onClick={onRefresh} />
       )}
-      <div className="mt-4 flex items-center justify-between">
-        <SendEmailButton
-          fingerprint={fingerprint}
-          subject={subject}
-          emailStatus={emailStatus}
-          onEmailStatusChange={handleEmailStatusChange}
-          editorRef={editorRef}
-          onEmailSent={handleSendEmailButtonClick}
-        />
-        {!(emailStatus.status === 'sending' || emailStatus.status === 'success') && (
-          <FeedbackButton
-            note={body}
-            subject={subject}
-            email={editorRef.current ? editorRef.current.getContent() : ''}
-          />
-        )}
-      </div>
+      <div className="buttons mt-4 flex items-center justify-between">{children}</div>
     </div>
   )
 }

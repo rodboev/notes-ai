@@ -3,7 +3,7 @@
 import React, { useState, useEffect } from 'react'
 import { motion } from 'framer-motion'
 import TextareaAutosize from 'react-textarea-autosize'
-import { useLocalStorage } from '../utils/useLocalStorage'
+import { useLocalStorage } from '../hooks/useLocalStorage'
 
 export default function Settings({ onClose }) {
   const [systemPrompt, setSystemPrompt] = useState('')

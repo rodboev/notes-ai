@@ -6,10 +6,10 @@ import SpinnerIcon from './Icons/SpinnerIcon'
 const SendEmailButton = ({
   fingerprint,
   subject,
-  editorRef,
-  emailStatus,
-  onEmailStatusChange,
+  getEmailContent,
   onEmailSent,
+  emailStatus,
+  updateEmailStatus,
 }) => {
   const isProduction = process.env.NEXT_PUBLIC_NODE_ENV === 'production'
   const to = isProduction
@@ -17,58 +17,55 @@ const SendEmailButton = ({
     : 'r.boev@libertypestnyc.com'
 
   const sendEmail = async () => {
-    const isProduction = process.env.NEXT_PUBLIC_NODE_ENV === 'production'
     const reallySend = isProduction
+    const content = getEmailContent()
 
-    if (editorRef.current) {
-      const content = editorRef.current.getContent()
-      onEmailStatusChange({ status: 'sending' })
-      if (reallySend) {
-        try {
-          const response = await fetch('/api/send-email', {
-            method: 'POST',
-            headers: {
-              'Content-Type': 'application/json',
-            },
-            body: JSON.stringify({ email: to, subject, content, fingerprint }),
-          })
-          if (response.ok) {
-            const data = await response.json()
-            console.log('Email sent successfully!')
-            onEmailStatusChange(data.status)
-            onEmailSent()
-          } else {
-            console.warn('Failed to send email.')
-            onEmailStatusChange({ status: 'error' })
-          }
-        } catch (error) {
-          console.error('Error sending email:', error)
-          onEmailStatusChange({ status: 'error', error: error.message })
-        }
-      } else {
-        // Simulate sending for non-production environments
-        setTimeout(() => {
-          onEmailStatusChange({
-            status: 'success',
-            sentAt: new Date().toISOString(),
-            subject,
-            content,
-            to,
-          })
+    updateEmailStatus({ status: 'sending' })
+    if (reallySend) {
+      try {
+        const response = await fetch('/api/send-email', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({ email: to, subject, content, fingerprint }),
+        })
+        if (response.ok) {
+          const data = await response.json()
+          console.log('Email sent successfully!')
+          updateEmailStatus(data.status)
           onEmailSent()
-        }, 800)
+        } else {
+          console.warn('Failed to send email.')
+          updateEmailStatus({ status: 'error' })
+        }
+      } catch (error) {
+        console.error('Error sending email:', error)
+        updateEmailStatus({ status: 'error', error: error.message })
       }
+    } else {
+      // Simulate sending for non-production environments
+      setTimeout(() => {
+        updateEmailStatus({
+          status: 'success',
+          sentAt: new Date().toISOString(),
+          subject,
+          content,
+          to,
+        })
+        onEmailSent()
+      }, 800)
     }
   }
 
   return (
     <button
       onClick={() => {
-        ;(Object.keys(emailStatus).length === 0 || emailStatus.status === 'error') && sendEmail()
+        ;(emailStatus.status === undefined || emailStatus.status === 'error') && sendEmail()
       }}
-      disabled={!(Object.keys(emailStatus).length === 0 || emailStatus.status === 'error')}
+      disabled={!(emailStatus.status === undefined || emailStatus.status === 'error')}
       className={`mr-2 ${
-        Object.keys(emailStatus).length === 0
+        emailStatus.status === undefined
           ? 'btn-teal flex'
           : emailStatus.status === 'sending'
             ? 'btn-teal flex cursor-not-allowed'
@@ -79,7 +76,7 @@ const SendEmailButton = ({
                 : null
       }`}
     >
-      {Object.keys(emailStatus).length === 0 ? (
+      {emailStatus.status === undefined ? (
         <span>Send email</span>
       ) : emailStatus.status === 'sending' ? (
         <>
