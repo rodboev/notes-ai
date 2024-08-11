@@ -1,25 +1,31 @@
 // src/app/components/Email.js
 
-import React, { useRef } from 'react'
+import React, { useRef, useEffect } from 'react'
 import EditableEmail from './EditableEmail'
 import { ExclamationTriangleIcon } from '@heroicons/react/24/solid'
 import SpinnerIcon from './Icons/SpinnerIcon'
 import SendEmailButton from './SendEmailButton'
 import FeedbackButton from './FeedbackButton'
 import RefreshButton from './RefreshButton'
+import { usePersistedEmailStatus } from '../hooks/usePersistedEmailStatus'
 
-const Email = ({
-  email,
-  noteFingerprint,
-  index,
-  total,
-  onEmailSent,
-  fetchData,
-  emailStatus,
-  updateEmailStatus,
-  isLoading,
-}) => {
+const Email = ({ email, noteFingerprint, index, total, fetchData, scrollToNextPair }) => {
   const editorRef = useRef(null)
+  const [emailStatuses, updateEmailStatus, isLoading, fetchStatuses] = usePersistedEmailStatus()
+
+  useEffect(() => {
+    fetchStatuses()
+  }, [fetchStatuses])
+
+  const handleEmailSent = () => {
+    if (index < total - 1) {
+      setTimeout(() => {
+        scrollToNextPair(index + 1)
+      }, 100)
+    }
+  }
+
+  const emailStatus = emailStatuses[email?.fingerprint] || {}
 
   return (
     <div className="right -mr-4 flex min-h-screen flex-1.4 flex-col justify-center pt-6">
@@ -40,13 +46,11 @@ const Email = ({
                   fingerprint={email.fingerprint}
                   subject={email.subject}
                   getEmailContent={() => editorRef.current?.getContent()}
-                  onEmailSent={() => {
-                    onEmailSent(index, total)
-                  }}
-                  emailStatus={emailStatus || {}}
-                  updateEmailStatus={updateEmailStatus}
+                  onEmailSent={handleEmailSent}
+                  emailStatus={emailStatus}
+                  updateEmailStatus={(newStatus) => updateEmailStatus(email.fingerprint, newStatus)}
                 />
-                {(!emailStatus ||
+                {(!emailStatus.status ||
                   (emailStatus.status !== 'sending' && emailStatus.status !== 'success')) && (
                   <FeedbackButton
                     note={email.noteContent}

@@ -2,43 +2,71 @@
 
 import { useState, useEffect, useCallback } from 'react'
 
+let cachedStatuses = null
+let lastFetchTime = 0
+const CACHE_DURATION = 300 // 5 sec duration to allow for page load
+let fetchPromise = null
+
 export function usePersistedEmailStatus() {
-  const [emailStatuses, setEmailStatuses] = useState({})
-  const [isLoading, setIsLoading] = useState(true)
+  const [emailStatuses, setEmailStatuses] = useState(cachedStatuses || {})
+  const [isLoading, setIsLoading] = useState(!cachedStatuses)
 
   const fetchStatuses = useCallback(async () => {
-    try {
-      const response = await fetch('/api/status')
-      if (response.ok) {
-        const fetchedStatuses = await response.json()
-        setEmailStatuses(fetchedStatuses)
+    const now = Date.now()
 
-        // Update localStorage with the latest data
-        Object.entries(fetchedStatuses).forEach(([fingerprint, status]) => {
-          localStorage.setItem(`emailStatus_${fingerprint}`, JSON.stringify(status))
-        })
-      } else {
-        throw new Error('Failed to fetch statuses from server')
-      }
-    } catch (error) {
-      console.error('Error fetching email statuses from server:', error)
-      // Fall back to localStorage
-      const localStatuses = {}
-      for (let i = 0; i < localStorage.length; i++) {
-        const key = localStorage.key(i)
-        if (key.startsWith('emailStatus_')) {
-          const fingerprint = key.replace('emailStatus_', '')
-          try {
-            localStatuses[fingerprint] = JSON.parse(localStorage.getItem(key))
-          } catch (e) {
-            console.error(`Error parsing stored status for ${fingerprint}:`, e)
-          }
-        }
-      }
-      setEmailStatuses(localStatuses)
-    } finally {
+    // Use cached data if it's fresh
+    if (cachedStatuses && now - lastFetchTime < CACHE_DURATION) {
+      setEmailStatuses(cachedStatuses)
       setIsLoading(false)
+      return
     }
+
+    // If there's an ongoing fetch, wait for it instead of starting a new one
+    if (fetchPromise) {
+      await fetchPromise
+      setEmailStatuses(cachedStatuses)
+      setIsLoading(false)
+      return
+    }
+
+    setIsLoading(true)
+    fetchPromise = (async () => {
+      try {
+        const response = await fetch('/api/status')
+        if (response.ok) {
+          const fetchedStatuses = await response.json()
+          setEmailStatuses(fetchedStatuses)
+          cachedStatuses = fetchedStatuses
+          lastFetchTime = Date.now()
+        } else {
+          throw new Error('Failed to fetch statuses from server')
+        }
+      } catch (error) {
+        console.error('Error fetching email statuses from server:', error)
+        // Fall back to localStorage only if there's no cached data
+        if (!cachedStatuses) {
+          const localStatuses = {}
+          for (let i = 0; i < localStorage.length; i++) {
+            const key = localStorage.key(i)
+            if (key.startsWith('emailStatus_')) {
+              const fingerprint = key.replace('emailStatus_', '')
+              try {
+                localStatuses[fingerprint] = JSON.parse(localStorage.getItem(key))
+              } catch (e) {
+                console.warn(`Error parsing stored status for ${fingerprint}:`, e)
+              }
+            }
+          }
+          setEmailStatuses(localStatuses)
+          cachedStatuses = localStatuses
+        }
+      } finally {
+        setIsLoading(false)
+        fetchPromise = null
+      }
+    })()
+
+    await fetchPromise
   }, [])
 
   useEffect(() => {
@@ -53,11 +81,16 @@ export function usePersistedEmailStatus() {
       } else if (typeof newStatus === 'object') {
         updatedStatus = { ...emailStatuses[fingerprint], ...newStatus }
       } else {
-        console.error('Invalid status format')
+        console.warn('Invalid status format')
         return
       }
 
-      setEmailStatuses((prev) => ({ ...prev, [fingerprint]: updatedStatus }))
+      const updatedStatuses = { ...emailStatuses, [fingerprint]: updatedStatus }
+      setEmailStatuses(updatedStatuses)
+      cachedStatuses = updatedStatuses
+
+      // Always update localStorage
+      localStorage.setItem(`emailStatus_${fingerprint}`, JSON.stringify(updatedStatus))
 
       try {
         const response = await fetch('/api/status', {
@@ -66,14 +99,12 @@ export function usePersistedEmailStatus() {
           body: JSON.stringify({ [fingerprint]: updatedStatus }),
         })
         if (!response.ok) throw new Error('Failed to update status on server')
-        localStorage.setItem(`emailStatus_${fingerprint}`, JSON.stringify(updatedStatus))
       } catch (error) {
-        console.error('Error updating email status on server:', error)
-        localStorage.setItem(`emailStatus_${fingerprint}`, JSON.stringify(updatedStatus))
+        console.warn('Error updating email status on server:', error)
       }
     },
     [emailStatuses],
   )
 
-  return [emailStatuses, updateEmailStatus, isLoading]
+  return [emailStatuses, updateEmailStatus, isLoading, fetchStatuses]
 }

@@ -4,7 +4,6 @@
 
 import { useEffect, useRef } from 'react'
 import { useData } from './hooks/useData'
-import { usePersistedEmailStatus } from './hooks/usePersistedEmailStatus'
 import Nav from './components/Nav'
 import Note from './components/Note'
 import Email from './components/Email'
@@ -14,23 +13,18 @@ import Upload from './components/Upload'
 
 export default function Home() {
   const { pairs, notesExist, fetchData, clearData, uploadData } = useData()
-  const [emailStatuses, updateEmailStatus, isLoading] = usePersistedEmailStatus()
   const pairRefs = useRef([])
 
   useEffect(() => {
     fetchData()
   }, [])
 
-  const handleEmailSent = (index, total) => {
-    if (index < total - 1) {
-      setTimeout(() => {
-        pairRefs.current[index + 1]?.scrollIntoView({ behavior: 'smooth' })
-      }, 100)
-    }
-  }
-
   const handleUpload = (data) => {
     uploadData(data, pairRefs)
+  }
+
+  const scrollToNextPair = (index) => {
+    pairRefs.current[index]?.scrollIntoView({ behavior: 'smooth' })
   }
 
   return (
@@ -57,11 +51,8 @@ export default function Home() {
               noteFingerprint={note.fingerprint}
               index={index}
               total={pairs.length}
-              onEmailSent={handleEmailSent}
               fetchData={fetchData}
-              emailStatus={emailStatuses[email?.fingerprint] || {}}
-              updateEmailStatus={(newStatus) => updateEmailStatus(email?.fingerprint, newStatus)}
-              isLoading={isLoading}
+              scrollToNextPair={scrollToNextPair}
             />
           </div>
         ))}
