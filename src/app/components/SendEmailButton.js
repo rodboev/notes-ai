@@ -59,42 +59,37 @@ const SendEmailButton = ({
   }
 
   return (
-    <button
-      onClick={() => {
-        ;(emailStatus.status === undefined || emailStatus.status === 'error') && sendEmail()
-      }}
-      disabled={!(emailStatus.status === undefined || emailStatus.status === 'error')}
-      className={`mr-2 ${
-        emailStatus.status === undefined
-          ? 'btn-teal flex'
-          : emailStatus.status === 'sending'
-            ? 'btn-teal flex cursor-not-allowed'
-            : emailStatus.status === 'success'
-              ? 'btn flex cursor-not-allowed border-2 border-green-600 bg-white !py-0'
-              : emailStatus.status === 'error'
-                ? 'btn flex border-2 border-red-600'
-                : null
-      }`}
-    >
-      {emailStatus.status === undefined ? (
-        <span>Send email</span>
-      ) : emailStatus.status === 'sending' ? (
-        <>
+    <>
+      {emailStatus.status === undefined && (
+        <button onClick={sendEmail} className="btn-teal mr-2 flex">
+          <span>Send email</span>
+        </button>
+      )}
+
+      {emailStatus.status === 'sending' && (
+        <button disabled className="btn-teal mr-2 flex cursor-not-allowed">
           <SpinnerIcon className="-m-1 mr-2" />
           <span>Send email</span>
-        </>
-      ) : emailStatus.status === 'success' ? (
-        <>
+        </button>
+      )}
+
+      {emailStatus.status === 'success' && (
+        <button
+          disabled
+          className="btn mr-2 flex cursor-not-allowed border-2 border-green-600 bg-white !py-0"
+        >
           <CheckIcon className="-m-2 mr-1.5 h-8 w-8 text-green-600" />
           <span>Email sent</span>
-        </>
-      ) : emailStatus.status === 'error' ? (
-        <>
+        </button>
+      )}
+
+      {emailStatus.status === 'error' && (
+        <button onClick={sendEmail} className="btn mr-2 flex border-2 border-red-600">
           <ExclamationTriangleIcon className="-m-2 mr-1 h-8 w-8 !py-0 text-red-600" />
           <span>Try again</span>
-        </>
-      ) : null}
-    </button>
+        </button>
+      )}
+    </>
   )
 }
 
