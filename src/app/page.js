@@ -4,14 +4,17 @@
 
 import { useEffect, useRef } from 'react'
 import { useData } from './hooks/useData'
+import { usePersistedEmailStatus } from './hooks/usePersistedEmailStatus'
 import Nav from './components/Nav'
 import Note from './components/Note'
 import Email from './components/Email'
 import UploadButton from './components/UploadButton'
 import ClearButton from './components/ClearButton'
+import Upload from './components/Upload'
 
 export default function Home() {
   const { pairs, notesExist, fetchData, clearData, uploadData } = useData()
+  const [emailStatuses, updateEmailStatus, isLoading] = usePersistedEmailStatus()
   const pairRefs = useRef([])
 
   useEffect(() => {
@@ -26,26 +29,29 @@ export default function Home() {
     }
   }
 
+  const handleUpload = (data) => {
+    uploadData(data, pairRefs)
+  }
+
   return (
     <div className="flex h-screen max-w-full snap-y snap-mandatory flex-col items-center overflow-y-scroll">
       <Nav>
-        <UploadButton onUpload={(data) => uploadData(data, pairRefs)} pairRefs={pairRefs} />
+        <UploadButton onUpload={() => {}} pairRefs={pairRefs} />
         {notesExist && (
           <ClearButton fetchData={fetchData} onClear={clearData} pairRefs={pairRefs} />
         )}
       </Nav>
-      {notesExist ? (
+
+      <Upload onUpload={handleUpload} notesExist={notesExist} />
+
+      {notesExist &&
         pairs.map(({ note, email }, index) => (
           <div
             key={note.fingerprint}
-            className="container -m-4 flex max-w-screen-2xl snap-center snap-always p-4 pb-0"
+            ref={(el) => (pairRefs.current[index] = el)}
+            className="pair container -m-4 flex max-w-screen-2xl snap-center snap-always p-4 pb-0"
           >
-            <Note
-              ref={(el) => (pairRefs.current[index] = el)}
-              note={note}
-              index={index}
-              total={pairs.length}
-            />
+            <Note note={note} index={index} total={pairs.length} />
             <Email
               email={email}
               noteFingerprint={note.fingerprint}
@@ -53,14 +59,12 @@ export default function Home() {
               total={pairs.length}
               onEmailSent={handleEmailSent}
               fetchData={fetchData}
+              emailStatus={emailStatuses[email?.fingerprint] || {}}
+              updateEmailStatus={(newStatus) => updateEmailStatus(email?.fingerprint, newStatus)}
+              isLoading={isLoading}
             />
           </div>
-        ))
-      ) : (
-        <div className="flex h-full items-center justify-center">
-          <p>No notes available. Please upload some data.</p>
-        </div>
-      )}
+        ))}
     </div>
   )
 }

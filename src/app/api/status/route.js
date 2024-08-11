@@ -4,21 +4,31 @@ import { readFromDisk, writeToDisk, deleteFromDisk } from '../../utils/diskStora
 import { firestore } from '../../../firebase.js'
 import { doc, getDoc, setDoc, deleteDoc } from 'firebase/firestore'
 
-const STATUS_DOC_ID = 'emailStatuses'
+const STATUS_COLLECTION = 'status'
+const EMAILS_DOC_ID = 'emails'
 
-export async function loadStatuses() {
-  // console.log(`Loading email statuses from disk`)
+async function loadStatuses() {
   try {
+    console.log('Attempting to read statuses from disk...')
     const diskStatuses = await readFromDisk('status.json')
-    if (diskStatuses) {
+    if (diskStatuses && Object.keys(diskStatuses).length > 0) {
+      console.log('Statuses found on disk:', diskStatuses)
+      // Write disk statuses to Firestore
+      await saveStatuses(diskStatuses)
       return diskStatuses
     }
 
-    console.log(`Statuses not found on disk, loading from Firestore`)
-    const statusesRef = doc(firestore, 'emails', STATUS_DOC_ID)
+    console.log('Statuses not found on disk or empty, loading from Firestore...')
+    const statusesRef = doc(firestore, STATUS_COLLECTION, EMAILS_DOC_ID)
     const statusesDoc = await getDoc(statusesRef)
     const statuses = statusesDoc.exists() ? statusesDoc.data() : {}
-    await writeToDisk('status.json', statuses)
+    console.log('Statuses loaded from Firestore:', statuses)
+
+    if (Object.keys(statuses).length > 0) {
+      console.log('Writing Firestore data to disk...')
+      await writeToDisk('status.json', statuses)
+    }
+
     return statuses
   } catch (error) {
     console.error(`Error loading email statuses:`, error)
@@ -32,7 +42,8 @@ export async function saveStatuses(newStatuses) {
     await writeToDisk('status.json', newStatuses)
     logStr += 'Email statuses saved to disk'
 
-    const statusesRef = doc(firestore, 'emails', STATUS_DOC_ID)
+    console.log('Attempting to save to Firestore:', newStatuses)
+    const statusesRef = doc(firestore, STATUS_COLLECTION, EMAILS_DOC_ID)
     await setDoc(statusesRef, newStatuses, { merge: true })
     logStr += ' and Firestore'
     console.log(logStr)
@@ -52,8 +63,11 @@ export async function GET(req) {
       return await DELETE(req)
     }
 
-    const statuses = await loadStatuses()
-    return new Response(JSON.stringify(statuses), {
+    console.log('Attempting to load statuses...')
+    const allStatuses = await loadStatuses()
+    console.log('Loaded statuses:', allStatuses)
+
+    return new Response(JSON.stringify(allStatuses), {
       headers: { 'Content-Type': 'application/json' },
     })
   } catch (error) {
@@ -99,7 +113,7 @@ export async function DELETE(req) {
     await deleteFromDisk('status.json')
 
     // Delete from Firestore
-    const statusesRef = doc(firestore, 'emails', STATUS_DOC_ID)
+    const statusesRef = doc(firestore, STATUS_COLLECTION, EMAILS_DOC_ID)
     await deleteDoc(statusesRef)
 
     return new Response(JSON.stringify({ message: 'Statuses deleted successfully' }), {

@@ -19,6 +19,7 @@ const Upload = ({ onUpload, notesExist }) => {
           header: true,
           complete: function (results) {
             onUpload(results.data)
+            setShowUploadZone(false)
           },
         })
       }
@@ -28,7 +29,7 @@ const Upload = ({ onUpload, notesExist }) => {
     [onUpload],
   )
 
-  const { getRootProps, getInputProps, isDragActive } = useDropzone({ onDrop })
+  const { getInputProps, isDragActive } = useDropzone({ onDrop })
 
   useEffect(() => {
     let dragCounter = 0
@@ -73,10 +74,11 @@ const Upload = ({ onUpload, notesExist }) => {
   return (
     <>
       <div
-        {...getRootProps()}
-        className={`dropzone fixed z-50 flex h-full w-full items-center justify-center bg-black bg-opacity-50 opacity-50 ${
-          isDragActive ? 'active' : 'show'
-        }`}
+        className="dropzone fixed z-50 flex h-full w-full items-center justify-center bg-black bg-opacity-50 opacity-50"
+        onClick={(e) => {
+          e.stopPropagation()
+          setShowUploadZone(false)
+        }}
       >
         <input {...getInputProps()} />
         <CloudArrowUpIcon className="w-2/5 border-2 border-dashed border-black px-44 py-24" />

@@ -2,12 +2,9 @@
 
 import React from 'react'
 
-const Note = React.forwardRef(({ note, index, total }, ref) => {
+const Note = ({ note, index, total }) => {
   return (
-    <div
-      ref={ref}
-      className="left -ml-full flex min-h-screen flex-1 flex-col justify-center border-s bg-neutral-200 p-10 pl-full pt-32"
-    >
+    <div className="left -ml-full flex min-h-screen flex-1 flex-col justify-center border-s bg-neutral-200 p-10 pl-full pt-32">
       <div className="note w-full rounded-lg bg-white p-10">
         <div className="text-3xl font-bold">{note.code?.split(' ')[0]}</div>
         <div className="text-xl font-bold">
@@ -24,6 +21,6 @@ const Note = React.forwardRef(({ note, index, total }, ref) => {
       </div>
     </div>
   )
-})
+}
 
 export default Note
