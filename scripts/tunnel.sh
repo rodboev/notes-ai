@@ -1,5 +1,7 @@
 #!/bin/bash
 
+echo "Starting tunnel..."
+
 # Create .ssh directory
 mkdir -p /app/.ssh
 chmod 700 /app/.ssh
@@ -10,3 +12,10 @@ chmod 600 /app/.ssh/id_rsa
 
 # Start the SSH tunnel
 ssh -N -L 1433:172.19.1.71:1433 -i /app/.ssh/id_rsa -o StrictHostKeyChecking=no -p 1022 alex@70.19.53.6 &
+
+if [ $? -ne 0 ]; then
+  echo "Tunnel setup failed!"
+  exit 1
+fi
+
+echo "Tunnel setup successful, starting the application..."
