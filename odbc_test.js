@@ -10,10 +10,10 @@ function getConnectionString() {
 const connectionString = getConnectionString()
 console.log(`Connection String: ${connectionString.replace(/PWD=[^;]+/, 'PWD=*****')}`)
 
-async function runQuery(connection, query, params = []) {
+async function runQuery(connection, query) {
   try {
     console.log(`Executing query: ${query}`)
-    const result = await connection.query(query, params)
+    const result = await connection.query(query)
     console.log('Query successful')
     return result
   } catch (err) {
@@ -36,24 +36,21 @@ async function getNotesInDateRange(connection, startDate, endDate, limit = 100) 
   // Query all columns except 'Note' within the date range
   const mainResult = await runQuery(
     connection,
-    `
-    SELECT TOP ${limit} ${columnNames}
-    FROM Notes
-    WHERE NoteDate >= ? AND NoteDate < ?
-    ORDER BY NoteDate ASC
-  `,
-    [startDate, endDate],
+    `SELECT TOP ${limit} ${columnNames}
+     FROM Notes
+     WHERE NoteDate >= '${startDate}' AND NoteDate < '${endDate}'
+     ORDER BY NoteDate ASC`,
   )
+
+  if (!mainResult) return null
 
   // Query 'Note' column separately for the same records
   const noteIds = mainResult.map((row) => row.NoteID).join(',')
   const noteResult = await runQuery(
     connection,
-    `
-    SELECT NoteID, Note
-    FROM Notes
-    WHERE NoteID IN (${noteIds})
-  `,
+    `SELECT NoteID, Note
+     FROM Notes
+     WHERE NoteID IN (${noteIds})`,
   )
 
   // Combine the results
@@ -73,15 +70,15 @@ async function main() {
     connection = await odbc.connect(connectionString)
     console.log('Connected successfully')
 
-    // Get notes from 8/13
+    // Get notes from 8/13 to 8/14
     const startDate = '2023-08-13'
     const endDate = '2023-08-14' // Use the day after your end date to include all of 8/13
     console.log(`Retrieving notes from ${startDate} to ${endDate}:`)
     const notes = await getNotesInDateRange(connection, startDate, endDate)
 
-    if (notes) {
+    if (notes && notes.length > 0) {
       console.log(`Retrieved ${notes.length} notes:`)
-      console.log(JSON.stringify(notes, null, 2))
+      console.log(JSON.stringify(notes[0], null, 2)) // Print the first note as an example
 
       // Example of working with the data
       notes.forEach((note) => {
@@ -90,7 +87,7 @@ async function main() {
         )
       })
     } else {
-      console.log('Failed to retrieve notes')
+      console.log('No notes found or failed to retrieve notes')
     }
 
     // Example of a simple query

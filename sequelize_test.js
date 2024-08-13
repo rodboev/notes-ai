@@ -39,10 +39,10 @@ const Note = sequelize.define(
   },
 )
 
-async function runQuery(connection, query, params = []) {
+async function runQuery(connection, query) {
   try {
     console.log(`Executing query: ${query}`)
-    const result = await connection.query(query, params)
+    const result = await connection.query(query)
     console.log('Query successful')
     return result
   } catch (err) {
@@ -65,27 +65,21 @@ async function getNotesInDateRange(connection, startDate, endDate, limit = 100, 
   // Query all columns except 'Note' within the date range
   const mainResult = await runQuery(
     connection,
-    `
-    SELECT ${columnNames}
-    FROM (
-      SELECT ROW_NUMBER() OVER (ORDER BY NoteDate ASC) AS RowNum, ${columnNames}
-      FROM Notes
-      WHERE NoteDate >= ? AND NoteDate < ?
-    ) AS NumberedNotes
-    WHERE RowNum > ? AND RowNum <= ?
-  `,
-    [startDate, endDate, offset, offset + limit],
+    `SELECT ${columnNames}
+     FROM (
+       SELECT ROW_NUMBER() OVER (ORDER BY NoteDate ASC) AS RowNum, ${columnNames}
+       FROM Notes
+       WHERE NoteDate >= '${startDate}' AND NoteDate < '${endDate}'
+     ) AS NumberedNotes
+     WHERE RowNum > ${offset} AND RowNum <= ${offset + limit}`,
   )
 
   // Get total count
   const countResult = await runQuery(
     connection,
-    `
-    SELECT COUNT(*) AS TotalCount
-    FROM Notes
-    WHERE NoteDate >= ? AND NoteDate < ?
-  `,
-    [startDate, endDate],
+    `SELECT COUNT(*) AS TotalCount
+     FROM Notes
+     WHERE NoteDate >= '${startDate}' AND NoteDate < '${endDate}'`,
   )
 
   const totalCount = countResult[0].TotalCount
@@ -94,11 +88,9 @@ async function getNotesInDateRange(connection, startDate, endDate, limit = 100, 
   const noteIds = mainResult.map((row) => row.NoteID).join(',')
   const noteResult = await runQuery(
     connection,
-    `
-    SELECT NoteID, Note
-    FROM Notes
-    WHERE NoteID IN (${noteIds})
-  `,
+    `SELECT NoteID, Note
+     FROM Notes
+     WHERE NoteID IN (${noteIds})`,
   )
 
   // Combine the results
@@ -137,7 +129,7 @@ async function main() {
 
     if (result) {
       console.log(`Retrieved ${result.rows.length} notes out of ${result.count} total:`)
-      console.log(JSON.stringify(result.rows, null, 2))
+      console.log(JSON.stringify(result.rows[0], null, 2)) // Print the first note as an example
 
       // Create Sequelize model instances from the raw data
       const sequelizeNotes = result.rows.map((note) => Note.build(note, { isNewRecord: false }))
