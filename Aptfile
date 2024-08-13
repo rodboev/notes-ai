@@ -2,5 +2,4 @@ unixodbc
 unixodbc-dev
 freetds-bin
 tdsodbc
-llibssl-dev
-
+libssl-dev
