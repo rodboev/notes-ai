@@ -1,1 +1,1 @@
-web: chmod +x /app/scripts/install_openssl.sh && /app/scripts/install_openssl.sh && chmod +x /app/scripts/tunnel.sh && /app/scripts/tunnel.sh && npm start
+web: chmod +x /app/scripts/install_openssl.sh && ./install_openssl.sh && export PATH=$HOME/.openssl/bin:\$PATH && export LD_LIBRARY_PATH=$HOME/.openssl/lib:\$LD_LIBRARY_PATH && chmod +x /app/scripts/tunnel.sh && /app/scripts/tunnel.sh && npm start
