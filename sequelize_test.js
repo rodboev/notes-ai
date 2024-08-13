@@ -3,9 +3,7 @@ const odbc = require('odbc')
 require('dotenv').config()
 
 function getConnectionString() {
-  const isHeroku = process.env.DYNO ? true : false
-  const driver = isHeroku ? '{FreeTDS}' : '{ODBC Driver 18 for SQL Server}'
-  return `Driver=${driver};Server=${process.env.SQL_SERVER || '127.0.0.1'},${process.env.SQL_PORT || 1433};Database=${process.env.SQL_DATABASE};UID=${process.env.SQL_USERNAME};PWD=${process.env.SQL_PASSWORD};Encrypt=yes;TrustServerCertificate=yes;`
+  return `Driver={FreeTDS};Server=${process.env.SQL_SERVER || '127.0.0.1'};Port=${process.env.SQL_PORT || 1433};Database=${process.env.SQL_DATABASE};UID=${process.env.SQL_USERNAME};PWD=${process.env.SQL_PASSWORD};TDS_Version=7.4;`
 }
 
 const connectionString = getConnectionString()
@@ -55,56 +53,41 @@ async function runQuery(connection, query) {
 }
 
 async function getNotesInDateRange(connection, startDate, endDate, limit = 100, offset = 0) {
-  // Get all column names except 'Note'
-  const columnsResult = await runQuery(
-    connection,
-    "SELECT COLUMN_NAME FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_NAME = 'Notes' AND COLUMN_NAME != 'Note'",
-  )
-  const columnNames = columnsResult.map((col) => col.COLUMN_NAME).join(', ')
+  // Ensure dates are in the correct format
+  const formattedStartDate = new Date(startDate).toISOString().split('T')[0]
+  const formattedEndDate = new Date(endDate).toISOString().split('T')[0]
 
-  // Query all columns except 'Note' within the date range
-  const mainResult = await runQuery(
-    connection,
-    `SELECT ${columnNames}
-     FROM (
-       SELECT ROW_NUMBER() OVER (ORDER BY NoteDate ASC) AS RowNum, ${columnNames}
-       FROM Notes
-       WHERE NoteDate >= '${startDate}' AND NoteDate < '${endDate}'
-     ) AS NumberedNotes
-     WHERE RowNum > ${offset} AND RowNum <= ${offset + limit}`,
-  )
+  const query = `
+    WITH CountedNotes AS (
+      SELECT *, ROW_NUMBER() OVER (ORDER BY NoteDate ASC) AS RowNum
+      FROM Notes
+      WHERE NoteDate >= '${formattedStartDate}' AND NoteDate < '${formattedEndDate}'
+    )
+    SELECT *
+    FROM (
+      SELECT COUNT(*) AS TotalCount FROM CountedNotes
+    ) AS CountTable
+    CROSS APPLY (
+      SELECT * FROM CountedNotes
+      WHERE RowNum > ${offset} AND RowNum <= ${offset + limit}
+    ) AS PagedNotes
+  `
 
-  // Get total count
-  const countResult = await runQuery(
-    connection,
-    `SELECT COUNT(*) AS TotalCount
-     FROM Notes
-     WHERE NoteDate >= '${startDate}' AND NoteDate < '${endDate}'`,
-  )
+  const result = await runQuery(connection, query)
 
-  const totalCount = countResult[0].TotalCount
-
-  // Query 'Note' column separately for the same records
-  const noteIds = mainResult.map((row) => row.NoteID).join(',')
-  const noteResult = await runQuery(
-    connection,
-    `SELECT NoteID, Note
-     FROM Notes
-     WHERE NoteID IN (${noteIds})`,
-  )
-
-  // Combine the results
-  if (mainResult && noteResult) {
-    const combinedResults = mainResult.map((row) => {
-      const noteRow = noteResult.find((nr) => nr.NoteID === row.NoteID)
-      return { ...row, Note: noteRow ? noteRow.Note : null }
+  if (result && result.length > 0) {
+    const totalCount = result[0].TotalCount
+    const rows = result.map((row) => {
+      const { TotalCount, RowNum, ...noteData } = row
+      return noteData
     })
 
     return {
       count: totalCount,
-      rows: combinedResults,
+      rows: rows,
     }
   }
+
   return null
 }
 
@@ -115,12 +98,10 @@ async function main() {
     connection = await odbc.connect(connectionString)
     console.log('Connected successfully')
 
-    // Get notes from 8/13 to 8/14
     const startDate = '2023-08-13'
     const endDate = '2023-08-14'
     console.log(`Retrieving notes from ${startDate} to ${endDate}:`)
 
-    // Simulating findAndCountAll with pagination
     const limit = 10
     const page = 1
     const offset = (page - 1) * limit
@@ -133,7 +114,6 @@ async function main() {
 
       // Create Sequelize model instances from the raw data
       const sequelizeNotes = result.rows.map((note) => Note.build(note, { isNewRecord: false }))
-      console.log('Sequelize note objects:', sequelizeNotes)
 
       // Example of using Sequelize instance methods
       sequelizeNotes.forEach((note) => {
