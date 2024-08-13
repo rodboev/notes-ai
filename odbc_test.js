@@ -8,10 +8,10 @@ function getConnectionString() {
 const connectionString = getConnectionString()
 console.log(`Connection String: ${connectionString.replace(/PWD=[^;]+/, 'PWD=*****')}`)
 
-async function runQuery(connection, query, params = []) {
+async function runQuery(connection, query) {
   try {
     console.log(`Executing query: ${query}`)
-    const result = await connection.query(query, params)
+    const result = await connection.query(query)
     console.log('Query successful')
     return result
   } catch (err) {
@@ -24,14 +24,18 @@ async function runQuery(connection, query, params = []) {
 }
 
 async function getNotesInDateRange(connection, startDate, endDate, limit = 100) {
+  // Ensure dates are in the correct format
+  const formattedStartDate = new Date(startDate).toISOString().split('T')[0]
+  const formattedEndDate = new Date(endDate).toISOString().split('T')[0]
+
   const query = `
     SELECT TOP ${limit} *
     FROM Notes
-    WHERE NoteDate >= ? AND NoteDate < ?
+    WHERE NoteDate >= '${formattedStartDate}' AND NoteDate < '${formattedEndDate}'
     ORDER BY NoteDate ASC
   `
 
-  return await runQuery(connection, query, [startDate, endDate])
+  return await runQuery(connection, query)
 }
 
 async function main() {
@@ -45,6 +49,7 @@ async function main() {
     const startDate = '2023-08-13'
     const endDate = '2023-08-14' // Use the day after your end date to include all of 8/13
     console.log(`Retrieving notes from ${startDate} to ${endDate}:`)
+
     const notes = await getNotesInDateRange(connection, startDate, endDate)
 
     if (notes && notes.length > 0) {
