@@ -22,4 +22,4 @@ REM Write PRIVATE_SSH_KEY to id_rsa file
 echo !key!
 ) > "%USERPROFILE%\.ssh\id_rsa"
 
-ssh -i "%USERPROFILE%\.ssh\id_rsa" -L 1433:172.19.1.71:1433 -o StrictHostKeyChecking=no -p 1022 alex@70.19.53.6
+ssh -N -L 1433:172.19.1.71:1433 -i "%USERPROFILE%\.ssh\id_rsa" -o StrictHostKeyChecking=no -p 1022 alex@70.19.53.6
