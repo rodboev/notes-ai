@@ -2,12 +2,12 @@
 
 import { readFromDisk, writeToDisk, deleteFromDisk } from '../../utils/diskStorage'
 import { firestore } from '../../../firebase.js'
-import { doc, getDoc, setDoc, deleteDoc, loadStatuses } from 'firebase/firestore'
+import { doc, getDoc, setDoc, deleteDoc } from 'firebase/firestore'
 
 const STATUS_COLLECTION = 'status'
 const EMAILS_DOC_ID = 'emails'
 
-async function loadStatuses() {
+export async function loadStatuses() {
   try {
     console.log('Attempting to read statuses from disk...')
     const diskStatuses = await readFromDisk('status.json')
