@@ -2,3 +2,5 @@ unixodbc
 unixodbc-dev
 freetds-bin
 tdsodbc
+make
+gcc
