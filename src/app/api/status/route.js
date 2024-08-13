@@ -12,7 +12,7 @@ export async function loadStatuses() {
     console.log('Attempting to read statuses from disk...')
     const diskStatuses = await readFromDisk('status.json')
     if (diskStatuses && Object.keys(diskStatuses).length > 0) {
-      console.log('Statuses found on disk:', diskStatuses)
+      // console.log('Statuses found on disk:', diskStatuses)
       // Write disk statuses to Firestore
       await saveStatuses(diskStatuses)
       return diskStatuses
@@ -22,7 +22,7 @@ export async function loadStatuses() {
     const statusesRef = doc(firestore, STATUS_COLLECTION, EMAILS_DOC_ID)
     const statusesDoc = await getDoc(statusesRef)
     const statuses = statusesDoc.exists() ? statusesDoc.data() : {}
-    console.log('Statuses loaded from Firestore:', statuses)
+    // console.log('Statuses loaded from Firestore:', statuses)
 
     if (Object.keys(statuses).length > 0) {
       console.log('Writing Firestore data to disk...')
@@ -42,7 +42,7 @@ export async function saveStatuses(newStatuses) {
     await writeToDisk('status.json', newStatuses)
     logStr += 'Email statuses saved to disk'
 
-    console.log('Attempting to save to Firestore:', newStatuses)
+    // console.log('Attempting to save to Firestore:', newStatuses)
     const statusesRef = doc(firestore, STATUS_COLLECTION, EMAILS_DOC_ID)
     await setDoc(statusesRef, newStatuses, { merge: true })
     logStr += ' and Firestore'
@@ -65,7 +65,7 @@ export async function GET(req) {
 
     console.log('Attempting to load statuses...')
     const allStatuses = await loadStatuses()
-    console.log('Loaded statuses:', allStatuses)
+    // console.log('Loaded statuses:', allStatuses)
 
     return new Response(JSON.stringify(allStatuses), {
       headers: { 'Content-Type': 'application/json' },
