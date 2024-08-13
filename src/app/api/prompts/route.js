@@ -7,9 +7,6 @@ import { fileURLToPath } from 'url'
 import { getDoc, setDoc, doc } from 'firebase/firestore'
 import { firestore } from '../../../firebase.js'
 
-const __filename = fileURLToPath(import.meta.url)
-const __dirname = dirname(__filename)
-
 const promptsCurrent = join(process.cwd(), 'data', 'prompts-current.json')
 const promptsDefault = join(process.cwd(), 'src', 'app', 'api', 'prompts', 'prompts-default.json')
 

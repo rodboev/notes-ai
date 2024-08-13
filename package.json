@@ -14,6 +14,7 @@
     "@tinymce/tinymce-react": "^5.1.1",
     "best-effort-json-parser": "^1.1.2",
     "dotenv": "^16.4.5",
+    "find-config": "^1.0.0",
     "firebase": "^10.12.4",
     "framer-motion": "^11.3.24",
     "googleapis": "^140.0.1",
@@ -30,8 +31,6 @@
     "react-dropzone": "^14.2.3",
     "react-textarea-autosize": "^8.5.3",
     "sequelize": "^6.37.3",
-    "tedious": "^18.3.0",
-    "tedious-connection-pool": "^1.0.5",
     "tiktoken": "^1.0.15",
     "tinymce": "^7.3.0"
   },
