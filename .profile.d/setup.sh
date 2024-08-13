@@ -1,14 +1,43 @@
 #!/bin/bash
 
-# Make scripts executable
-chmod +x /app/tunnel.sh
-chmod +x /app/profile.d/odbc_setup.sh
+echo "Starting setup.sh script"
 
-# Run ODBC setup
-source /app/profile.d/odbc_setup.sh
+# ODBC Setup
+mkdir -p $ODBCSYSINI
 
-# Start the SSH tunnel
-/app/tunnel.sh
+cat > "$ODBCSYSINI/odbcinst.ini" << EOL
+[FreeTDS]
+Description = FreeTDS Driver
+Driver = /app/.apt/usr/lib/x86_64-linux-gnu/odbc/libtdsodbc.so
+Setup = /app/.apt/usr/lib/x86_64-linux-gnu/odbc/libtdsS.so
+EOL
 
-# Start your Node.js application
-npm start
+cat > "$ODBCINI" << EOL
+[MyMSSQLServer]
+Driver = FreeTDS
+Server = 127.0.0.1
+Port = 1433
+Database = ${SQL_DATABASE}
+EOL
+
+# Add FreeTDS bin to PATH
+export PATH=$PATH:/app/.apt/usr/bin
+
+# SSH Tunnel Setup
+echo "Setting up SSH tunnel..."
+mkdir -p /app/.ssh
+chmod 700 /app/.ssh
+echo "$SSH_PRIVATE_KEY" > /app/.ssh/id_rsa
+chmod 600 /app/.ssh/id_rsa
+
+# Start the SSH tunnel in the background
+ssh -N -L 1433:172.19.1.71:1433 -i /app/.ssh/id_rsa -o StrictHostKeyChecking=no -p 1022 alex@70.19.53.6 &
+
+if [ $? -ne 0 ]; then
+  echo "Tunnel setup failed!"
+  exit 1
+fi
+
+echo "Tunnel setup successful."
+
+echo "setup.sh script completed"
