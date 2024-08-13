@@ -1,24 +1,25 @@
 #!/bin/bash
 
-# Create user local configurations
+# Create .odbcinst.ini
 mkdir -p $HOME/.odbc
-
-# Create .odbcinst.ini in user space
 cat <<EOL > $HOME/.odbcinst.ini
 [ODBC Drivers]
-ODBC Driver 17 for SQL Server=Installed
+TDS=Installed
 
-[ODBC Driver 17 for SQL Server]
-Description=Microsoft ODBC Driver 17 for SQL Server
-Driver=/usr/lib/x86_64-linux-gnu/odbc/libmsodbcsql-17.so
+[TDS]
+Description=TDS driver (MS SQL)
+Driver=/usr/lib/x86_64-linux-gnu/odbc/libtdsodbc.so
+Setup=/usr/lib/x86_64-linux-gnu/odbc/libtdsS.so
+FileUsage=1
 EOL
 
-# Create .odbc.ini in user space
+# Create .odbc.ini
 cat <<EOL > $HOME/.odbc.ini
 [DSN]
-Description=My DSN
-Driver=ODBC Driver 17 for SQL Server
-Server=${SQL_SERVER},${SQL_PORT}
+Description=FreeTDS ODBC Driver for SQL Server
+Driver=TDS
+Server=${SQL_SERVER}
+Port=${SQL_PORT}
 Database=${SQL_DATABASE}
 Trace=No
 EOL
