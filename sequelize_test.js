@@ -1,3 +1,4 @@
+const Sequelize = require('sequelize')
 const odbc = require('odbc')
 require('dotenv').config()
 
@@ -9,6 +10,34 @@ function getConnectionString() {
 
 const connectionString = getConnectionString()
 console.log(`Connection String: ${connectionString.replace(/PWD=[^;]+/, 'PWD=*****')}`)
+
+// Create a Sequelize instance without an actual connection
+const sequelize = new Sequelize('dummy', 'dummy', 'dummy', {
+  dialect: 'mssql',
+  logging: false,
+})
+
+// Define your model
+const Note = sequelize.define(
+  'Note',
+  {
+    NoteID: {
+      type: Sequelize.INTEGER,
+      primaryKey: true,
+      autoIncrement: true,
+    },
+    CompanyID: Sequelize.INTEGER,
+    LocationID: Sequelize.INTEGER,
+    NoteDate: Sequelize.DATE,
+    NoteCode: Sequelize.STRING,
+    Note: Sequelize.TEXT,
+    // ... other fields
+  },
+  {
+    tableName: 'Notes',
+    timestamps: false,
+  },
+)
 
 async function runQuery(connection, query, params = []) {
   try {
@@ -25,7 +54,7 @@ async function runQuery(connection, query, params = []) {
   }
 }
 
-async function getNotesInDateRange(connection, startDate, endDate, limit = 100) {
+async function getNotesInDateRange(connection, startDate, endDate, limit = 100, offset = 0) {
   // Get all column names except 'Note'
   const columnsResult = await runQuery(
     connection,
@@ -37,13 +66,29 @@ async function getNotesInDateRange(connection, startDate, endDate, limit = 100) 
   const mainResult = await runQuery(
     connection,
     `
-    SELECT TOP ${limit} ${columnNames}
+    SELECT ${columnNames}
+    FROM (
+      SELECT ROW_NUMBER() OVER (ORDER BY NoteDate ASC) AS RowNum, ${columnNames}
+      FROM Notes
+      WHERE NoteDate >= ? AND NoteDate < ?
+    ) AS NumberedNotes
+    WHERE RowNum > ? AND RowNum <= ?
+  `,
+    [startDate, endDate, offset, offset + limit],
+  )
+
+  // Get total count
+  const countResult = await runQuery(
+    connection,
+    `
+    SELECT COUNT(*) AS TotalCount
     FROM Notes
     WHERE NoteDate >= ? AND NoteDate < ?
-    ORDER BY NoteDate ASC
   `,
     [startDate, endDate],
   )
+
+  const totalCount = countResult[0].TotalCount
 
   // Query 'Note' column separately for the same records
   const noteIds = mainResult.map((row) => row.NoteID).join(',')
@@ -58,10 +103,15 @@ async function getNotesInDateRange(connection, startDate, endDate, limit = 100) 
 
   // Combine the results
   if (mainResult && noteResult) {
-    return mainResult.map((row) => {
+    const combinedResults = mainResult.map((row) => {
       const noteRow = noteResult.find((nr) => nr.NoteID === row.NoteID)
       return { ...row, Note: noteRow ? noteRow.Note : null }
     })
+
+    return {
+      count: totalCount,
+      rows: combinedResults,
+    }
   }
   return null
 }
@@ -73,30 +123,35 @@ async function main() {
     connection = await odbc.connect(connectionString)
     console.log('Connected successfully')
 
-    // Get notes from 8/13
+    // Get notes from 8/13 to 8/14
     const startDate = '2023-08-13'
-    const endDate = '2023-08-14' // Use the day after your end date to include all of 8/13
+    const endDate = '2023-08-14'
     console.log(`Retrieving notes from ${startDate} to ${endDate}:`)
-    const notes = await getNotesInDateRange(connection, startDate, endDate)
 
-    if (notes) {
-      console.log(`Retrieved ${notes.length} notes:`)
-      console.log(JSON.stringify(notes, null, 2))
+    // Simulating findAndCountAll with pagination
+    const limit = 10
+    const page = 1
+    const offset = (page - 1) * limit
 
-      // Example of working with the data
-      notes.forEach((note) => {
+    const result = await getNotesInDateRange(connection, startDate, endDate, limit, offset)
+
+    if (result) {
+      console.log(`Retrieved ${result.rows.length} notes out of ${result.count} total:`)
+      console.log(JSON.stringify(result.rows, null, 2))
+
+      // Create Sequelize model instances from the raw data
+      const sequelizeNotes = result.rows.map((note) => Note.build(note, { isNewRecord: false }))
+      console.log('Sequelize note objects:', sequelizeNotes)
+
+      // Example of using Sequelize instance methods
+      sequelizeNotes.forEach((note) => {
         console.log(
-          `Note ID: ${note.NoteID}, Date: ${note.NoteDate}, Content: ${note.Note.substring(0, 50)}...`,
+          `Note ID: ${note.NoteID}, Date: ${note.NoteDate}, Summary: ${note.Note.substring(0, 50)}...`,
         )
       })
     } else {
       console.log('Failed to retrieve notes')
     }
-
-    // Example of a simple query
-    console.log('Executing a simple query:')
-    const versionResult = await runQuery(connection, 'SELECT @@VERSION AS SqlVersion')
-    console.log('SQL Server Version:', versionResult[0].SqlVersion)
   } catch (err) {
     console.error('Error:', err)
   } finally {
