@@ -1,16 +1,19 @@
 #!/bin/bash
 
-# Create odbcinst.ini
+# Create user local configurations
+mkdir -p $HOME/.odbc
+
+# Create .odbcinst.ini in user space
 cat <<EOL > $HOME/.odbcinst.ini
 [ODBC Drivers]
 ODBC Driver 17 for SQL Server=Installed
 
 [ODBC Driver 17 for SQL Server]
 Description=Microsoft ODBC Driver 17 for SQL Server
-Driver=/opt/microsoft/msodbcsql17/lib64/libmsodbcsql-17.7.so.2.1
+Driver=/usr/lib/x86_64-linux-gnu/odbc/libmsodbcsql-17.so
 EOL
 
-# Create odbc.ini
+# Create .odbc.ini in user space
 cat <<EOL > $HOME/.odbc.ini
 [DSN]
 Description=My DSN
