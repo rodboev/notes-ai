@@ -2,3 +2,4 @@ unixodbc
 unixodbc-dev
 freetds-bin
 tdsodbc
+libssl1.1

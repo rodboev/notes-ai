@@ -2,8 +2,6 @@ const odbc = require('odbc')
 
 const connectionString = `Driver={ODBC Driver 17 for SQL Server};Server=${process.env.SQL_SERVER || '127.0.0.1'},${process.env.SQL_PORT || 1433};Database=${process.env.SQL_DATABASE};UID=${process.env.SQL_USERNAME};PWD=${process.env.SQL_PASSWORD};Encrypt=yes;TrustServerCertificate=yes;`
 
-const sql = require('mssql/msnodesqlv8')
-
 console.log(`Connection String: ${connectionString}`)
 
 async function main() {
