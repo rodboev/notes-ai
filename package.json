@@ -17,6 +17,7 @@
     "firebase": "^10.12.4",
     "framer-motion": "^11.3.24",
     "googleapis": "^140.0.1",
+    "msnodesqlv8": "^4.2.1",
     "mssql": "^11.0.1",
     "next": "^15.0.0-rc.0",
     "nodemailer": "^6.9.14",
@@ -30,6 +31,7 @@
     "react-textarea-autosize": "^8.5.3",
     "sequelize": "^6.37.3",
     "tedious": "^18.3.0",
+    "tedious-connection-pool": "^1.0.5",
     "tiktoken": "^1.0.15",
     "tinymce": "^7.3.0"
   },
