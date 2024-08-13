@@ -2,18 +2,16 @@ const odbc = require('odbc')
 require('dotenv').config()
 
 function getConnectionString() {
-  const isHeroku = process.env.DYNO ? true : false
-  const driver = isHeroku ? '{FreeTDS}' : '{ODBC Driver 18 for SQL Server}'
-  return `Driver=${driver};Server=${process.env.SQL_SERVER || '127.0.0.1'},${process.env.SQL_PORT || 1433};Database=${process.env.SQL_DATABASE};UID=${process.env.SQL_USERNAME};PWD=${process.env.SQL_PASSWORD};Encrypt=yes;TrustServerCertificate=yes;`
+  return `Driver={FreeTDS};Server=${process.env.SQL_SERVER || '127.0.0.1'};Port=${process.env.SQL_PORT || 1433};Database=${process.env.SQL_DATABASE};UID=${process.env.SQL_USERNAME};PWD=${process.env.SQL_PASSWORD};TDS_Version=7.4;`
 }
 
 const connectionString = getConnectionString()
 console.log(`Connection String: ${connectionString.replace(/PWD=[^;]+/, 'PWD=*****')}`)
 
-async function runQuery(connection, query) {
+async function runQuery(connection, query, params = []) {
   try {
     console.log(`Executing query: ${query}`)
-    const result = await connection.query(query)
+    const result = await connection.query(query, params)
     console.log('Query successful')
     return result
   } catch (err) {
@@ -26,41 +24,14 @@ async function runQuery(connection, query) {
 }
 
 async function getNotesInDateRange(connection, startDate, endDate, limit = 100) {
-  // Get all column names except 'Note'
-  const columnsResult = await runQuery(
-    connection,
-    "SELECT COLUMN_NAME FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_NAME = 'Notes' AND COLUMN_NAME != 'Note'",
-  )
-  const columnNames = columnsResult.map((col) => col.COLUMN_NAME).join(', ')
+  const query = `
+    SELECT TOP ${limit} *
+    FROM Notes
+    WHERE NoteDate >= ? AND NoteDate < ?
+    ORDER BY NoteDate ASC
+  `
 
-  // Query all columns except 'Note' within the date range
-  const mainResult = await runQuery(
-    connection,
-    `SELECT TOP ${limit} ${columnNames}
-     FROM Notes
-     WHERE NoteDate >= '${startDate}' AND NoteDate < '${endDate}'
-     ORDER BY NoteDate ASC`,
-  )
-
-  if (!mainResult) return null
-
-  // Query 'Note' column separately for the same records
-  const noteIds = mainResult.map((row) => row.NoteID).join(',')
-  const noteResult = await runQuery(
-    connection,
-    `SELECT NoteID, Note
-     FROM Notes
-     WHERE NoteID IN (${noteIds})`,
-  )
-
-  // Combine the results
-  if (mainResult && noteResult) {
-    return mainResult.map((row) => {
-      const noteRow = noteResult.find((nr) => nr.NoteID === row.NoteID)
-      return { ...row, Note: noteRow ? noteRow.Note : null }
-    })
-  }
-  return null
+  return await runQuery(connection, query, [startDate, endDate])
 }
 
 async function main() {
