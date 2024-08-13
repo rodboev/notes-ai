@@ -1,25 +1,17 @@
 const odbc = require('odbc')
+const dotenv = require('dotenv').config()
 
-const connectionString = `Driver={ODBC Driver 17 for SQL Server};Server=${process.env.SQL_SERVER || '127.0.0.1'},${process.env.SQL_PORT || 1433};Database=${process.env.SQL_DATABASE};UID=${process.env.SQL_USERNAME};PWD=${process.env.SQL_PASSWORD};Encrypt=yes;TrustServerCertificate=yes;`
+const connectionString = `Driver={FreeTDS};Server=${process.env.SQL_SERVER || '127.0.0.1'};Port=${process.env.SQL_PORT || '1433'};Database=${process.env.SQL_DATABASE};Uid=${process.env.SQL_USERNAME};Pwd=${process.env.SQL_PASSWORD};`
 
-console.log(`Connection String: ${connectionString}`)
-
-async function main() {
+async function query() {
   try {
-    // Connect to the database
     const connection = await odbc.connect(connectionString)
-
-    // Example query
-    const result = await connection.query('SELECT * FROM Notes')
-
-    // Log the results
+    const result = await connection.query('SELECT TOP 10 * FROM Notes')
     console.log(result)
-
-    // Close the connection
     await connection.close()
-  } catch (err) {
-    console.error('Error:', err)
+  } catch (error) {
+    console.error('Error:', error)
   }
 }
 
-main()
+query()
