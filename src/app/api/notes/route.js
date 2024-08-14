@@ -1,171 +1,240 @@
 // src/app/api/notes/route.js
 
 import { NextResponse } from 'next/server'
+import sql from 'mssql/msnodesqlv8.js'
 import hash from 'object-hash'
-import { readFromDisk, writeToDisk, deleteFromDisk } from '../../utils/diskStorage'
+import { readFromDisk, writeToDisk } from '../../utils/diskStorage'
 import { firestore } from '../../../firebase'
-import { collection, getDocs, doc, writeBatch } from 'firebase/firestore'
-import dotenv from 'dotenv'
+import { collection, getDoc, getDocs, doc, writeBatch } from 'firebase/firestore'
 
-dotenv.config()
+sql.driver = 'FreeTDS'
+
+const DESIRED_NOTE_CODES = ['911 EMER', 'SERVICE', 'KEY ISSUE', 'ALERT', 'HHALERT']
 const isProduction = process.env.NEXT_PUBLIC_NODE_ENV === 'production'
 
-async function deletePreviousData() {
+function formatDate(dateString) {
+  const date = new Date(dateString)
+  return date.toISOString().split('T')[0]
+}
+
+const config = {
+  server: process.env.SQL_SERVER || '127.0.0.1',
+  port: parseInt(process.env.SQL_PORT) || 1433,
+  database: process.env.SQL_DATABASE,
+  user: process.env.SQL_USERNAME,
+  password: process.env.SQL_PASSWORD,
+  options: {
+    trustedConnection: false,
+    enableArithAbort: true,
+    encrypt: false,
+    driver: 'FreeTDS',
+  },
+  connectionString: `Driver={FreeTDS};Server=${process.env.SQL_SERVER || '127.0.0.1'},${process.env.SQL_PORT || 1433};Database=${process.env.SQL_DATABASE};Uid=${process.env.SQL_USERNAME};Pwd=${process.env.SQL_PASSWORD};TDS_Version=7.4;`,
+}
+
+async function runQuery(pool, query) {
   try {
-    const deleteCollection = async (collectionName) => {
-      const collectionRef = collection(firestore, collectionName)
-      const querySnapshot = await getDocs(collectionRef)
-
-      const batch = writeBatch(firestore)
-      querySnapshot.forEach((doc) => {
-        batch.delete(doc.ref)
-      })
-      await batch.commit()
-      console.log(`Deleted ${collectionName} from Firestore`)
-    }
-
-    // Delete notes and emails from Firestore
-    await deleteCollection('notes')
-    await deleteCollection('emails')
-
-    // Delete notes and emails from disk
-    await deleteFromDisk('notes.json')
-    await deleteFromDisk('emails.json')
-
-    console.log('Notes and emails deleted from Firestore and disk')
-  } catch (error) {
-    console.warn(`Error deleting documents from Firestore: ${error.message}`)
+    // console.log(`Executing query: ${query}`)
+    const result = await pool.request().query(query)
+    console.log('Query successful')
+    return result.recordset
+  } catch (err) {
+    console.error(`Error executing query "${query}":`, err)
+    throw err
   }
 }
 
-export async function GET() {
-  // console.log(`Loading notes from disk`)
+async function getJoinedNotes(pool, startDate, endDate, limit = 500) {
+  const formattedStartDate = formatDate(startDate)
+  const formattedEndDate = formatDate(endDate)
+  const noteCodesString = DESIRED_NOTE_CODES.map((code) => `'${code}'`).join(', ')
+
+  const query = `
+    SELECT TOP ${limit}
+      n.LocationID,
+      n.NoteDate,
+      n.NoteCode,
+      n.Note,
+      CASE
+        WHEN LEN(LTRIM(RTRIM(t.LName))) > 0
+        THEN CONCAT(t.FName, ' ', LEFT(t.LName, 1), '.')
+        ELSE t.FName
+      END AS Tech,
+      LTRIM(RTRIM(CONCAT(
+        COALESCE(l.Address, ''), ', ',
+        COALESCE(l.City, ''), ', ',
+        COALESCE(l.State, ''), ' ',
+        COALESCE(l.Zip, '')
+      ))) AS Address,
+      l.Company,
+      l.LocationCode
+    FROM Notes n
+    LEFT JOIN Locations l ON n.LocationID = l.LocationID
+    LEFT JOIN Employees e ON n.AddUserID = e.UserID
+    LEFT JOIN Technicians t ON e.TechID = t.TechID
+    WHERE n.NoteDate >= '${formattedStartDate}' 
+      AND n.NoteDate < '${formattedEndDate}'
+      AND n.NoteCode IN (${noteCodesString})
+    ORDER BY n.NoteDate ASC
+  `
+
+  return await runQuery(pool, query)
+}
+
+async function getNotesCount(pool, startDate, endDate) {
+  const formattedStartDate = formatDate(startDate)
+  const formattedEndDate = formatDate(endDate)
+  const noteCodesString = DESIRED_NOTE_CODES.map((code) => `'${code}'`).join(', ')
+
+  const query = `
+    SELECT COUNT(*) as count
+    FROM Notes
+    WHERE NoteDate >= '${formattedStartDate}' 
+      AND NoteDate < '${formattedEndDate}'
+      AND NoteCode IN (${noteCodesString})
+  `
+
+  const result = await runQuery(pool, query)
+  return result[0].count
+}
+
+function transformNotes(notes) {
+  return notes.map((note) => ({
+    locationID: note.LocationID,
+    date: note.NoteDate,
+    code: note.NoteCode,
+    content: note.Note,
+    tech: note.Tech,
+    address: note.Address,
+    company: note.Company,
+    locationCode: note.LocationCode,
+  }))
+}
+
+async function saveNotes(notes, startDate, endDate) {
+  const cacheKey = `notes_${startDate}_${endDate}`
+  const cacheData = {
+    notes,
+    startDate,
+    endDate,
+    timestamp: new Date().toISOString(),
+  }
+
+  // Store in disk
+  await writeToDisk(`${cacheKey}.json`, cacheData)
+
+  // Store in Firestore
+  const batch = writeBatch(firestore)
+  const cacheDocRef = doc(firestore, 'notesCache', cacheKey)
+  batch.set(cacheDocRef, {
+    startDate,
+    endDate,
+    timestamp: new Date().toISOString(),
+  })
+
+  notes.forEach((note) => {
+    const noteDocRef = doc(firestore, 'notesCache', cacheKey, 'notes', note.fingerprint)
+    batch.set(noteDocRef, note)
+  })
+  await batch.commit()
+
+  console.log('Notes successfully stored in disk and Firestore')
+}
+
+async function getSavedNotes(cacheKey) {
+  // Try to read from disk first
+  const diskData = await readFromDisk(`${cacheKey}.json`)
+  if (diskData) {
+    console.log('Notes found in disk cache')
+    return diskData.notes
+  }
+
+  // If not in disk, check Firestore
+  const cacheDocRef = doc(firestore, 'notesCache', cacheKey)
+  const cacheDocSnap = await getDoc(cacheDocRef)
+
+  if (cacheDocSnap.exists()) {
+    const notesCollectionRef = collection(firestore, 'notesCache', cacheKey, 'notes')
+    const notesSnapshot = await getDocs(notesCollectionRef)
+    const firestoreNotes = notesSnapshot.docs.map((doc) => doc.data())
+
+    console.log('Notes found in Firestore')
+    return firestoreNotes
+  }
+
+  return null
+}
+
+export async function GET(request) {
+  const { searchParams } = new URL(request.url)
+  let startDate = searchParams.get('startDate')
+  let endDate = searchParams.get('endDate')
+
+  // If startDate or endDate is null, undefined, or "null", set default values
+  if (!startDate || startDate === 'null' || !endDate || endDate === 'null') {
+    const today = new Date()
+    const yesterday = new Date(today)
+    yesterday.setDate(yesterday.getDate() - 1)
+
+    startDate =
+      startDate && startDate !== 'null' ? startDate : yesterday.toISOString().split('T')[0]
+    endDate = endDate && endDate !== 'null' ? endDate : today.toISOString().split('T')[0]
+    console.log(`Using default dates: startDate=${startDate}, endDate=${endDate}`)
+  }
+
+  // Adjust endDate for database query
+  const queryEndDate = new Date(endDate)
+  queryEndDate.setDate(queryEndDate.getDate() + 1)
+  const formattedQueryEndDate = queryEndDate.toISOString().split('T')[0]
+
+  // Try to get stored notes first
+  const cacheKey = `notes_${startDate}_${endDate}`
+  let storedNotes = await getSavedNotes(cacheKey)
+  if (storedNotes) {
+    if (!isProduction) storedNotes = storedNotes.slice(0, 6)
+    console.log(`Returning ${storedNotes.length} notes`)
+    return NextResponse.json(storedNotes)
+  }
+
+  let pool
   try {
-    let notes = await readFromDisk('notes.json')
-    if (!notes) {
-      console.log(`Notes not found on disk, loading from Firestore, saving to disk and returning`)
-      // If not on disk, fetch from Firestore
-      const notesCollection = collection(firestore, 'notes')
-      const querySnapshot = await getDocs(notesCollection)
-      notes = querySnapshot.docs.map((doc) => doc.data())
+    console.log('Attempting to connect to the database...')
+    pool = await sql.connect(config)
+    console.log('Connected successfully')
 
-      // Write to disk for future use
-      await writeToDisk('notes.json', notes)
-    }
+    let notes = await getJoinedNotes(pool, startDate, formattedQueryEndDate)
 
-    // Filter and sort notes
-    notes = notes
+    notes = transformNotes(notes)
       .filter((note) => note.code === '911 EMER')
-      .sort((a, b) => {
-        if (a.date !== b.date) return a.date.localeCompare(b.date)
-        return a.time.localeCompare(b.time)
-      })
+      .sort((a, b) => new Date(a.date) - new Date(b.date))
+
+    // Add fingerprint to each note
+    notes = notes.map((note) => ({
+      ...note,
+      fingerprint: hash(note),
+    }))
+
+    // Store the notes in disk and Firestore
+    await saveNotes(notes, startDate, endDate)
 
     if (!isProduction) notes = notes.slice(0, 6)
 
+    console.log(`Returning ${notes.length} notes`)
     return NextResponse.json(notes)
   } catch (error) {
-    console.error(`Error loading notes:`, error)
-    return NextResponse.json([])
-  }
-}
-
-export async function DELETE() {
-  try {
-    await deletePreviousData()
-    return new NextResponse(null, { status: 204 }) // 204 No Content
-  } catch (error) {
-    console.warn(`Error deleting data:`, error)
-    return new NextResponse(null, {
-      status: 500,
-      statusText: 'Internal Server Error',
-    })
-  }
-}
-
-export async function PUT(req) {
-  let notes
-  try {
-    notes = await req.json()
-  } catch (error) {
-    console.warn('Invalid JSON:', error)
-    return new Response(`Invalid JSON: ${error}`, { status: 400 })
-  }
-
-  const requiredKeys = [
-    'Note Code',
-    'Company',
-    'Location Code',
-    'Location ID',
-    'Address Line 1',
-    'Note',
-    'Added By',
-    'Note Date',
-    'Note Time',
-  ]
-
-  const notesWithUndefinedValues = []
-
-  // Ensure all fields are present and have valid values
-  notes = notes.map((note) => {
-    // Collect notes with undefined values
-    let hasUndefinedValue = false
-    requiredKeys.forEach((key) => {
-      if (note[key] === undefined) {
-        hasUndefinedValue = true
+    console.error('Error:', error)
+    return NextResponse.json(
+      { error: 'Internal Server Error', details: error.message },
+      { status: 500 },
+    )
+  } finally {
+    if (pool) {
+      try {
+        await pool.close()
+        console.log('Connection closed')
+      } catch (closeErr) {
+        console.error('Error closing connection:', closeErr)
       }
-    })
-
-    if (hasUndefinedValue) {
-      notesWithUndefinedValues.push(note)
     }
-
-    return {
-      fingerprint: hash(note),
-      code: note['Note Code'] ?? '',
-      company: note['Company'] ?? '',
-      locationCode: note['Location Code'] ?? '',
-      locationID: note['Location ID'] ?? '',
-      address: note['Address Line 1'] ?? '',
-      content: note['Note'] ?? '',
-      tech: note['Added By'] ?? '',
-      date: note['Note Date'] ?? '',
-      time: note['Note Time'] ?? '',
-    }
-  })
-
-  // Log notes with undefined values
-  if (notesWithUndefinedValues.length > 0) {
-    console.warn('Notes with undefined values:', notesWithUndefinedValues)
-  }
-
-  try {
-    // Delete existing notes and emails before uploading new ones
-    await writeToDisk('notes.json', [])
-    await writeToDisk('emails.json', [])
-    await deletePreviousData() // Keep Firestore deletion
-
-    // Write all notes to disk
-    await writeToDisk('notes.json', notes)
-
-    // Batch write all notes to Firestore
-    const batch = writeBatch(firestore)
-    notes.forEach((note) => {
-      const docRef = doc(firestore, 'notes', note.fingerprint)
-      batch.set(docRef, note)
-    })
-    await batch.commit()
-
-    console.log('Notes successfully updated in disk and Firestore')
-    return new Response(JSON.stringify(notes), {
-      headers: {
-        'Content-Type': 'application/json',
-      },
-    })
-  } catch (error) {
-    console.warn(`Error writing data:`, error)
-    return new Response(`Error writing data: ${error.message}`, {
-      status: 500,
-    })
   }
 }

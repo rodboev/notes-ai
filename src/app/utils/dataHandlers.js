@@ -13,22 +13,28 @@ export const fetchData = async (
   setPairs,
   setNotesExist,
   emailEventSourceRef,
+  startDate,
+  endDate,
 ) => {
-  console.log(`${timestamp()} Fetching data, refresh: ${refresh}`)
+  console.log(
+    `${timestamp()} Fetching data, refresh: ${refresh}, startDate: ${startDate}, endDate: ${endDate}`,
+  )
 
   // Fetch notes
   let notes = []
   try {
-    notes = await fetch('/api/notes').then((res) => res.json())
+    notes = await fetch(`/api/notes?startDate=${startDate}&endDate=${endDate}`).then((res) =>
+      res.json(),
+    )
     if (notes.length === 0) {
-      notes = cachedNotes
+      notes = cachedNotes[`${startDate}_${endDate}`] || []
     }
   } catch (error) {
     console.warn(`${timestamp()} Failed to fetch notes:`, String(error).split('\n')[0])
-    notes = cachedNotes
+    notes = cachedNotes[`${startDate}_${endDate}`] || []
   }
 
-  setCachedNotes(notes)
+  setCachedNotes({ ...cachedNotes, [`${startDate}_${endDate}`]: notes })
 
   if (notes.length === 0) {
     setNotesExist(false)
@@ -46,11 +52,11 @@ export const fetchData = async (
   }
   closeEventSource()
 
-  let url = '/api/emails'
+  let url = `/api/emails?startDate=${startDate}&endDate=${endDate}`
   if (refresh === 'all') {
-    url += '?refresh=all'
+    url += '&refresh=all'
   } else if (refresh.length === 40) {
-    url += '?refresh=' + refresh
+    url += '&refresh=' + refresh
   }
 
   try {
@@ -58,7 +64,8 @@ export const fetchData = async (
     emailEventSourceRef.current = emailEvents
 
     let emailsJson = ''
-    let allEmails = refresh.length === 40 ? [...cachedEmails] : []
+    let allEmails =
+      refresh.length === 40 ? [...(cachedEmails[`${startDate}_${endDate}`] || [])] : []
 
     emailEvents.addEventListener('message', (event) => {
       const data = parse(event.data)
@@ -101,12 +108,12 @@ export const fetchData = async (
     emailEvents.addEventListener('error', (event) => {
       console.error(`${timestamp()} EventSource error:`, event)
       closeEventSource()
-      const joined = leftJoin({ notes, emails: cachedEmails })
+      const joined = leftJoin({ notes, emails: cachedEmails[`${startDate}_${endDate}`] || [] })
       setPairs(joined)
     })
   } catch (error) {
     console.warn(`${timestamp()} Error fetching emails:`, String(error).split('\n')[0])
-    const joined = leftJoin({ notes, emails: cachedEmails })
+    const joined = leftJoin({ notes, emails: cachedEmails[`${startDate}_${endDate}`] || [] })
     setPairs(joined)
   }
 }
@@ -116,26 +123,4 @@ export const clearData = (setPairs, setNotesExist, setCachedNotes, setCachedEmai
   setNotesExist(false)
   setCachedNotes([])
   setCachedEmails([])
-}
-
-export const uploadData = async (data, fetchData, pairRefs) => {
-  try {
-    const response = await fetch('/api/notes', {
-      method: 'PUT',
-      headers: {
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify(data),
-    })
-
-    if (response.ok) {
-      console.log('File uploaded and data saved successfully!')
-      await fetchData('all')
-      pairRefs?.current[0]?.scrollIntoView({ behavior: 'smooth' })
-    } else {
-      console.warn('Failed to upload the file.')
-    }
-  } catch (error) {
-    console.warn('Upload error:', String(error).split('\n')[0])
-  }
 }

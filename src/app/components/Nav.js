@@ -14,7 +14,7 @@ export default function Nav({ children }) {
 
   return (
     <div className="align-center fixed z-20 -ml-4 flex w-full flex-col">
-      <nav className="ml-4 flex justify-center border-b bg-white/50 p-3 backdrop-blur-md">
+      <nav className="z-30 ml-4 flex h-20 justify-center border-b bg-white/50 p-3 backdrop-blur-md">
         <div className="container flex w-full max-w-screen-2xl items-center justify-between">
           <div className="left tracking-tighter">
             <span className="display-inline mx-1 text-5xl font-bold text-teal">liberty</span>
@@ -22,7 +22,7 @@ export default function Nav({ children }) {
           </div>
           <div className="right align-center flex items-center px-3">
             {children}
-            <div className="relative m-1 mr-2">
+            <div className="relative m-1 ml-4 mr-2">
               <SettingsIcon
                 className="icon align-center flex cursor-pointer text-neutral-500 hover:opacity-85"
                 onClick={toggleSettings}

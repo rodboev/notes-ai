@@ -121,6 +121,8 @@ function expand(template, variables) {
 export async function GET(req) {
   const url = new URL(req.url)
   const refresh = url.searchParams.get('refresh')
+  const startDate = url.searchParams.get('startDate')
+  const endDate = url.searchParams.get('endDate')
 
   let storedEmails = []
 
@@ -210,14 +212,10 @@ export async function GET(req) {
         if (refresh === 'all' || !(storedEmails?.length > 0)) {
           console.log(`${timestamp()} Refreshing all emails`)
 
-          const noteChunks = await fetch(`http://localhost:${port}/api/notes`)
+          const noteChunks = await fetch(
+            `http://localhost:${port}/api/notes?startDate=${startDate}&endDate=${endDate}`,
+          )
             .then((res) => res.json())
-            // .then((notes) =>
-            //   notes
-            //     .filter((note) => note.code === '911 EMER')
-            //     .sort((a, b) => new Date(a.date + 'T' + a.time) - new Date(b.date + 'T' + b.time))
-            //     .slice(0, 5),
-            // )
             .then((sortedNotes) => chunkArray(sortedNotes, isProduction ? 8 : 2))
 
           let emailsToSave = []

@@ -4,6 +4,7 @@ module.exports = {
     './src/pages/**/*.{js,ts,jsx,tsx,mdx}',
     './src/components/**/*.{js,ts,jsx,tsx,mdx}',
     './src/app/**/*.{js,ts,jsx,tsx,mdx}',
+    './node_modules/react-tailwindcss-datepicker/dist/index.esm.js',
   ],
   theme: {
     fontFamily: {
@@ -16,6 +17,8 @@ module.exports = {
       },
       colors: {
         teal: 'rgb(23,72, 77)',
+        'teal-500': 'rgb(23, 72, 77)',
+        'teal-100': 'rgba(23, 72, 77, 0.25)',
         'teal-90': 'rgba(23, 72, 77, 0.9)',
         'teal-80': 'rgba(23, 72, 77, 0.8)',
         'teal-70': 'rgba(23, 72, 77, 0.7)',
