@@ -64,8 +64,7 @@ export const fetchData = async (
     emailEventSourceRef.current = emailEvents
 
     let emailsJson = ''
-    let allEmails =
-      refresh.length === 40 ? [...(cachedEmails[`${startDate}_${endDate}`] || [])] : []
+    let allEmails = refresh.length === 40 ? [...cachedEmails] : []
 
     emailEvents.addEventListener('message', (event) => {
       const data = parse(event.data)
@@ -108,12 +107,12 @@ export const fetchData = async (
     emailEvents.addEventListener('error', (event) => {
       console.error(`${timestamp()} EventSource error:`, event)
       closeEventSource()
-      const joined = leftJoin({ notes, emails: cachedEmails[`${startDate}_${endDate}`] || [] })
+      const joined = leftJoin({ notes, emails: cachedEmails })
       setPairs(joined)
     })
   } catch (error) {
     console.warn(`${timestamp()} Error fetching emails:`, String(error).split('\n')[0])
-    const joined = leftJoin({ notes, emails: cachedEmails[`${startDate}_${endDate}`] || [] })
+    const joined = leftJoin({ notes, emails: cachedEmails })
     setPairs(joined)
   }
 }
@@ -121,6 +120,6 @@ export const fetchData = async (
 export const clearData = (setPairs, setNotesExist, setCachedNotes, setCachedEmails) => {
   setPairs([])
   setNotesExist(false)
-  setCachedNotes([])
+  setCachedNotes({})
   setCachedEmails([])
 }

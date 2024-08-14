@@ -40,10 +40,8 @@ async function loadEmails() {
 async function saveEmails(emails) {
   console.warn(`${timestamp()} Saving emails to disk and Firestore`)
 
-  // Log the total number of emails and any empty ones
+  // Log the total number of emails
   console.log(`${timestamp()} Total emails: ${emails.length}`)
-  const emptyEmails = emails.filter((email) => Object.keys(email).length === 0)
-  console.log(`${timestamp()} Number of empty emails: ${emptyEmails.length}`)
 
   // Save to disk
   try {
@@ -64,11 +62,7 @@ async function saveEmails(emails) {
 
   let savedCount = 0
   try {
-    emails.forEach((email, index) => {
-      if (Object.keys(email).length === 0) {
-        console.warn(`${timestamp()} Empty email object at index ${index}`)
-        return
-      }
+    emails.forEach((email) => {
       if (email.fingerprint) {
         const docRef = doc(emailsCollection, email.fingerprint)
         batch.set(docRef, email)
@@ -125,12 +119,25 @@ export async function GET(req) {
   const endDate = url.searchParams.get('endDate')
 
   let storedEmails = []
+  let emailCache = {}
 
   if (refresh === 'all') {
     await deletePreviousEmails()
   } else {
     storedEmails = await loadEmails()
+    emailCache = storedEmails.reduce((acc, email) => {
+      if (email.fingerprint) {
+        acc[email.fingerprint] = email
+      }
+      return acc
+    }, {})
   }
+
+  // Filter stored emails based on date range
+  const filteredEmails = storedEmails.filter((email) => {
+    const emailDate = new Date(email.date)
+    return emailDate >= new Date(startDate) && emailDate < new Date(endDate)
+  })
 
   const encoder = new TextEncoder()
   const readableStream = new ReadableStream({
@@ -165,8 +172,6 @@ export async function GET(req) {
           { role: 'system', content: systemContent },
           { role: 'user', content: userContent },
         ]
-        // console.dir(messages)
-        // debugger
 
         let stream
         try {
@@ -206,11 +211,11 @@ export async function GET(req) {
 
       try {
         console.log(
-          `${timestamp()} GET /api/emails${refresh ? `?refresh=${refresh}` : ''}, stored emails: ${storedEmails?.length || 0}`,
+          `${timestamp()} GET /api/emails${refresh ? `?refresh=${refresh}` : ''}, stored emails: ${storedEmails?.length || 0}, filtered emails: ${filteredEmails?.length || 0}`,
         )
 
-        if (refresh === 'all' || !(storedEmails?.length > 0)) {
-          console.log(`${timestamp()} Refreshing all emails`)
+        if (refresh === 'all' || filteredEmails.length === 0) {
+          console.log(`${timestamp()} Refreshing emails for date range ${startDate}-${endDate}`)
 
           const noteChunks = await fetch(
             `http://localhost:${port}/api/notes?startDate=${startDate}&endDate=${endDate}`,
@@ -229,8 +234,16 @@ export async function GET(req) {
           console.log(`${timestamp()} Closing controller`)
           controller.close()
 
-          // Needed to get more than 8 emails:
-          await saveEmails(emailsToSave)
+          // Merge new emails with existing ones, replacing any with the same fingerprint
+          const updatedEmails = [
+            ...storedEmails.filter(
+              (email) =>
+                !emailsToSave.some((newEmail) => newEmail.fingerprint === email.fingerprint),
+            ),
+            ...emailsToSave,
+          ]
+          await saveEmails(updatedEmails)
+          // sendData({ emails: emailsToSave }, 'stop')
         } else if (refresh?.length === 40) {
           console.log(`${timestamp()} Refreshing single email`)
 
@@ -240,6 +253,7 @@ export async function GET(req) {
 
           if (noteToRefresh) {
             const singleEmail = await streamResponse([noteToRefresh])
+            emailCache[refresh] = singleEmail[0]
             // Sent just the one in procesChunk, so save + send them all here
             const updatedEmails = storedEmails.map((email) =>
               email.fingerprint === refresh ? singleEmail[0] : email,
@@ -252,11 +266,13 @@ export async function GET(req) {
           } else {
             sendData({ error: 'Note not found' }, 'error')
           }
-        } else if (storedEmails?.length > 0) {
+        } else if (filteredEmails?.length > 0) {
           responseComplete = true
           // Full resonses get 'stop' with them
-          sendData({ emails: storedEmails }, 'stop')
-          console.log(`${timestamp()} Closing controller`)
+          sendData({ emails: filteredEmails }, 'stop')
+          console.log(
+            `${timestamp()} Closing controller, sent ${filteredEmails.length} filtered emails`,
+          )
           controller.close()
         }
       } catch (error) {
