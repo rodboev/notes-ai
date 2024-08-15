@@ -247,7 +247,6 @@ export async function GET(request) {
   const cacheKey = `notes_${startDate}_${endDate}`
   let storedNotes = await getSavedNotes(cacheKey)
   if (storedNotes) {
-    if (!isProduction) storedNotes = storedNotes.slice(0, 6)
     console.log(`Returning ${storedNotes.length} notes`)
     return NextResponse.json(storedNotes)
   }
@@ -272,8 +271,6 @@ export async function GET(request) {
 
     // Store the notes in disk and Firestore
     await saveNotes(notes, startDate, endDate)
-
-    if (!isProduction) notes = notes.slice(0, 6)
 
     console.log(`Returning ${notes.length} notes`)
     return NextResponse.json(notes)

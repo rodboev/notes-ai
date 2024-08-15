@@ -116,9 +116,10 @@ export async function GET(req) {
   const startDate = url.searchParams.get('startDate')
   const endDate = url.searchParams.get('endDate')
   const fingerprint = url.searchParams.get('fingerprint')
+  const fingerprints = url.searchParams.get('fingerprints')?.split(',') || []
 
   console.log(
-    `${timestamp()} GET /api/emails request params: refresh=${refresh}, startDate=${startDate}, endDate=${endDate}, fingerprint=${fingerprint}`,
+    `${timestamp()} GET /api/emails request params: refresh=${refresh}, startDate=${startDate}, endDate=${endDate}, fingerprint=${fingerprint}, fingerprints=${fingerprints}`,
   )
 
   let storedEmails = await loadEmails()
@@ -187,14 +188,16 @@ export async function GET(req) {
           if (!status) {
             // Streaming response
             emailsJson += chunk
+            // console.log(`${timestamp()} sendData(chunk)`)
             sendData(chunk)
           } else if (status === 'stop') {
             // Full response end of this streaming chunk
             const emails = parse(emailsJson.trim()).emails || []
             emailsToSave = [...emailsToSave, ...emails]
-            // console.log(`${timestamp()} // sendData(emails, 'stop')`)
+            console.log(`${timestamp()} sendData('', 'stop')`)
             sendData('', 'stop')
           } else {
+            console.log(`${timestamp()} sendData('', status)`)
             sendData('', status)
           }
         }
@@ -232,21 +235,30 @@ export async function GET(req) {
           }
 
           if (email) {
+            console.log(`${timestamp()} sendData({ emails: [email] }, 'stop')`)
             sendData({ emails: [email] }, 'stop')
           } else {
             throw new Error(`Failed to generate or retrieve email for fingerprint: ${fingerprint}`)
           }
         } else {
-          // Handle multiple notes (existing bulk processing logic)
+          // Handle multiple notes
           let notesToProcess = []
-          const response = await fetch(
-            `http://localhost:${port}/api/notes?startDate=${startDate}&endDate=${endDate}`,
-          )
-          notesToProcess = await response.json()
+          if (fingerprints.length > 0) {
+            const response = await fetch(
+              `http://localhost:${port}/api/notes?startDate=${startDate}&endDate=${endDate}`,
+            )
+            const allNotes = await response.json()
+            notesToProcess = allNotes.filter((note) => fingerprints.includes(note.fingerprint))
+          } else {
+            const response = await fetch(
+              `http://localhost:${port}/api/notes?startDate=${startDate}&endDate=${endDate}`,
+            )
+            notesToProcess = await response.json()
+          }
 
           console.log(`${timestamp()} Fetched ${notesToProcess.length} notes to process`)
 
-          const noteChunks = chunkArray(notesToProcess, isProduction ? 8 : 2)
+          const noteChunks = chunkArray(notesToProcess, isProduction ? 8 : 3)
           console.log(`${timestamp()} Created ${noteChunks.length} note chunks`)
 
           let emailsToSave = []
@@ -275,6 +287,8 @@ export async function GET(req) {
           }
 
           // Send all prepared emails at once
+          console.log(`${timestamp()} // Send all prepared emails at once`)
+          console.log(`${timestamp()} sendData({ emails: emailsToSend }, 'stop')`)
           sendData({ emails: emailsToSend }, 'stop')
 
           if (emailsToSave.length > 0) {
@@ -291,6 +305,7 @@ export async function GET(req) {
           }
         }
 
+        console.log(`${timestamp()} responseComplete = true, sendData('', 'stop')`)
         responseComplete = true
         sendData('', 'stop')
 

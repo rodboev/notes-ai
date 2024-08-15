@@ -7,11 +7,13 @@ export const merge = (arrayList1, arrayList2) => [
     .values(),
 ]
 
-export const leftJoin = ({ notes, emails = [] }) =>
-  notes.map((note) => ({
+export const leftJoin = ({ notes, emails = [] }) => {
+  console.log(`Joining ${notes.length} notes with ${emails.length} emails`)
+  return notes.map((note) => ({
     note,
     email: emails.find((email) => email.fingerprint === note.fingerprint),
   }))
+}
 
 export const chunkArray = (array, chunkSize) => {
   const chunks = []

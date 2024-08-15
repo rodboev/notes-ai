@@ -8,7 +8,6 @@ import SendEmailButton from './SendEmailButton'
 import FeedbackButton from './FeedbackButton'
 import RefreshButton from './RefreshButton'
 import { usePersistedEmailStatus } from '../hooks/usePersistedEmailStatus'
-import { useData } from '../hooks/useData'
 
 const Email = ({
   email,

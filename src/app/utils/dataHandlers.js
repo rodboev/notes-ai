@@ -20,26 +20,21 @@ export const fetchData = async ({
   console.log(
     `${timestamp()} Fetching data, refresh: ${refresh}, startDate: ${startDate}, endDate: ${endDate}, fingerprint: ${fingerprint}`,
   )
+  console.log(
+    `${timestamp()} cachedNotes: ${cachedNotes.length}, cachedEmails: ${cachedEmails.length}`,
+  )
 
-  // Use cached notes or fetch new ones
+  // Fetch or use cached notes
   let notes = cachedNotes[`${startDate}_${endDate}`] || []
-
-  // Fetch new notes only if necessary
-  if (!notes.length || (fingerprint && !notes.some((note) => note.fingerprint === fingerprint))) {
+  if (!notes.length || fingerprint) {
     try {
-      let url = fingerprint
-        ? `/api/notes?fingerprint=${fingerprint}`
+      const url = fingerprint
+        ? `/api/notes?fingerprint=${fingerprint}&startDate=${startDate}&endDate=${endDate}`
         : `/api/notes?startDate=${startDate}&endDate=${endDate}`
       const response = await fetch(url)
       const newNotes = await response.json()
 
-      if (fingerprint) {
-        // For single note refresh, merge with existing notes
-        notes = merge(notes, newNotes)
-      } else {
-        notes = newNotes
-      }
-
+      notes = fingerprint ? merge(notes, newNotes) : newNotes
       setCachedNotes({ ...cachedNotes, [`${startDate}_${endDate}`]: notes })
     } catch (error) {
       console.warn(`${timestamp()} Failed to fetch notes:`, String(error).split('\n')[0])
@@ -47,13 +42,10 @@ export const fetchData = async ({
   }
 
   setNotesExist(notes.length > 0)
+  if (notes.length === 0) return
 
-  if (notes.length === 0) {
-    setNotesExist(false)
-    return
-  } else {
-    setNotesExist(true)
-  }
+  // Get fingerprints of needed emails
+  const neededFingerprints = notes.map((note) => note.fingerprint)
 
   // Fetch emails
   const closeEventSource = () => {
@@ -64,10 +56,10 @@ export const fetchData = async ({
   }
   closeEventSource()
 
-  let url = fingerprint
-    ? `/api/emails?fingerprint=${fingerprint}&refresh=${fingerprint}`
-    : `/api/emails?startDate=${startDate}&endDate=${endDate}`
-
+  let url = `/api/emails?startDate=${startDate}&endDate=${endDate}&fingerprints=${neededFingerprints.join(',')}`
+  if (fingerprint) {
+    url += `&fingerprint=${fingerprint}&refresh=${refresh}`
+  }
   if (refresh === 'all') {
     url += '&refresh=all'
   }
@@ -77,11 +69,13 @@ export const fetchData = async ({
     emailEventSourceRef.current = emailEvents
 
     let emailsJson = ''
-    let allEmails = refresh.length === 40 ? [...cachedEmails] : []
+    let allEmails = refresh === 'all' ? [] : [...cachedEmails]
 
     const updatePairs = (emails) => {
-      console.log(`Joining ${notes.length} notes and ${emails.length} emails`)
-      const joined = leftJoin({ notes, emails })
+      const filteredEmails = emails.filter((email) =>
+        neededFingerprints.includes(email.fingerprint),
+      )
+      const joined = leftJoin({ notes, emails: filteredEmails })
       setPairs(joined)
     }
 
@@ -102,7 +96,7 @@ export const fetchData = async ({
         emails = parse(emailsJson)?.emails
       }
 
-      if (typeof emails !== 'undefined') {
+      if (Array.isArray(emails)) {
         const filteredEmails = emails.filter((email) => email?.fingerprint?.length === 40)
 
         if (status === 'stop') {
@@ -113,8 +107,7 @@ export const fetchData = async ({
         allEmails = merge(allEmails, filteredEmails)
         setCachedEmails(allEmails)
 
-        const joined = leftJoin({ notes, emails: allEmails })
-        setPairs(joined)
+        updatePairs(allEmails)
       }
 
       if (status === 'complete') {
@@ -126,19 +119,10 @@ export const fetchData = async ({
     emailEvents.addEventListener('error', (event) => {
       console.error(`${timestamp()} EventSource error:`, event)
       closeEventSource()
-      const joined = leftJoin({ notes, emails: cachedEmails })
-      setPairs(joined)
+      updatePairs(cachedEmails)
     })
   } catch (error) {
     console.warn(`${timestamp()} Error fetching emails:`, String(error).split('\n')[0])
-    const joined = leftJoin({ notes, emails: cachedEmails })
-    setPairs(joined)
+    updatePairs(cachedEmails)
   }
-}
-
-export const clearData = (setPairs, setNotesExist, setCachedNotes, setCachedEmails) => {
-  setPairs([])
-  setNotesExist(false)
-  setCachedNotes({})
-  setCachedEmails([])
 }
