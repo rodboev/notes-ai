@@ -21,25 +21,32 @@ export const fetchData = async ({
     `${timestamp()} Fetching data, refresh: ${refresh}, startDate: ${startDate}, endDate: ${endDate}, fingerprint: ${fingerprint}`,
   )
 
-  // Fetch notes
-  let notes = []
-  try {
-    if (fingerprint) {
-      notes = await fetch(`/api/notes?fingerprint=${fingerprint}`).then((res) => res.json())
-    } else {
-      notes = await fetch(`/api/notes?startDate=${startDate}&endDate=${endDate}`).then((res) =>
-        res.json(),
-      )
+  // Use cached notes or fetch new ones
+  let notes = cachedNotes[`${startDate}_${endDate}`] || []
+
+  // Fetch new notes only if necessary
+  if (!notes.length || (fingerprint && !notes.some((note) => note.fingerprint === fingerprint))) {
+    try {
+      let url = fingerprint
+        ? `/api/notes?fingerprint=${fingerprint}`
+        : `/api/notes?startDate=${startDate}&endDate=${endDate}`
+      const response = await fetch(url)
+      const newNotes = await response.json()
+
+      if (fingerprint) {
+        // For single note refresh, merge with existing notes
+        notes = merge(notes, newNotes)
+      } else {
+        notes = newNotes
+      }
+
+      setCachedNotes({ ...cachedNotes, [`${startDate}_${endDate}`]: notes })
+    } catch (error) {
+      console.warn(`${timestamp()} Failed to fetch notes:`, String(error).split('\n')[0])
     }
-    if (notes.length === 0) {
-      notes = cachedNotes[`${startDate}_${endDate}`] || []
-    }
-  } catch (error) {
-    console.warn(`${timestamp()} Failed to fetch notes:`, String(error).split('\n')[0])
-    notes = cachedNotes[`${startDate}_${endDate}`] || []
   }
 
-  setCachedNotes({ ...cachedNotes, [`${startDate}_${endDate}`]: notes })
+  setNotesExist(notes.length > 0)
 
   if (notes.length === 0) {
     setNotesExist(false)
@@ -71,6 +78,12 @@ export const fetchData = async ({
 
     let emailsJson = ''
     let allEmails = refresh.length === 40 ? [...cachedEmails] : []
+
+    const updatePairs = (emails) => {
+      console.log(`Joining ${notes.length} notes and ${emails.length} emails`)
+      const joined = leftJoin({ notes, emails })
+      setPairs(joined)
+    }
 
     emailEvents.addEventListener('message', (event) => {
       const data = parse(event.data)

@@ -41,14 +41,6 @@ async function loadEmails() {
 async function saveEmails(emails) {
   console.warn(`${timestamp()} Saving emails to disk and Firestore`)
 
-  // Log the total number of emails
-  console.log(`${timestamp()} Total emails: ${emails.length}`)
-
-  // Log each email's date and fingerprint
-  emails.forEach((email) => {
-    console.log(`${timestamp()} Saving email: date=${email.date}, fingerprint=${email.fingerprint}`)
-  })
-
   // Save to disk
   try {
     await writeToDisk('emails.json', emails)
@@ -130,7 +122,6 @@ export async function GET(req) {
   )
 
   let storedEmails = await loadEmails()
-  console.log(`${timestamp()} Loaded ${storedEmails.length} stored emails`)
 
   let emailCache = storedEmails.reduce((acc, email) => {
     if (email.fingerprint) {
@@ -228,7 +219,7 @@ export async function GET(req) {
 
           let email = emailCache[fingerprint]
 
-          if (!email || refresh === 'all' || refresh === fingerprint) {
+          if (!email || refresh === 'true' || refresh === 'all' || refresh === fingerprint) {
             const [generatedEmail] = await streamResponse([note[0]])
             if (generatedEmail) {
               email = generatedEmail

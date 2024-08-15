@@ -74,6 +74,8 @@ export default function Home() {
               total={pairs.length}
               fetchData={fetchData}
               scrollToNextPair={scrollToNextPair}
+              startDate={date.startDate}
+              endDate={date.endDate}
             />
           </div>
         ))}

@@ -8,8 +8,18 @@ import SendEmailButton from './SendEmailButton'
 import FeedbackButton from './FeedbackButton'
 import RefreshButton from './RefreshButton'
 import { usePersistedEmailStatus } from '../hooks/usePersistedEmailStatus'
+import { useData } from '../hooks/useData'
 
-const Email = ({ email, noteFingerprint, index, total, fetchData, scrollToNextPair }) => {
+const Email = ({
+  email,
+  noteFingerprint,
+  index,
+  total,
+  scrollToNextPair,
+  fetchData,
+  startDate,
+  endDate,
+}) => {
   const editorRef = useRef(null)
   const [emailStatuses, updateEmailStatus, isLoading, fetchStatuses] = usePersistedEmailStatus()
 
@@ -28,7 +38,11 @@ const Email = ({ email, noteFingerprint, index, total, fetchData, scrollToNextPa
   const emailStatus = emailStatuses[email?.fingerprint] || {}
 
   const handleRefresh = () => {
-    fetchData({ fingerprint: email.fingerprint || noteFingerprint })
+    fetchData({
+      fingerprint: email.fingerprint || noteFingerprint,
+      startDate,
+      endDate,
+    })
   }
 
   return (
