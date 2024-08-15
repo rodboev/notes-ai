@@ -27,6 +27,10 @@ const Email = ({ email, noteFingerprint, index, total, fetchData, scrollToNextPa
 
   const emailStatus = emailStatuses[email?.fingerprint] || {}
 
+  const handleRefresh = () => {
+    fetchData({ fingerprint: email.fingerprint || noteFingerprint })
+  }
+
   return (
     <div className="right -mr-4 flex min-h-screen flex-1.4 flex-col justify-center pt-6">
       <div className="email flex flex-col p-10 pr-4">
@@ -40,7 +44,7 @@ const Email = ({ email, noteFingerprint, index, total, fetchData, scrollToNextPa
                 email={email}
                 emailStatus={emailStatus}
                 editorRef={editorRef}
-                onRefresh={() => fetchData({ fingerprint: noteFingerprint })}
+                onRefresh={handleRefresh}
               >
                 <SendEmailButton
                   fingerprint={email.fingerprint}
@@ -62,7 +66,7 @@ const Email = ({ email, noteFingerprint, index, total, fetchData, scrollToNextPa
             ) : (
               email.error && (
                 <div className="relative inline-flex min-w-96 max-w-2xl flex-col items-center self-center rounded-lg border-2 border-dashed px-10 py-14 text-neutral-500">
-                  <RefreshButton onClick={() => fetchData({ fingerprint: email.fingerprint })} />
+                  <RefreshButton onClick={handleRefresh} />
                   <ExclamationTriangleIcon className="m-4 w-10" />
                   <div>{email.error}</div>
                 </div>

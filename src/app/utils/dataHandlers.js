@@ -18,7 +18,7 @@ export const fetchData = async ({
   fingerprint = null,
 }) => {
   console.log(
-    `${timestamp()} Fetching data, refresh: ${refresh}, startDate: ${startDate}, endDate: ${endDate}`,
+    `${timestamp()} Fetching data, refresh: ${refresh}, startDate: ${startDate}, endDate: ${endDate}, fingerprint: ${fingerprint}`,
   )
 
   // Fetch notes
@@ -57,11 +57,12 @@ export const fetchData = async ({
   }
   closeEventSource()
 
-  let url = `/api/emails?startDate=${startDate}&endDate=${endDate}`
+  let url = fingerprint
+    ? `/api/emails?fingerprint=${fingerprint}&refresh=${fingerprint}`
+    : `/api/emails?startDate=${startDate}&endDate=${endDate}`
+
   if (refresh === 'all') {
     url += '&refresh=all'
-  } else if (refresh.length === 40) {
-    url += '&refresh=' + refresh
   }
 
   try {

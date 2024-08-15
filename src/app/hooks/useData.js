@@ -16,7 +16,7 @@ export const useData = () => {
       setError(null)
       try {
         await fetchData({
-          refresh: fingerprint ? 'single' : false,
+          refresh: fingerprint ? fingerprint : false,
           cachedNotes,
           cachedEmails,
           setCachedNotes,

@@ -215,71 +215,96 @@ export async function GET(req) {
           `${timestamp()} Processing request: refresh=${refresh}, fingerprint=${fingerprint}, stored emails: ${storedEmails.length}`,
         )
 
-        let notesToProcess = []
-
         if (fingerprint) {
+          // Handle single note refresh
           const response = await fetch(
             `http://localhost:${port}/api/notes?fingerprint=${fingerprint}`,
           )
-          notesToProcess = await response.json()
+          const note = await response.json()
+
+          if (note.length === 0) {
+            throw new Error(`Note not found for fingerprint: ${fingerprint}`)
+          }
+
+          let email = emailCache[fingerprint]
+
+          if (!email || refresh === 'all' || refresh === fingerprint) {
+            const [generatedEmail] = await streamResponse([note[0]])
+            if (generatedEmail) {
+              email = generatedEmail
+              // Update stored emails and cache
+              storedEmails = storedEmails.filter((e) => e.fingerprint !== fingerprint)
+              storedEmails.push(email)
+              emailCache[fingerprint] = email
+              await saveEmails(storedEmails)
+            }
+          }
+
+          if (email) {
+            sendData({ emails: [email] }, 'stop')
+          } else {
+            throw new Error(`Failed to generate or retrieve email for fingerprint: ${fingerprint}`)
+          }
         } else {
+          // Handle multiple notes (existing bulk processing logic)
+          let notesToProcess = []
           const response = await fetch(
             `http://localhost:${port}/api/notes?startDate=${startDate}&endDate=${endDate}`,
           )
           notesToProcess = await response.json()
-        }
 
-        console.log(`${timestamp()} Fetched ${notesToProcess.length} notes to process`)
+          console.log(`${timestamp()} Fetched ${notesToProcess.length} notes to process`)
 
-        const noteChunks = chunkArray(notesToProcess, isProduction ? 8 : 2)
-        console.log(`${timestamp()} Created ${noteChunks.length} note chunks`)
+          const noteChunks = chunkArray(notesToProcess, isProduction ? 8 : 2)
+          console.log(`${timestamp()} Created ${noteChunks.length} note chunks`)
 
-        let emailsToSave = []
-        let emailsToSend = []
+          let emailsToSave = []
+          let emailsToSend = []
 
-        for (const chunk of noteChunks) {
-          const chunkToProcess = chunk.filter(
-            (note) =>
-              refresh === 'all' || !emailCache[note.fingerprint] || refresh === note.fingerprint,
-          )
+          for (const chunk of noteChunks) {
+            const chunkToProcess = chunk.filter(
+              (note) =>
+                refresh === 'all' || !emailCache[note.fingerprint] || refresh === note.fingerprint,
+            )
 
-          if (chunkToProcess.length > 0) {
-            const emailChunk = await streamResponse(chunkToProcess)
-            emailsToSave = [...emailsToSave, ...emailChunk]
-            console.log(`${timestamp()} Generated ${emailsToSave.length} new emails`)
+            if (chunkToProcess.length > 0) {
+              const emailChunk = await streamResponse(chunkToProcess)
+              emailsToSave = [...emailsToSave, ...emailChunk]
+              console.log(`${timestamp()} Generated ${emailsToSave.length} new emails`)
+            }
+
+            chunk.forEach((note) => {
+              const email =
+                emailCache[note.fingerprint] ||
+                emailsToSave.find((e) => e.fingerprint === note.fingerprint)
+              if (email) {
+                emailsToSend.push(email)
+              }
+            })
           }
 
-          chunk.forEach((note) => {
-            const email =
-              emailCache[note.fingerprint] ||
-              emailsToSave.find((e) => e.fingerprint === note.fingerprint)
-            if (email) {
-              emailsToSend.push(email)
-            }
-          })
-        }
+          // Send all prepared emails at once
+          sendData({ emails: emailsToSend }, 'stop')
 
-        // Send all prepared emails at once
-        sendData({ emails: emailsToSend }, 'stop')
+          if (emailsToSave.length > 0) {
+            // Merge new emails with existing ones, replacing any with the same fingerprint
+            const updatedEmails = [
+              ...storedEmails.filter(
+                (email) =>
+                  !emailsToSave.some((newEmail) => newEmail.fingerprint === email.fingerprint),
+              ),
+              ...emailsToSave,
+            ]
+            console.log(`${timestamp()} Merged emails, total count: ${updatedEmails.length}`)
+            await saveEmails(updatedEmails)
+          }
+        }
 
         responseComplete = true
         sendData('', 'stop')
 
         console.log(`${timestamp()} Closing controller`)
         controller.close()
-
-        if (emailsToSave.length > 0) {
-          // Merge new emails with existing ones, replacing any with the same fingerprint
-          const updatedEmails = [
-            ...storedEmails.filter(
-              (email) =>
-                !emailsToSave.some((newEmail) => newEmail.fingerprint === email.fingerprint),
-            ),
-            ...emailsToSave,
-          ]
-          console.log(`${timestamp()} Merged emails, total count: ${updatedEmails.length}`)
-          await saveEmails(updatedEmails)
-        }
       } catch (error) {
         console.error(`${timestamp()} Error processing emails:`, error)
         sendData({ error: error.message || 'Internal server error' }, 'error')
