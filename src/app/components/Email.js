@@ -7,7 +7,7 @@ import SpinnerIcon from './Icons/SpinnerIcon'
 import SendEmailButton from './SendEmailButton'
 import FeedbackButton from './FeedbackButton'
 import RefreshButton from './RefreshButton'
-import { usePersistedEmailStatus } from '../hooks/usePersistedEmailStatus'
+import { useEmailStatus } from '../hooks/useEmailStatus'
 
 const Email = ({
   email,
@@ -20,11 +20,7 @@ const Email = ({
   endDate,
 }) => {
   const editorRef = useRef(null)
-  const [emailStatuses, updateEmailStatus, isLoading, fetchStatuses] = usePersistedEmailStatus()
-
-  useEffect(() => {
-    fetchStatuses()
-  }, [fetchStatuses])
+  const [emailStatuses, updateEmailStatus, isLoading, fetchStatuses] = useEmailStatus()
 
   const handleEmailSent = () => {
     if (index < total - 1) {

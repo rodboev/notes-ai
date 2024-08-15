@@ -1,4 +1,4 @@
-// src/app/hooks/usePersistedEmailStatus.js
+// src/app/hooks/useEmailStatus.js
 
 import { useState, useEffect, useCallback } from 'react'
 
@@ -7,7 +7,7 @@ let lastFetchTime = 0
 const CACHE_DURATION = 300 // 5 sec duration to allow for page load
 let fetchPromise = null
 
-export function usePersistedEmailStatus() {
+export function useEmailStatus() {
   const [emailStatuses, setEmailStatuses] = useState(cachedStatuses || {})
   const [isLoading, setIsLoading] = useState(!cachedStatuses)
 
@@ -43,23 +43,6 @@ export function usePersistedEmailStatus() {
         }
       } catch (error) {
         console.error('Error fetching email statuses from server:', error)
-        // Fall back to localStorage only if there's no cached data
-        if (!cachedStatuses) {
-          const localStatuses = {}
-          for (let i = 0; i < localStorage.length; i++) {
-            const key = localStorage.key(i)
-            if (key.startsWith('emailStatus_')) {
-              const fingerprint = key.replace('emailStatus_', '')
-              try {
-                localStatuses[fingerprint] = JSON.parse(localStorage.getItem(key))
-              } catch (e) {
-                console.warn(`Error parsing stored status for ${fingerprint}:`, e)
-              }
-            }
-          }
-          setEmailStatuses(localStatuses)
-          cachedStatuses = localStatuses
-        }
       } finally {
         setIsLoading(false)
         fetchPromise = null
@@ -88,9 +71,6 @@ export function usePersistedEmailStatus() {
       const updatedStatuses = { ...emailStatuses, [fingerprint]: updatedStatus }
       setEmailStatuses(updatedStatuses)
       cachedStatuses = updatedStatuses
-
-      // Always update localStorage
-      localStorage.setItem(`emailStatus_${fingerprint}`, JSON.stringify(updatedStatus))
 
       try {
         const response = await fetch('/api/status', {

@@ -6,10 +6,6 @@ import { timestamp } from './timestamp'
 
 export const fetchData = async ({
   refresh = false,
-  cachedNotes,
-  cachedEmails,
-  setCachedNotes,
-  setCachedEmails,
   setPairs,
   setNotesExist,
   emailEventSourceRef,
@@ -20,25 +16,17 @@ export const fetchData = async ({
   console.log(
     `${timestamp()} Fetching data, refresh: ${refresh}, startDate: ${startDate}, endDate: ${endDate}, fingerprint: ${fingerprint}`,
   )
-  console.log(
-    `${timestamp()} cachedNotes: ${cachedNotes.length}, cachedEmails: ${cachedEmails.length}`,
-  )
 
-  // Fetch or use cached notes
-  let notes = cachedNotes[`${startDate}_${endDate}`] || []
-  if (!notes.length || fingerprint) {
-    try {
-      const url = fingerprint
-        ? `/api/notes?fingerprint=${fingerprint}&startDate=${startDate}&endDate=${endDate}`
-        : `/api/notes?startDate=${startDate}&endDate=${endDate}`
-      const response = await fetch(url)
-      const newNotes = await response.json()
-
-      notes = fingerprint ? merge(notes, newNotes) : newNotes
-      setCachedNotes({ ...cachedNotes, [`${startDate}_${endDate}`]: notes })
-    } catch (error) {
-      console.warn(`${timestamp()} Failed to fetch notes:`, String(error).split('\n')[0])
-    }
+  // Fetch notes
+  let notes = []
+  try {
+    const url = fingerprint
+      ? `/api/notes?fingerprint=${fingerprint}&startDate=${startDate}&endDate=${endDate}`
+      : `/api/notes?startDate=${startDate}&endDate=${endDate}`
+    const response = await fetch(url)
+    notes = await response.json()
+  } catch (error) {
+    console.warn(`${timestamp()} Failed to fetch notes:`, String(error).split('\n')[0])
   }
 
   setNotesExist(notes.length > 0)
@@ -47,15 +35,7 @@ export const fetchData = async ({
   // Get fingerprints of needed emails
   const neededFingerprints = notes.map((note) => note.fingerprint)
 
-  // Ensure cachedEmails is an array and filter out fingerprints that are already cached
-  const cachedFingerprints = Array.isArray(cachedEmails)
-    ? cachedEmails.map((email) => email.fingerprint)
-    : []
-  const uncachedFingerprints = neededFingerprints.filter((fp) => !cachedFingerprints.includes(fp))
-
   console.log(`${timestamp()} Total emails needed: ${neededFingerprints.length}`)
-  console.log(`${timestamp()} Cached emails: ${cachedFingerprints.length}`)
-  console.log(`${timestamp()} Emails to be fetched: ${uncachedFingerprints.length}`)
 
   // Fetch emails
   const closeEventSource = () => {
@@ -66,14 +46,7 @@ export const fetchData = async ({
   }
   closeEventSource()
 
-  // If all emails are cached and we're not doing a forced refresh, use cached data
-  if (uncachedFingerprints.length === 0 && !fingerprint) {
-    console.log(`${timestamp()} All emails are cached, using stored data`)
-    updatePairs(notes, cachedEmails, setPairs)
-    return
-  }
-
-  let url = `/api/emails?startDate=${startDate}&endDate=${endDate}&fingerprints=${uncachedFingerprints.join(',')}`
+  let url = `/api/emails?startDate=${startDate}&endDate=${endDate}&fingerprints=${neededFingerprints.join(',')}`
   if (fingerprint) {
     url += `&fingerprint=${fingerprint}&refresh=${refresh}`
   }
@@ -86,7 +59,7 @@ export const fetchData = async ({
     emailEventSourceRef.current = emailEvents
 
     let emailsJson = ''
-    let allEmails = refresh === 'all' ? [] : [...cachedEmails]
+    let allEmails = []
 
     emailEvents.addEventListener('message', (event) => {
       const data = parse(event.data)
@@ -111,10 +84,8 @@ export const fetchData = async ({
         if (status === 'stop') {
           allEmails = merge(allEmails, filteredEmails)
           emailsJson = ''
-          setCachedEmails(allEmails)
         }
         allEmails = merge(allEmails, filteredEmails)
-        setCachedEmails(allEmails)
 
         updatePairs(notes, allEmails, setPairs)
       }
@@ -128,11 +99,11 @@ export const fetchData = async ({
     emailEvents.addEventListener('error', (event) => {
       console.error(`${timestamp()} EventSource error:`, event)
       closeEventSource()
-      updatePairs(notes, cachedEmails, setPairs)
+      updatePairs(notes, [], setPairs)
     })
   } catch (error) {
     console.warn(`${timestamp()} Error fetching emails:`, String(error).split('\n')[0])
-    updatePairs(notes, cachedEmails, setPairs)
+    updatePairs(notes, [], setPairs)
   }
 }
 
