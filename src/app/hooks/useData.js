@@ -7,7 +7,7 @@ export const useData = () => {
   const [pairs, setPairs] = useState([])
   const [notesExist, setNotesExist] = useState(true)
   const emailEventSourceRef = useRef(null)
-  const [cachedEmails, setCachedEmails] = useLocalStorage('emailsCache', {})
+  const [cachedEmails, setCachedEmails] = useLocalStorage('emailsCache', [])
   const [cachedNotes, setCachedNotes] = useLocalStorage('notesCache', {})
   const [error, setError] = useState(null)
 
@@ -40,7 +40,7 @@ export const useData = () => {
     setPairs([])
     setNotesExist(false)
     setCachedNotes({})
-    setCachedEmails({})
+    setCachedEmails([])
   }, [])
 
   return {

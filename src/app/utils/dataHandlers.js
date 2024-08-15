@@ -47,6 +47,16 @@ export const fetchData = async ({
   // Get fingerprints of needed emails
   const neededFingerprints = notes.map((note) => note.fingerprint)
 
+  // Ensure cachedEmails is an array and filter out fingerprints that are already cached
+  const cachedFingerprints = Array.isArray(cachedEmails)
+    ? cachedEmails.map((email) => email.fingerprint)
+    : []
+  const uncachedFingerprints = neededFingerprints.filter((fp) => !cachedFingerprints.includes(fp))
+
+  console.log(`${timestamp()} Total emails needed: ${neededFingerprints.length}`)
+  console.log(`${timestamp()} Cached emails: ${cachedFingerprints.length}`)
+  console.log(`${timestamp()} Emails to be fetched: ${uncachedFingerprints.length}`)
+
   // Fetch emails
   const closeEventSource = () => {
     if (emailEventSourceRef.current) {
@@ -56,7 +66,14 @@ export const fetchData = async ({
   }
   closeEventSource()
 
-  let url = `/api/emails?startDate=${startDate}&endDate=${endDate}&fingerprints=${neededFingerprints.join(',')}`
+  // If all emails are cached and we're not doing a forced refresh, use cached data
+  if (uncachedFingerprints.length === 0 && !fingerprint) {
+    console.log(`${timestamp()} All emails are cached, using stored data`)
+    updatePairs(notes, cachedEmails, setPairs)
+    return
+  }
+
+  let url = `/api/emails?startDate=${startDate}&endDate=${endDate}&fingerprints=${uncachedFingerprints.join(',')}`
   if (fingerprint) {
     url += `&fingerprint=${fingerprint}&refresh=${refresh}`
   }
@@ -70,14 +87,6 @@ export const fetchData = async ({
 
     let emailsJson = ''
     let allEmails = refresh === 'all' ? [] : [...cachedEmails]
-
-    const updatePairs = (emails) => {
-      const filteredEmails = emails.filter((email) =>
-        neededFingerprints.includes(email.fingerprint),
-      )
-      const joined = leftJoin({ notes, emails: filteredEmails })
-      setPairs(joined)
-    }
 
     emailEvents.addEventListener('message', (event) => {
       const data = parse(event.data)
@@ -107,7 +116,7 @@ export const fetchData = async ({
         allEmails = merge(allEmails, filteredEmails)
         setCachedEmails(allEmails)
 
-        updatePairs(allEmails)
+        updatePairs(notes, allEmails, setPairs)
       }
 
       if (status === 'complete') {
@@ -119,10 +128,19 @@ export const fetchData = async ({
     emailEvents.addEventListener('error', (event) => {
       console.error(`${timestamp()} EventSource error:`, event)
       closeEventSource()
-      updatePairs(cachedEmails)
+      updatePairs(notes, cachedEmails, setPairs)
     })
   } catch (error) {
     console.warn(`${timestamp()} Error fetching emails:`, String(error).split('\n')[0])
-    updatePairs(cachedEmails)
+    updatePairs(notes, cachedEmails, setPairs)
   }
+}
+
+const updatePairs = (notes, emails, setPairs) => {
+  const filteredEmails = emails.filter((email) =>
+    notes.some((note) => note.fingerprint === email.fingerprint),
+  )
+  const joined = leftJoin({ notes, emails: filteredEmails })
+  setPairs(joined)
+  console.log(`${timestamp()} Updated pairs: ${joined.length}`)
 }

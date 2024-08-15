@@ -4,6 +4,7 @@
 
 import { useState, useEffect, useRef } from 'react'
 import { useData } from './hooks/useData'
+import { useLocalStorage } from './hooks/useLocalStorage'
 import Nav from './components/Nav'
 import Note from './components/Note'
 import Email from './components/Email'
@@ -17,14 +18,17 @@ export default function Home() {
   const yesterday = new Date(today)
   yesterday.setDate(yesterday.getDate() - 1)
 
-  const [date, setDate] = useState({
+  const [storedDate, setStoredDate] = useLocalStorage('selectedDate', {
     startDate: yesterday.toISOString().split('T')[0],
     endDate: today.toISOString().split('T')[0],
   })
 
+  const [date, setDate] = useState(storedDate)
+
   const handleDateChange = (newDate) => {
     console.log('newDate:', newDate)
     setDate(newDate)
+    setStoredDate(newDate)
     console.log(`Selected: ${newDate}`)
   }
 
