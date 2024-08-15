@@ -1,6 +1,6 @@
 // src/app/components/Settings.js
 
-import React, { useState, useEffect } from 'react'
+import React, { useState, useEffect, useCallback } from 'react'
 import { motion } from 'framer-motion'
 import TextareaAutosize from 'react-textarea-autosize'
 import { useLocalStorage } from '../hooks/useLocalStorage'
@@ -14,26 +14,28 @@ export default function Settings({ onClose }) {
   })
   const [savingPrompts, setSavingPrompts] = useState(false)
 
-  useEffect(() => {
-    fetchPrompts()
-  }, [])
-
-  const fetchPrompts = async () => {
+  const fetchPrompts = useCallback(async () => {
     try {
       const response = await fetch('/api/prompts')
       if (response.ok) {
         const data = await response.json()
         setSystemPrompt(data.system.current || data.system.default)
         setEmailPrompt(data.email.current || data.email.default)
-        setCachedPrompts({
-          system: {
-            current: data.system.current || data.system.default,
-            default: data.system.default,
-          },
-          email: {
-            current: data.email.current || data.email.default,
-            default: data.email.default,
-          },
+        setCachedPrompts((prev) => {
+          const newValue = {
+            system: {
+              current: data.system.current || data.system.default,
+              default: data.system.default,
+            },
+            email: {
+              current: data.email.current || data.email.default,
+              default: data.email.default,
+            },
+          }
+          if (JSON.stringify(prev) !== JSON.stringify(newValue)) {
+            return newValue
+          }
+          return prev
         })
       } else {
         throw new Error('Failed to fetch prompts from API')
@@ -44,7 +46,11 @@ export default function Settings({ onClose }) {
       setSystemPrompt(cachedPrompts.system.current || '')
       setEmailPrompt(cachedPrompts.email.current || '')
     }
-  }
+  }, [cachedPrompts, setCachedPrompts])
+
+  useEffect(() => {
+    fetchPrompts()
+  }, [fetchPrompts])
 
   const savePrompts = async () => {
     setSavingPrompts(true)
