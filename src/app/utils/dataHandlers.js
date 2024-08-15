@@ -4,8 +4,8 @@ import { parse } from 'best-effort-json-parser'
 import { merge, leftJoin } from './arrayUtils'
 import { timestamp } from './timestamp'
 
-export const fetchData = async (
-  refresh,
+export const fetchData = async ({
+  refresh = false,
   cachedNotes,
   cachedEmails,
   setCachedNotes,
@@ -15,7 +15,8 @@ export const fetchData = async (
   emailEventSourceRef,
   startDate,
   endDate,
-) => {
+  fingerprint = null,
+}) => {
   console.log(
     `${timestamp()} Fetching data, refresh: ${refresh}, startDate: ${startDate}, endDate: ${endDate}`,
   )
@@ -23,9 +24,13 @@ export const fetchData = async (
   // Fetch notes
   let notes = []
   try {
-    notes = await fetch(`/api/notes?startDate=${startDate}&endDate=${endDate}`).then((res) =>
-      res.json(),
-    )
+    if (fingerprint) {
+      notes = await fetch(`/api/notes?fingerprint=${fingerprint}`).then((res) => res.json())
+    } else {
+      notes = await fetch(`/api/notes?startDate=${startDate}&endDate=${endDate}`).then((res) =>
+        res.json(),
+      )
+    }
     if (notes.length === 0) {
       notes = cachedNotes[`${startDate}_${endDate}`] || []
     }

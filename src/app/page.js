@@ -29,7 +29,7 @@ export default function Home() {
   }
 
   useEffect(() => {
-    fetchData(date.startDate, date.endDate)
+    fetchData({ startDate: date.startDate, endDate: date.endDate })
   }, [date.startDate, date.endDate])
 
   const scrollToNextPair = (index) => {

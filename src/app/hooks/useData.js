@@ -12,11 +12,11 @@ export const useData = () => {
   const [error, setError] = useState(null)
 
   const fetchDataHandler = useCallback(
-    async (startDate, endDate, refresh = false) => {
+    async ({ startDate = null, endDate = null, fingerprint = null }) => {
       setError(null)
       try {
-        await fetchData(
-          refresh,
+        await fetchData({
+          refresh: fingerprint ? 'single' : false,
           cachedNotes,
           cachedEmails,
           setCachedNotes,
@@ -26,7 +26,8 @@ export const useData = () => {
           emailEventSourceRef,
           startDate,
           endDate,
-        )
+          fingerprint,
+        })
       } catch (err) {
         console.error('Error fetching data:', err)
         setError(err.message)

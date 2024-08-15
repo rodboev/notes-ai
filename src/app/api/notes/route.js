@@ -13,6 +13,10 @@ const DESIRED_NOTE_CODES = ['911 EMER', 'SERVICE', 'KEY ISSUE', 'ALERT', 'HHALER
 const isProduction = process.env.NEXT_PUBLIC_NODE_ENV === 'production'
 
 function formatDate(dateString) {
+  if (!dateString || !/^\d{4}-\d{2}-\d{2}$/.test(dateString)) {
+    console.warn(`Invalid date string: ${dateString}`)
+    return null
+  }
   const date = new Date(dateString)
   return date.toISOString().split('T')[0]
 }
@@ -111,6 +115,12 @@ function transformNotes(notes) {
   }))
 }
 
+async function updateNotesCacheIndex(cacheKey) {
+  const index = (await readFromDisk('notesCacheIndex.json')) || {}
+  index[cacheKey] = new Date().toISOString()
+  await writeToDisk('notesCacheIndex.json', index)
+}
+
 async function saveNotes(notes, startDate, endDate) {
   const cacheKey = `notes_${startDate}_${endDate}`
   const cacheData = {
@@ -137,6 +147,8 @@ async function saveNotes(notes, startDate, endDate) {
     batch.set(noteDocRef, note)
   })
   await batch.commit()
+
+  await updateNotesCacheIndex(cacheKey)
 
   console.log('Notes successfully stored in disk and Firestore')
 }
@@ -165,10 +177,54 @@ async function getSavedNotes(cacheKey) {
   return null
 }
 
+async function getNoteByFingerprint(fingerprint) {
+  // Search in disk cache first
+  const diskCaches = (await readFromDisk('notesCacheIndex.json')) || {}
+  for (const cacheKey of Object.keys(diskCaches)) {
+    const diskData = await readFromDisk(`${cacheKey}.json`)
+    if (diskData && diskData.notes) {
+      const foundNote = diskData.notes.find((note) => note.fingerprint === fingerprint)
+      if (foundNote) {
+        console.log('Note found in disk cache')
+        return foundNote
+      }
+    }
+  }
+
+  // If not found in disk cache, search in Firestore
+  const cacheSnapshots = await getDocs(collection(firestore, 'notesCache'))
+  for (const cacheDoc of cacheSnapshots.docs) {
+    const notesCollectionRef = collection(firestore, 'notesCache', cacheDoc.id, 'notes')
+    const noteDoc = await getDoc(doc(notesCollectionRef, fingerprint))
+    if (noteDoc.exists()) {
+      console.log('Note found in Firestore')
+      return noteDoc.data()
+    }
+  }
+
+  console.log('Note not found in cache or Firestore')
+  return null
+}
+
 export async function GET(request) {
   const { searchParams } = new URL(request.url)
   let startDate = searchParams.get('startDate')
   let endDate = searchParams.get('endDate')
+  let fingerprint = searchParams.get('fingerprint')
+
+  if (fingerprint) {
+    const note = await getNoteByFingerprint(fingerprint)
+    if (note) {
+      return NextResponse.json([note])
+    } else {
+      return NextResponse.json(
+        {
+          error: 'Note not found',
+        },
+        { status: 404 },
+      )
+    }
+  }
 
   // If startDate or endDate is null, undefined, or "null", set default values
   if (!startDate || startDate === 'null' || !endDate || endDate === 'null') {
@@ -224,8 +280,13 @@ export async function GET(request) {
   } catch (error) {
     console.error('Error:', error)
     return NextResponse.json(
-      { error: 'Internal Server Error', details: error.message },
-      { status: 500 },
+      {
+        error: 'Internal Server Error',
+        details: error.message,
+      },
+      {
+        status: 500,
+      },
     )
   } finally {
     if (pool) {

@@ -16,24 +16,25 @@ const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY })
 const port = process.env.PORT
 
 async function loadEmails() {
-  // console.log(`${timestamp()} Loading emails from disk`)
+  console.log(`${timestamp()} Attempting to load emails from disk`)
   try {
     const diskEmails = await readFromDisk('emails.json')
     if (diskEmails) {
+      console.log(`${timestamp()} Loaded ${diskEmails.length} emails from disk`)
       return diskEmails
     }
 
-    console.log(
-      `${timestamp()} Emails not on disk, loading from Firestore, saving to disk, returning`,
-    )
+    console.log(`${timestamp()} Emails not on disk, loading from Firestore`)
     const emailsCollection = collection(firestore, 'emails')
     const snapshot = await getDocs(emailsCollection)
     const emails = snapshot.docs.map((doc) => doc.data())
+    console.log(`${timestamp()} Loaded ${emails.length} emails from Firestore`)
     await writeToDisk('emails.json', emails)
+    console.log(`${timestamp()} Saved ${emails.length} emails to disk`)
     return emails
   } catch (error) {
     console.warn(`${timestamp()} Error loading emails:`, error)
-    return [] // Return empty array, client-side will use local storage
+    return []
   }
 }
 
@@ -42,6 +43,11 @@ async function saveEmails(emails) {
 
   // Log the total number of emails
   console.log(`${timestamp()} Total emails: ${emails.length}`)
+
+  // Log each email's date and fingerprint
+  emails.forEach((email) => {
+    console.log(`${timestamp()} Saving email: date=${email.date}, fingerprint=${email.fingerprint}`)
+  })
 
   // Save to disk
   try {
@@ -53,7 +59,7 @@ async function saveEmails(emails) {
 
   // Save to Firestore
   if (!firestore) {
-    console.warn('${timestamp()} Firestore is not initialized')
+    console.warn(`${timestamp()} Firestore is not initialized`)
     return
   }
 
@@ -68,7 +74,7 @@ async function saveEmails(emails) {
         batch.set(docRef, email)
         savedCount++
       } else {
-        console.warn(`${timestamp()} Email without fingerprint at index ${index}:`, email)
+        console.warn(`${timestamp()} Email without fingerprint:`, email)
       }
     })
     await batch.commit()
@@ -117,27 +123,22 @@ export async function GET(req) {
   const refresh = url.searchParams.get('refresh')
   const startDate = url.searchParams.get('startDate')
   const endDate = url.searchParams.get('endDate')
+  const fingerprint = url.searchParams.get('fingerprint')
 
-  let storedEmails = []
-  let emailCache = {}
+  console.log(
+    `${timestamp()} GET /api/emails request params: refresh=${refresh}, startDate=${startDate}, endDate=${endDate}, fingerprint=${fingerprint}`,
+  )
 
-  if (refresh === 'all') {
-    await deletePreviousEmails()
-  } else {
-    storedEmails = await loadEmails()
-    emailCache = storedEmails.reduce((acc, email) => {
-      if (email.fingerprint) {
-        acc[email.fingerprint] = email
-      }
-      return acc
-    }, {})
-  }
+  let storedEmails = await loadEmails()
+  console.log(`${timestamp()} Loaded ${storedEmails.length} stored emails`)
 
-  // Filter stored emails based on date range
-  const filteredEmails = storedEmails.filter((email) => {
-    const emailDate = new Date(email.date)
-    return emailDate >= new Date(startDate) && emailDate < new Date(endDate)
-  })
+  let emailCache = storedEmails.reduce((acc, email) => {
+    if (email.fingerprint) {
+      acc[email.fingerprint] = email
+    }
+    return acc
+  }, {})
+  console.log(`${timestamp()} Created email cache with ${Object.keys(emailCache).length} entries`)
 
   const encoder = new TextEncoder()
   const readableStream = new ReadableStream({
@@ -145,7 +146,7 @@ export async function GET(req) {
       let responseComplete = false
 
       function sendData(data, status = 'stream') {
-        // console.log(JSON.stringify(data), status)
+        // console.log(`${timestamp()} Sending data with status: ${status}`)
         controller.enqueue(
           encoder.encode(
             `data: { "chunk": ${JSON.stringify(data)}, "status": ${JSON.stringify(status)} }\n\n`,
@@ -211,29 +212,63 @@ export async function GET(req) {
 
       try {
         console.log(
-          `${timestamp()} GET /api/emails${refresh ? `?refresh=${refresh}` : ''}, stored emails: ${storedEmails?.length || 0}, filtered emails: ${filteredEmails?.length || 0}`,
+          `${timestamp()} Processing request: refresh=${refresh}, fingerprint=${fingerprint}, stored emails: ${storedEmails.length}`,
         )
 
-        if (refresh === 'all' || filteredEmails.length === 0) {
-          console.log(`${timestamp()} Refreshing emails for date range ${startDate}-${endDate}`)
+        let notesToProcess = []
 
-          const noteChunks = await fetch(
+        if (fingerprint) {
+          const response = await fetch(
+            `http://localhost:${port}/api/notes?fingerprint=${fingerprint}`,
+          )
+          notesToProcess = await response.json()
+        } else {
+          const response = await fetch(
             `http://localhost:${port}/api/notes?startDate=${startDate}&endDate=${endDate}`,
           )
-            .then((res) => res.json())
-            .then((sortedNotes) => chunkArray(sortedNotes, isProduction ? 8 : 2))
+          notesToProcess = await response.json()
+        }
 
-          let emailsToSave = []
-          for (const chunk of noteChunks) {
-            const emailChunk = await streamResponse(chunk)
+        console.log(`${timestamp()} Fetched ${notesToProcess.length} notes to process`)
+
+        const noteChunks = chunkArray(notesToProcess, isProduction ? 8 : 2)
+        console.log(`${timestamp()} Created ${noteChunks.length} note chunks`)
+
+        let emailsToSave = []
+        let emailsToSend = []
+
+        for (const chunk of noteChunks) {
+          const chunkToProcess = chunk.filter(
+            (note) =>
+              refresh === 'all' || !emailCache[note.fingerprint] || refresh === note.fingerprint,
+          )
+
+          if (chunkToProcess.length > 0) {
+            const emailChunk = await streamResponse(chunkToProcess)
             emailsToSave = [...emailsToSave, ...emailChunk]
+            console.log(`${timestamp()} Generated ${emailsToSave.length} new emails`)
           }
-          responseComplete = true
-          sendData('', 'stop')
 
-          console.log(`${timestamp()} Closing controller`)
-          controller.close()
+          chunk.forEach((note) => {
+            const email =
+              emailCache[note.fingerprint] ||
+              emailsToSave.find((e) => e.fingerprint === note.fingerprint)
+            if (email) {
+              emailsToSend.push(email)
+            }
+          })
+        }
 
+        // Send all prepared emails at once
+        sendData({ emails: emailsToSend }, 'stop')
+
+        responseComplete = true
+        sendData('', 'stop')
+
+        console.log(`${timestamp()} Closing controller`)
+        controller.close()
+
+        if (emailsToSave.length > 0) {
           // Merge new emails with existing ones, replacing any with the same fingerprint
           const updatedEmails = [
             ...storedEmails.filter(
@@ -242,38 +277,8 @@ export async function GET(req) {
             ),
             ...emailsToSave,
           ]
+          console.log(`${timestamp()} Merged emails, total count: ${updatedEmails.length}`)
           await saveEmails(updatedEmails)
-          // sendData({ emails: emailsToSave }, 'stop')
-        } else if (refresh?.length === 40) {
-          console.log(`${timestamp()} Refreshing single email`)
-
-          const noteToRefresh = await fetch(`http://localhost:${port}/api/notes`)
-            .then((res) => res.json())
-            .then((notes) => notes.find((n) => n.fingerprint === refresh))
-
-          if (noteToRefresh) {
-            const singleEmail = await streamResponse([noteToRefresh])
-            emailCache[refresh] = singleEmail[0]
-            // Sent just the one in procesChunk, so save + send them all here
-            const updatedEmails = storedEmails.map((email) =>
-              email.fingerprint === refresh ? singleEmail[0] : email,
-            )
-            await saveEmails(updatedEmails)
-            responseComplete = true
-            sendData({ emails: updatedEmails }, 'stop')
-            console.log(`${timestamp()} Closing controller`)
-            controller.close()
-          } else {
-            sendData({ error: 'Note not found' }, 'error')
-          }
-        } else if (filteredEmails?.length > 0) {
-          responseComplete = true
-          // Full resonses get 'stop' with them
-          sendData({ emails: filteredEmails }, 'stop')
-          console.log(
-            `${timestamp()} Closing controller, sent ${filteredEmails.length} filtered emails`,
-          )
-          controller.close()
         }
       } catch (error) {
         console.error(`${timestamp()} Error processing emails:`, error)
