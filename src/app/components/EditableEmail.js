@@ -60,7 +60,7 @@ const EditableEmail = ({ email, emailStatus, editorRef, children, onRefresh }) =
   }, [emailStatus, editorReady, email.body])
 
   return (
-    <div className="relative mb-4 flex flex-col">
+    <div className="relative mb-4 mt-2.5 flex flex-col">
       <Editor
         tinymceScriptSrc="/api/tinymce/tinymce.min.js"
         onInit={(evt, editor) => {

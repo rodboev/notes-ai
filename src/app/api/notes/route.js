@@ -71,7 +71,8 @@ async function getJoinedNotes(pool, startDate, endDate, limit = 500) {
         COALESCE(l.Zip, '')
       ))) AS Address,
       l.Company,
-      l.LocationCode
+      l.LocationCode,
+      l.EMail
     FROM Notes n
     LEFT JOIN Locations l ON n.LocationID = l.LocationID
     LEFT JOIN Employees e ON n.AddUserID = e.UserID
@@ -81,25 +82,9 @@ async function getJoinedNotes(pool, startDate, endDate, limit = 500) {
       AND n.NoteCode IN (${noteCodesString})
     ORDER BY n.NoteDate ASC
   `
+  console.log(query)
 
   return await runQuery(pool, query)
-}
-
-async function getNotesCount(pool, startDate, endDate) {
-  const formattedStartDate = formatDate(startDate)
-  const formattedEndDate = formatDate(endDate)
-  const noteCodesString = DESIRED_NOTE_CODES.map((code) => `'${code}'`).join(', ')
-
-  const query = `
-    SELECT COUNT(*) as count
-    FROM Notes
-    WHERE NoteDate >= '${formattedStartDate}' 
-      AND NoteDate < '${formattedEndDate}'
-      AND NoteCode IN (${noteCodesString})
-  `
-
-  const result = await runQuery(pool, query)
-  return result[0].count
 }
 
 function transformNotes(notes) {
@@ -112,6 +97,7 @@ function transformNotes(notes) {
     address: note.Address,
     company: note.Company,
     locationCode: note.LocationCode,
+    emailAddress: note.EMail,
   }))
 }
 
@@ -171,6 +157,17 @@ async function getSavedNotes(cacheKey) {
     const firestoreNotes = notesSnapshot.docs.map((doc) => doc.data())
 
     console.log('Notes found in Firestore')
+
+    // Save Firestore notes to disk
+    const cacheData = {
+      notes: firestoreNotes,
+      startDate: cacheDocSnap.data().startDate,
+      endDate: cacheDocSnap.data().endDate,
+      timestamp: cacheDocSnap.data().timestamp,
+    }
+    await writeToDisk(`${cacheKey}.json`, cacheData)
+    console.log('Notes from Firestore saved to disk cache')
+
     return firestoreNotes
   }
 
