@@ -97,7 +97,7 @@ export const useEmails = (notes) => {
     }
   }, [notes, queryClient])
 
-  return { emails, isLoading, error }
+  return { data: emails, isLoading, error }
 }
 
 const fetchSingleEmail = async (fingerprint) => {

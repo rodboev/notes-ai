@@ -2,7 +2,7 @@
 
 'use client'
 
-import { useState, useRef } from 'react'
+import { useState, useRef, useEffect } from 'react'
 import Nav from './components/Nav'
 import Note from './components/Note'
 import Email from './components/Email'
@@ -46,11 +46,17 @@ export default function Home() {
     pairRefs.current[index]?.scrollIntoView({ behavior: 'smooth' })
   }
 
-  // if (isLoadingNotes || isLoadingEmails) return <div>Loading...</div>
-  if (notesError || emailsError)
-    return <div>An error occurred: {notesError?.message || emailsError?.message}</div>
+  if (isLoadingNotes || isLoadingEmails || isLoadingStatuses) {
+    console.log('Loading state:', { isLoadingNotes, isLoadingEmails, isLoadingStatuses })
+    return <div>Loading...</div>
+  }
 
-  const pairs = leftJoin(notes, emails?.emails || [])
+  if (notesError || emailsError) {
+    console.error('Error:', notesError || emailsError)
+    return <div>An error occurred: {notesError?.message || emailsError?.message}</div>
+  }
+
+  const pairs = leftJoin(notes, emails || [])
 
   return (
     <div className="flex h-screen max-w-full snap-y snap-mandatory flex-col items-center overflow-y-scroll">
@@ -75,22 +81,22 @@ export default function Home() {
       </Nav>
 
       {pairs.map(({ note, email }, index) => (
-        <div
-          key={note.fingerprint}
-          ref={(el) => (pairRefs.current[index] = el)}
-          className="pair container -m-4 flex max-w-screen-2xl snap-center snap-always p-4 pb-0"
-        >
-          <Note note={note} index={index} total={pairs.length} />
-          <Email
-            email={email}
-            noteFingerprint={note.fingerprint}
-            emailStatus={emailStatuses?.[note.fingerprint]}
-            updateStatus={updateStatus}
-            index={index}
-            total={pairs.length}
-            scrollToNextPair={scrollToNextPair}
-          />
-        </div>
+          <div
+            key={note.fingerprint}
+            ref={(el) => (pairRefs.current[index] = el)}
+            className="pair container -m-4 flex max-w-screen-2xl snap-center snap-always p-4 pb-0"
+          >
+            <Note note={note} index={index} total={pairs.length} />
+            <Email
+              email={email}
+              noteFingerprint={note.fingerprint}
+              emailStatus={emailStatuses?.[note.fingerprint]}
+              updateStatus={updateStatus}
+              index={index}
+              total={pairs.length}
+              scrollToNextPair={scrollToNextPair}
+            />
+          </div>
       ))}
     </div>
   )

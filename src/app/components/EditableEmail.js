@@ -54,7 +54,7 @@ const EditableEmail = ({ email, emailStatus, editorRef, children, onRefresh }) =
       editorRef.current.setContent(email.body || '')
     }
     if (editorReady) {
-      const isDisabled = ['sending', 'success'].includes(emailStatus.status)
+      const isDisabled = emailStatus && ['sending', 'success'].includes(emailStatus.status)
       updateEditorState(isDisabled)
     }
   }, [emailStatus, editorReady, email.body])
