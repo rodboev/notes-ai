@@ -3,21 +3,26 @@
 import { CheckIcon, ExclamationTriangleIcon } from '@heroicons/react/16/solid'
 import SpinnerIcon from './Icons/SpinnerIcon'
 import { useSendEmail } from '../hooks/useSendEmail'
-import { useEmailStatus } from '../hooks/useEmailStatus'
 
-const SendEmailButton = ({ fingerprint, subject, getEmailContent, onEmailSent }) => {
+const SendEmailButton = ({
+  fingerprint,
+  subject,
+  getEmailContent,
+  onEmailSent,
+  emailStatus,
+  updateStatus,
+}) => {
   const isProduction = process.env.NEXT_PUBLIC_NODE_ENV === 'production'
   const to = isProduction
     ? 'a.dallas@libertypestnyc.com, r.boev@libertypestnyc.com'
     : 'r.boev@libertypestnyc.com'
 
   const sendEmailMutation = useSendEmail(fingerprint)
-  const { data: emailStatus, updateStatus } = useEmailStatus(fingerprint)
 
   const sendEmail = async () => {
     const content = getEmailContent()
 
-    updateStatus({ status: 'sending' })
+    updateStatus({ fingerprint, status: 'sending' })
 
     try {
       const result = await sendEmailMutation.mutateAsync({
@@ -28,11 +33,11 @@ const SendEmailButton = ({ fingerprint, subject, getEmailContent, onEmailSent })
       })
 
       console.log('Email sent successfully!')
-      updateStatus(result)
+      updateStatus({ fingerprint, status: result.status })
       onEmailSent()
     } catch (error) {
       console.error('Error sending email:', error)
-      updateStatus({ status: 'error', error: error.message })
+      updateStatus({ fingerprint, status: 'error', error: error.message })
     }
   }
 

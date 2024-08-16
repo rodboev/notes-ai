@@ -10,14 +10,16 @@ import RefreshButton from './RefreshButton'
 import { useEmailStatus } from '../hooks/useEmailStatus'
 import { useSingleEmail } from '../hooks/useEmails'
 
-const Email = ({ email, noteFingerprint, index, total, scrollToNextPair }) => {
+const Email = ({
+  email,
+  noteFingerprint,
+  emailStatus,
+  updateStatus,
+  index,
+  total,
+  scrollToNextPair,
+}) => {
   const editorRef = useRef(null)
-
-  const {
-    data: emailStatus,
-    isLoading: isLoadingStatus,
-    updateStatus,
-  } = useEmailStatus(noteFingerprint)
   const { data: emailData, refreshEmail } = useSingleEmail(noteFingerprint)
 
   const handleRefresh = async () => {
@@ -34,13 +36,6 @@ const Email = ({ email, noteFingerprint, index, total, scrollToNextPair }) => {
       }, 100)
     }
   }
-
-  if (isLoadingStatus)
-    return (
-      <div className="inline-flex flex-col items-center text-neutral-500">
-        <SpinnerIcon className="scale-150 text-neutral-500" />
-      </div>
-    )
 
   const displayEmail = emailData || email
 

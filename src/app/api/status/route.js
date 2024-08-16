@@ -54,25 +54,28 @@ async function saveStatus(fingerprint, newStatus) {
 export async function GET(req) {
   try {
     const url = new URL(req.url)
-    const fingerprint = url.searchParams.get('fingerprint')
+    const fingerprints = url.searchParams.get('fingerprints')?.split(',') || []
 
-    if (!fingerprint) {
-      return new Response(JSON.stringify({ error: 'Fingerprint parameter is required' }), {
+    if (fingerprints.length === 0) {
+      return new Response(JSON.stringify({ error: 'Fingerprints parameter is required' }), {
         status: 400,
         headers: { 'Content-Type': 'application/json' },
       })
     }
 
-    console.log(`Attempting to load status for fingerprint: ${fingerprint}`)
+    console.log(`Attempting to load statuses for fingerprints: ${fingerprints.join(', ')}`)
     const allStatuses = await loadStatuses()
-    const status = allStatuses[fingerprint] || null
+    const statuses = fingerprints.reduce((acc, fingerprint) => {
+      acc[fingerprint] = allStatuses[fingerprint] || null
+      return acc
+    }, {})
 
-    return new Response(JSON.stringify({ [fingerprint]: status }), {
+    return new Response(JSON.stringify(statuses), {
       headers: { 'Content-Type': 'application/json' },
     })
   } catch (error) {
-    console.error('Error fetching status:', error)
-    return new Response(JSON.stringify({ error: 'Failed to fetch status' }), {
+    console.error('Error fetching statuses:', error)
+    return new Response(JSON.stringify({ error: 'Failed to fetch statuses' }), {
       status: 500,
       headers: { 'Content-Type': 'application/json' },
     })

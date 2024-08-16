@@ -10,6 +10,7 @@ import Datepicker from 'react-tailwindcss-datepicker'
 import { useNotes } from './hooks/useNotes'
 import { useEmails } from './hooks/useEmails'
 import { leftJoin } from './utils/arrayUtils'
+import { useEmailStatuses } from './hooks/useEmailStatus'
 
 export default function Home() {
   const pairRefs = useRef([])
@@ -28,8 +29,13 @@ export default function Home() {
     isLoading: isLoadingNotes,
     error: notesError,
   } = useNotes(date.startDate, date.endDate)
-
   const { data: emails, isLoading: isLoadingEmails, error: emailsError } = useEmails(notes)
+  const fingerprints = notes?.map((note) => note.fingerprint) || []
+  const {
+    data: emailStatuses,
+    isLoading: isLoadingStatuses,
+    updateStatus,
+  } = useEmailStatuses(fingerprints)
 
   const handleDateChange = (newDate) => {
     console.log('newDate:', newDate)
@@ -78,6 +84,8 @@ export default function Home() {
           <Email
             email={email}
             noteFingerprint={note.fingerprint}
+            emailStatus={emailStatuses?.[note.fingerprint]}
+            updateStatus={updateStatus}
             index={index}
             total={pairs.length}
             scrollToNextPair={scrollToNextPair}
