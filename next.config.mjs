@@ -12,9 +12,7 @@ const nextConfig = {
     }
     return config
   },
-  experimental: {
-    serverComponentsExternalPackages: ['mssql'],
-  },
+  serverExternalPackages: ['mssql'],
   env: {
     NEXT_PUBLIC_NODE_ENV: process.env.NODE_ENV,
   },

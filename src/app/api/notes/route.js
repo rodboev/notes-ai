@@ -223,7 +223,7 @@ export async function GET(request) {
     }
   }
 
-  // If startDate or endDate is null, undefined, or "null", set default values
+  // Set default dates if not provided
   if (!startDate || startDate === 'null' || !endDate || endDate === 'null') {
     const today = new Date()
     const yesterday = new Date(today)
@@ -235,26 +235,27 @@ export async function GET(request) {
     console.log(`Using default dates: startDate=${startDate}, endDate=${endDate}`)
   }
 
-  // Adjust endDate for database query
-  const queryEndDate = new Date(endDate)
-  queryEndDate.setDate(queryEndDate.getDate() + 1)
-  const formattedQueryEndDate = queryEndDate.toISOString().split('T')[0]
-
   // Try to get stored notes first
   const cacheKey = `notes_${startDate}_${endDate}`
-  let storedNotes = await getSavedNotes(cacheKey)
-  if (storedNotes) {
-    console.log(`Returning ${storedNotes.length} notes`)
-    return NextResponse.json(storedNotes)
+  let notes = await getSavedNotes(cacheKey)
+
+  if (notes) {
+    console.log(`Returning ${notes.length} notes from cache`)
+    return NextResponse.json(notes)
   }
 
+  // If not in cache, try to fetch from database
   let pool
   try {
     console.log('Attempting to connect to the database...')
     pool = await sql.connect(config)
     console.log('Connected successfully')
 
-    let notes = await getJoinedNotes(pool, startDate, formattedQueryEndDate)
+    const queryEndDate = new Date(endDate)
+    queryEndDate.setDate(queryEndDate.getDate() + 1)
+    const formattedQueryEndDate = queryEndDate.toISOString().split('T')[0]
+
+    notes = await getJoinedNotes(pool, startDate, formattedQueryEndDate)
 
     notes = transformNotes(notes)
       .filter((note) => note.code === '911 EMER')
@@ -269,10 +270,19 @@ export async function GET(request) {
     // Store the notes in disk and Firestore
     await saveNotes(notes, startDate, endDate)
 
-    console.log(`Returning ${notes.length} notes`)
+    console.log(`Returning ${notes.length} notes from database`)
     return NextResponse.json(notes)
   } catch (error) {
-    console.error('Error:', error)
+    console.error('Error fetching from database:', error)
+
+    // If database fetch fails, try to get from disk one last time
+    notes = await getSavedNotes(cacheKey)
+    if (notes) {
+      console.log(`Returning ${notes.length} notes from cache after database failure`)
+      return NextResponse.json(notes)
+    }
+
+    // If still no notes, return an error
     return NextResponse.json(
       {
         error: 'Internal Server Error',
