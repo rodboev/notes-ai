@@ -1,17 +1,23 @@
 // src/app/layout.js
 
+'use client'
+
 import { Inter } from 'next/font/google'
 import './globals.css'
-const inter = Inter({ subsets: ['latin'] })
+import { QueryClientProvider } from '@tanstack/react-query'
+import { queryClient } from './utils/queryClient'
 
-export const metadata = {
-  title: 'Liberty Notes AI',
-}
+const inter = Inter({ subsets: ['latin'] })
 
 export default function RootLayout({ children }) {
   return (
     <html lang="en">
-      <body className={inter.className}>{children}</body>
+      <head>
+        <title>Liberty Notes AI</title>
+      </head>
+      <body className={inter.className}>
+        <QueryClientProvider client={queryClient}>{children}</QueryClientProvider>
+      </body>
     </html>
   )
 }

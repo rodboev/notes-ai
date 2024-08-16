@@ -1,20 +1,17 @@
 // src/app/api/status/route.js
 
-import { readFromDisk, writeToDisk, deleteFromDisk } from '../../utils/diskStorage'
+import { readFromDisk, writeToDisk } from '../../utils/diskStorage'
 import { firestore } from '../../../firebase.js'
-import { doc, getDoc, setDoc, deleteDoc } from 'firebase/firestore'
+import { doc, getDoc, setDoc } from 'firebase/firestore'
 
 const STATUS_COLLECTION = 'status'
 const EMAILS_DOC_ID = 'emails'
 
-export async function loadStatuses() {
+async function loadStatuses() {
   try {
     console.log('Attempting to read statuses from disk...')
     const diskStatuses = await readFromDisk('status.json')
     if (diskStatuses && Object.keys(diskStatuses).length > 0) {
-      // console.log('Statuses found on disk:', diskStatuses)
-      // Write disk statuses to Firestore
-      await saveStatuses(diskStatuses)
       return diskStatuses
     }
 
@@ -22,7 +19,6 @@ export async function loadStatuses() {
     const statusesRef = doc(firestore, STATUS_COLLECTION, EMAILS_DOC_ID)
     const statusesDoc = await getDoc(statusesRef)
     const statuses = statusesDoc.exists() ? statusesDoc.data() : {}
-    // console.log('Statuses loaded from Firestore:', statuses)
 
     if (Object.keys(statuses).length > 0) {
       console.log('Writing Firestore data to disk...')
@@ -36,22 +32,21 @@ export async function loadStatuses() {
   }
 }
 
-export async function saveStatuses(newStatuses) {
-  let logStr = ''
+async function saveStatus(fingerprint, newStatus) {
   try {
-    await writeToDisk('status.json', newStatuses)
-    logStr += 'Email statuses saved to disk'
+    const allStatuses = await loadStatuses()
+    allStatuses[fingerprint] = newStatus
 
-    // console.log('Attempting to save to Firestore:', newStatuses)
+    await writeToDisk('status.json', allStatuses)
+    console.log('Email status saved to disk')
+
     const statusesRef = doc(firestore, STATUS_COLLECTION, EMAILS_DOC_ID)
-    await setDoc(statusesRef, newStatuses, { merge: true })
-    logStr += ' and Firestore'
-    console.log(logStr)
+    await setDoc(statusesRef, { [fingerprint]: newStatus }, { merge: true })
+    console.log('Email status saved to Firestore')
 
-    return newStatuses
+    return newStatus
   } catch (error) {
-    console.log(logStr)
-    console.error(`Error saving email statuses:`, error)
+    console.error(`Error saving email status:`, error)
     throw error
   }
 }
@@ -59,69 +54,56 @@ export async function saveStatuses(newStatuses) {
 export async function GET(req) {
   try {
     const url = new URL(req.url)
-    if (url.searchParams.has('delete')) {
-      return await DELETE(req)
+    const fingerprint = url.searchParams.get('fingerprint')
+
+    if (!fingerprint) {
+      return new Response(JSON.stringify({ error: 'Fingerprint parameter is required' }), {
+        status: 400,
+        headers: { 'Content-Type': 'application/json' },
+      })
     }
 
-    console.log('Attempting to load statuses...')
+    console.log(`Attempting to load status for fingerprint: ${fingerprint}`)
     const allStatuses = await loadStatuses()
-    // console.log('Loaded statuses:', allStatuses)
+    const status = allStatuses[fingerprint] || null
 
-    return new Response(JSON.stringify(allStatuses), {
+    return new Response(JSON.stringify({ [fingerprint]: status }), {
       headers: { 'Content-Type': 'application/json' },
     })
   } catch (error) {
-    console.error('Error fetching statuses:', error)
-    return new Response(JSON.stringify({ error: 'Failed to fetch statuses' }), {
+    console.error('Error fetching status:', error)
+    return new Response(JSON.stringify({ error: 'Failed to fetch status' }), {
       status: 500,
       headers: { 'Content-Type': 'application/json' },
     })
   }
 }
 
-export async function POST(req) {
+export async function PATCH(req) {
   try {
-    const newStatus = await req.json()
-    const existingStatuses = await loadStatuses()
+    const { fingerprint, status } = await req.json()
 
-    // Merge the new status with existing statuses
-    const updatedStatuses = { ...existingStatuses, ...newStatus }
+    if (!fingerprint || !status) {
+      return new Response(JSON.stringify({ error: 'Fingerprint and status are required' }), {
+        status: 400,
+        headers: { 'Content-Type': 'application/json' },
+      })
+    }
 
-    await saveStatuses(updatedStatuses)
+    const updatedStatus = await saveStatus(fingerprint, status)
 
     return new Response(
       JSON.stringify({
-        message: 'Statuses updated successfully',
-        statuses: updatedStatuses,
+        message: 'Status updated successfully',
+        status: updatedStatus,
       }),
       {
         headers: { 'Content-Type': 'application/json' },
       },
     )
   } catch (error) {
-    console.error('Error updating statuses:', error)
-    return new Response(JSON.stringify({ error: 'Failed to update statuses' }), {
-      status: 500,
-      headers: { 'Content-Type': 'application/json' },
-    })
-  }
-}
-
-export async function DELETE(req) {
-  try {
-    // Delete from disk
-    await deleteFromDisk('status.json')
-
-    // Delete from Firestore
-    const statusesRef = doc(firestore, STATUS_COLLECTION, EMAILS_DOC_ID)
-    await deleteDoc(statusesRef)
-
-    return new Response(JSON.stringify({ message: 'Statuses deleted successfully' }), {
-      headers: { 'Content-Type': 'application/json' },
-    })
-  } catch (error) {
-    console.error('Error deleting statuses:', error)
-    return new Response(JSON.stringify({ error: 'Failed to delete statuses' }), {
+    console.error('Error updating status:', error)
+    return new Response(JSON.stringify({ error: 'Failed to update status' }), {
       status: 500,
       headers: { 'Content-Type': 'application/json' },
     })

@@ -5,6 +5,7 @@ import { CheckIcon, ExclamationTriangleIcon } from '@heroicons/react/16/solid'
 import SpinnerIcon from './Icons/SpinnerIcon'
 import SendIcon from './Icons/SendIcon-v1'
 import { motion, AnimatePresence } from 'framer-motion'
+import { useSendFeedback } from '../hooks/useSendFeedback'
 
 const FeedbackInput = ({ value, onChange, disabled }) => (
   <AnimatePresence>
@@ -32,7 +33,7 @@ const FeedbackInput = ({ value, onChange, disabled }) => (
 const FeedbackButton = ({ note, email, subject }) => {
   const [feedbackFieldVisible, setFeedbackFieldVisible] = useState(false)
   const [feedbackText, setFeedbackText] = useState('')
-  const [feedbackStatus, setFeedbackStatus] = useState('idle')
+  const sendFeedbackMutation = useSendFeedback()
 
   const handleFeedbackClick = async () => {
     if (!feedbackFieldVisible) {
@@ -40,26 +41,17 @@ const FeedbackButton = ({ note, email, subject }) => {
       return
     }
 
-    if (feedbackStatus === 'sending' || feedbackStatus === 'success') return
+    if (sendFeedbackMutation.isLoading || sendFeedbackMutation.isSuccess) return
 
-    setFeedbackStatus('sending')
-
-    const isProduction = process.env.NEXT_PUBLIC_NODE_ENV === 'production'
-    if (isProduction) {
-      try {
-        const response = await fetch('/api/send-feedback', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ feedback: feedbackText, note, subject, email }),
-        })
-        setFeedbackStatus(response.ok ? 'success' : 'error')
-      } catch (error) {
-        console.error('Error sending feedback:', error)
-        setFeedbackStatus('error')
-      }
-    } else {
-      // Simulate sending for non-production environments
-      setTimeout(() => setFeedbackStatus('success'), 800)
+    try {
+      await sendFeedbackMutation.mutateAsync({
+        feedback: feedbackText,
+        note,
+        subject,
+        email,
+      })
+    } catch (error) {
+      console.error('Error sending feedback:', error)
     }
   }
 
@@ -69,7 +61,7 @@ const FeedbackButton = ({ note, email, subject }) => {
         <FeedbackInput
           value={feedbackText}
           onChange={(e) => setFeedbackText(e.target.value)}
-          disabled={feedbackStatus === 'sending' || feedbackStatus === 'success'}
+          disabled={sendFeedbackMutation.isLoading || sendFeedbackMutation.isSuccess}
         />
       )}
 
@@ -82,7 +74,7 @@ const FeedbackButton = ({ note, email, subject }) => {
         </button>
       )}
 
-      {feedbackFieldVisible && feedbackStatus === 'idle' && (
+      {feedbackFieldVisible && sendFeedbackMutation.isIdle && (
         <button
           onClick={handleFeedbackClick}
           className="btn inline-block w-fit bg-neutral-500 text-white"
@@ -92,7 +84,7 @@ const FeedbackButton = ({ note, email, subject }) => {
         </button>
       )}
 
-      {feedbackStatus === 'sending' && (
+      {sendFeedbackMutation.isLoading && (
         <button
           disabled
           className="btn inline-block w-fit cursor-not-allowed bg-neutral-500 text-white"
@@ -102,7 +94,7 @@ const FeedbackButton = ({ note, email, subject }) => {
         </button>
       )}
 
-      {feedbackStatus === 'success' && (
+      {sendFeedbackMutation.isSuccess && (
         <button
           disabled
           className="btn inline-block w-fit cursor-not-allowed border-2 border-green-600 bg-white"
@@ -112,7 +104,7 @@ const FeedbackButton = ({ note, email, subject }) => {
         </button>
       )}
 
-      {feedbackStatus === 'error' && (
+      {sendFeedbackMutation.isError && (
         <button
           onClick={handleFeedbackClick}
           className="btn inline-block w-fit border-2 border-red-600"

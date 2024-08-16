@@ -1,94 +1,39 @@
 // src/app/components/Settings.js
 
-import React, { useState, useEffect, useCallback } from 'react'
+import React, { useState } from 'react'
 import { motion } from 'framer-motion'
 import TextareaAutosize from 'react-textarea-autosize'
-import { useLocalStorage } from '../hooks/useLocalStorage'
+import { usePrompts } from '../hooks/usePrompts'
 
 export default function Settings({ onClose }) {
+  const { data: prompts, isLoading, isError, updatePrompts, isUpdating } = usePrompts()
   const [systemPrompt, setSystemPrompt] = useState('')
   const [emailPrompt, setEmailPrompt] = useState('')
-  const [cachedPrompts, setCachedPrompts] = useLocalStorage('promptsCache', {
-    system: { current: '', default: '' },
-    email: { current: '', default: '' },
-  })
-  const [savingPrompts, setSavingPrompts] = useState(false)
 
-  const fetchPrompts = useCallback(async () => {
-    try {
-      const response = await fetch('/api/prompts')
-      if (response.ok) {
-        const data = await response.json()
-        setSystemPrompt(data.system.current || data.system.default)
-        setEmailPrompt(data.email.current || data.email.default)
-        setCachedPrompts((prev) => {
-          const newValue = {
-            system: {
-              current: data.system.current || data.system.default,
-              default: data.system.default,
-            },
-            email: {
-              current: data.email.current || data.email.default,
-              default: data.email.default,
-            },
-          }
-          if (JSON.stringify(prev) !== JSON.stringify(newValue)) {
-            return newValue
-          }
-          return prev
-        })
-      } else {
-        throw new Error('Failed to fetch prompts from API')
-      }
-    } catch (error) {
-      console.warn('Error fetching prompts:', error.message)
-      // Fall back to cached prompts if available, otherwise use empty strings
-      setSystemPrompt(cachedPrompts.system.current || '')
-      setEmailPrompt(cachedPrompts.email.current || '')
+  React.useEffect(() => {
+    if (prompts) {
+      setSystemPrompt(prompts.system.current || prompts.system.default)
+      setEmailPrompt(prompts.email.current || prompts.email.default)
     }
-  }, [cachedPrompts, setCachedPrompts])
-
-  useEffect(() => {
-    fetchPrompts()
-  }, [fetchPrompts])
+  }, [prompts])
 
   const savePrompts = async () => {
-    setSavingPrompts(true)
-    try {
-      const response = await fetch('/api/prompts', {
-        method: 'PATCH',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          system: { current: systemPrompt },
-          email: { current: emailPrompt },
-        }),
-      })
-      if (response.ok) {
-        console.log('Prompts saved successfully')
-        // Update the cached prompts
-        setCachedPrompts((prev) => ({
-          ...prev,
-          system: { ...prev.system, current: systemPrompt },
-          email: { ...prev.email, current: emailPrompt },
-        }))
-        onClose()
-      } else {
-        console.error('Failed to save prompts')
-      }
-    } catch (error) {
-      console.error('Error saving prompts:', error)
-    } finally {
-      setSavingPrompts(false)
-    }
+    await updatePrompts({
+      system: { current: systemPrompt },
+      email: { current: emailPrompt },
+    })
+    onClose()
   }
 
   const resetPrompts = () => {
-    setSystemPrompt(cachedPrompts.system.default || '')
-    setEmailPrompt(cachedPrompts.email.default || '')
-    console.log('Prompts reverted to defaults')
+    if (prompts) {
+      setSystemPrompt(prompts.system.default)
+      setEmailPrompt(prompts.email.default)
+    }
   }
+
+  if (isLoading) return <div>Loading...</div>
+  if (isError) return <div>Error loading prompts</div>
 
   return (
     <motion.div
@@ -127,9 +72,9 @@ export default function Settings({ onClose }) {
           <button
             className="btn-teal rounded px-4 py-2"
             onClick={savePrompts}
-            disabled={savingPrompts}
+            disabled={isUpdating}
           >
-            {savingPrompts ? 'Saving' : 'Save prompts'}
+            {isUpdating ? 'Saving' : 'Save prompts'}
           </button>
         </div>
         <div className="right flex flex-1">

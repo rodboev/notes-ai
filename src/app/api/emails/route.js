@@ -112,18 +112,16 @@ function expand(template, variables) {
 
 export async function GET(req) {
   const url = new URL(req.url)
-  const refresh = url.searchParams.get('refresh')
   const startDate = url.searchParams.get('startDate')
   const endDate = url.searchParams.get('endDate')
   const fingerprint = url.searchParams.get('fingerprint')
   const fingerprints = url.searchParams.get('fingerprints')?.split(',') || []
 
   console.log(
-    `${timestamp()} GET /api/emails request params: refresh=${refresh}, startDate=${startDate}, endDate=${endDate}, fingerprint=${fingerprint}, fingerprints=${fingerprints}`,
+    `${timestamp()} GET /api/emails request params: startDate=${startDate}, endDate=${endDate}, fingerprint=${fingerprint}, fingerprints=${fingerprints}`,
   )
 
   let storedEmails = await loadEmails()
-
   let emailCache = storedEmails.reduce((acc, email) => {
     if (email.fingerprint) {
       acc[email.fingerprint] = email
@@ -206,7 +204,7 @@ export async function GET(req) {
 
       try {
         console.log(
-          `${timestamp()} Processing request: refresh=${refresh}, fingerprint=${fingerprint}, stored emails: ${storedEmails.length}`,
+          `${timestamp()} Processing request: fingerprint=${fingerprint}, stored emails: ${storedEmails.length}`,
         )
 
         if (fingerprint) {
@@ -222,7 +220,7 @@ export async function GET(req) {
 
           let email = emailCache[fingerprint]
 
-          if (!email || refresh === 'true' || refresh === 'all' || refresh === fingerprint) {
+          if (!email || fingerprint) {
             const [generatedEmail] = await streamResponse([note[0]])
             if (generatedEmail) {
               email = generatedEmail
@@ -241,7 +239,7 @@ export async function GET(req) {
             throw new Error(`Failed to generate or retrieve email for fingerprint: ${fingerprint}`)
           }
         } else {
-          // Handle multiple notes
+          // Handle multiple emails
           let notesToProcess = []
           if (fingerprints.length > 0) {
             const response = await fetch(
@@ -258,17 +256,14 @@ export async function GET(req) {
 
           console.log(`${timestamp()} Fetched ${notesToProcess.length} notes to process`)
 
-          const noteChunks = chunkArray(notesToProcess, isProduction ? 8 : 3)
+          const noteChunks = chunkArray(notesToProcess, 10)
           console.log(`${timestamp()} Created ${noteChunks.length} note chunks`)
 
           let emailsToSave = []
           let emailsToSend = []
 
           for (const chunk of noteChunks) {
-            const chunkToProcess = chunk.filter(
-              (note) =>
-                refresh === 'all' || !emailCache[note.fingerprint] || refresh === note.fingerprint,
-            )
+            const chunkToProcess = chunk.filter((note) => !emailCache[note.fingerprint])
 
             if (chunkToProcess.length > 0) {
               const emailChunk = await streamResponse(chunkToProcess)

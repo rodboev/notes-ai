@@ -7,11 +7,12 @@ export const merge = (arrayList1, arrayList2) => [
     .values(),
 ]
 
-export const leftJoin = ({ notes, emails = [] }) => {
-  console.log(`Joining ${notes.length} notes with ${emails.length} emails`)
+export const leftJoin = (notes, emails) => {
+  if (!notes) return []
+  console.log(`Joining ${notes.length} notes with ${emails?.length || 0} emails`)
   return notes.map((note) => ({
     note,
-    email: emails.find((email) => email.fingerprint === note.fingerprint),
+    email: emails?.find((email) => email.fingerprint === note.fingerprint) || null,
   }))
 }
 

@@ -2,46 +2,52 @@
 
 'use client'
 
-import { useState, useEffect, useRef } from 'react'
-import { useData } from './hooks/useData'
-import { useLocalStorage } from './hooks/useLocalStorage'
+import { useState, useRef } from 'react'
 import Nav from './components/Nav'
 import Note from './components/Note'
 import Email from './components/Email'
 import Datepicker from 'react-tailwindcss-datepicker'
+import { useNotes } from './hooks/useNotes'
+import { useEmails } from './hooks/useEmails'
+import { leftJoin } from './utils/arrayUtils'
 
 export default function Home() {
-  const { pairs, notesExist, fetchData, clearData } = useData()
   const pairRefs = useRef([])
 
   const today = new Date()
   const yesterday = new Date(today)
   yesterday.setDate(yesterday.getDate() - 1)
 
-  const [storedDate, setStoredDate] = useLocalStorage('selectedDate', {
+  const [date, setDate] = useState({
     startDate: yesterday.toISOString().split('T')[0],
     endDate: today.toISOString().split('T')[0],
   })
 
-  const [date, setDate] = useState(storedDate)
+  const {
+    data: notes,
+    isLoading: isLoadingNotes,
+    error: notesError,
+  } = useNotes(date.startDate, date.endDate)
+
+  const { data: emails, isLoading: isLoadingEmails, error: emailsError } = useEmails(notes)
 
   const handleDateChange = (newDate) => {
     console.log('newDate:', newDate)
     setDate(newDate)
-    setStoredDate(newDate)
-    console.log(`Selected: ${newDate}`)
   }
-
-  useEffect(() => {
-    fetchData({ startDate: date.startDate, endDate: date.endDate })
-  }, [date.startDate, date.endDate])
 
   const scrollToNextPair = (index) => {
     pairRefs.current[index]?.scrollIntoView({ behavior: 'smooth' })
   }
 
+  // if (isLoadingNotes || isLoadingEmails) return <div>Loading...</div>
+  if (notesError || emailsError)
+    return <div>An error occurred: {notesError?.message || emailsError?.message}</div>
+
+  const pairs = leftJoin(notes, emails?.emails || [])
+
   return (
-    <div className="w- outline- flex h-screen max-w-full snap-y snap-mandatory flex-col items-center overflow-y-scroll">
+    <div className="flex h-screen max-w-full snap-y snap-mandatory flex-col items-center overflow-y-scroll">
       <Nav>
         <Datepicker
           useRange={false}
@@ -57,32 +63,27 @@ export default function Home() {
           toggleClassName={
             'h-10 w-fit items-center overflow-hidden rounded px-4 pb-0.5 font-bold hover:bg-opacity-95 active:bg-opacity-100 bg-teal text-white align-middle ml-4'
           }
-          startFrom={new Date('2024-08-13')}
           value={date}
           onChange={handleDateChange}
         />
       </Nav>
 
-      {notesExist &&
-        pairs.map(({ note, email }, index) => (
-          <div
-            key={note.fingerprint}
-            ref={(el) => (pairRefs.current[index] = el)}
-            className="pair container -m-4 flex max-w-screen-2xl snap-center snap-always p-4 pb-0"
-          >
-            <Note note={note} index={index} total={pairs.length} />
-            <Email
-              email={email}
-              noteFingerprint={note.fingerprint}
-              index={index}
-              total={pairs.length}
-              fetchData={fetchData}
-              scrollToNextPair={scrollToNextPair}
-              startDate={date.startDate}
-              endDate={date.endDate}
-            />
-          </div>
-        ))}
+      {pairs.map(({ note, email }, index) => (
+        <div
+          key={note.fingerprint}
+          ref={(el) => (pairRefs.current[index] = el)}
+          className="pair container -m-4 flex max-w-screen-2xl snap-center snap-always p-4 pb-0"
+        >
+          <Note note={note} index={index} total={pairs.length} />
+          <Email
+            email={email}
+            noteFingerprint={note.fingerprint}
+            index={index}
+            total={pairs.length}
+            scrollToNextPair={scrollToNextPair}
+          />
+        </div>
+      ))}
     </div>
   )
 }
