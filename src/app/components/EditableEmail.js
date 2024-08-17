@@ -86,10 +86,7 @@ const EditableEmail = ({ email, emailStatus, editorRef, children, onRefresh }) =
           license_key: 'gpl',
         }}
       />
-      {!(emailStatus?.status === 'sending' || emailStatus?.status === 'success') && (
-        <RefreshButton onClick={onRefresh} />
-      )}
-      <div className="buttons mt-4 flex items-center justify-between">{children}</div>
+      {children}
     </div>
   )
 }

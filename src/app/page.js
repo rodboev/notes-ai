@@ -9,8 +9,15 @@ import Email from './components/Email'
 import Datepicker from 'react-tailwindcss-datepicker'
 import { useNotes } from './hooks/useNotes'
 import { useEmails } from './hooks/useEmails'
-import { leftJoin } from './utils/arrayUtils'
 import { useEmailStatuses } from './hooks/useEmailStatus'
+
+const leftJoin = (notes = [], emails = []) => {
+  if (!notes) return []
+  return notes.map((note) => ({
+    note,
+    email: emails.find((email) => email.fingerprint === note.fingerprint) || null,
+  }))
+}
 
 export default function Home() {
   const pairRefs = useRef([])
@@ -24,18 +31,30 @@ export default function Home() {
     endDate: today.toISOString().split('T')[0],
   })
 
+  const [pairs, setPairs] = useState([])
+
   const {
     data: notes,
     isLoading: isLoadingNotes,
     error: notesError,
   } = useNotes(date.startDate, date.endDate)
+
   const { data: emails, isLoading: isLoadingEmails, error: emailsError } = useEmails(notes)
+
   const fingerprints = notes?.map((note) => note.fingerprint) || []
   const {
     data: emailStatuses,
     isLoading: isLoadingStatuses,
     updateStatus,
   } = useEmailStatuses(fingerprints)
+
+  useEffect(() => {
+    if (notes && emails && Array.isArray(notes) && Array.isArray(emails)) {
+      const newPairs = leftJoin(notes, emails)
+      setPairs(newPairs)
+      console.log('Updated pairs:', newPairs)
+    }
+  }, [notes, emails])
 
   const handleDateChange = (newDate) => {
     console.log('newDate:', newDate)
@@ -46,17 +65,14 @@ export default function Home() {
     pairRefs.current[index]?.scrollIntoView({ behavior: 'smooth' })
   }
 
-  if (isLoadingNotes || isLoadingEmails || isLoadingStatuses) {
-    console.log('Loading state:', { isLoadingNotes, isLoadingEmails, isLoadingStatuses })
-    return <div>Loading...</div>
-  }
-
   if (notesError || emailsError) {
     console.error('Error:', notesError || emailsError)
     return <div>An error occurred: {notesError?.message || emailsError?.message}</div>
   }
 
-  const pairs = leftJoin(notes, emails || [])
+  if (isLoadingNotes || isLoadingEmails) {
+    return <div>Loading...</div>
+  }
 
   return (
     <div className="flex h-screen max-w-full snap-y snap-mandatory flex-col items-center overflow-y-scroll">
@@ -81,14 +97,15 @@ export default function Home() {
       </Nav>
 
       {pairs.map(({ note, email }, index) => (
-          <div
-            key={note.fingerprint}
-            ref={(el) => (pairRefs.current[index] = el)}
-            className="pair container -m-4 flex max-w-screen-2xl snap-center snap-always p-4 pb-0"
-          >
-            <Note note={note} index={index} total={pairs.length} />
+        <div
+          key={note.fingerprint}
+          ref={(el) => (pairRefs.current[index] = el)}
+          className="pair container -m-4 flex max-w-screen-2xl snap-center snap-always p-4 pb-0"
+        >
+          {note && <Note note={note} index={index} total={pairs.length} />}
+          {email && (
             <Email
-              email={email}
+              initialEmail={email}
               noteFingerprint={note.fingerprint}
               emailStatus={emailStatuses?.[note.fingerprint]}
               updateStatus={updateStatus}
@@ -96,7 +113,8 @@ export default function Home() {
               total={pairs.length}
               scrollToNextPair={scrollToNextPair}
             />
-          </div>
+          )}
+        </div>
       ))}
     </div>
   )

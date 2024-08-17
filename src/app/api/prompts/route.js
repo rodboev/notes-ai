@@ -38,13 +38,20 @@ async function loadPromptsFromFirestore() {
 
 async function savePrompts(prompts) {
   try {
-    // Write to disk
-    await writeFile(promptsCurrent, JSON.stringify(prompts, null, 2), 'utf8')
-    console.log('Successfully wrote prompts to disk')
+    const currentPrompts = await loadPromptsFromDisk(promptsCurrent)
+    const hasChanges = JSON.stringify(currentPrompts) !== JSON.stringify(prompts)
 
-    // Write to Firestore
-    await setDoc(doc(firestore, 'prompts', 'current'), prompts)
-    console.log('Successfully wrote prompts to Firestore')
+    if (hasChanges) {
+      // Write to disk
+      await writeFile(promptsCurrent, JSON.stringify(prompts, null, 2), 'utf8')
+      console.log('Successfully wrote prompts to disk')
+
+      // Write to Firestore
+      await setDoc(doc(firestore, 'prompts', 'current'), prompts)
+      console.log('Successfully wrote prompts to Firestore')
+    } else {
+      console.log('No changes detected, skipping save operation')
+    }
   } catch (error) {
     console.warn('Failed to save prompts:', error)
   }

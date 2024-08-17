@@ -5,15 +5,23 @@ import { parse } from 'best-effort-json-parser'
 import { firestore } from '../../../firebase.js'
 import { readFromDisk, writeToDisk, deleteFromDisk } from '../../utils/diskStorage'
 import { collection, doc, writeBatch, getDocs } from 'firebase/firestore'
-import { chunkArray } from '../../utils/arrayUtils'
 import { timestamp } from '../../utils/timestamp'
 import dotenv from 'dotenv'
 import { getPrompts } from '../prompts/route.js'
+import { firestoreGetDoc, firestoreBatchWrite, firestoreSetDoc } from '../../utils/firestoreHelper'
 
 dotenv.config()
 const isProduction = process.env.NEXT_PUBLIC_NODE_ENV === 'production'
 const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY })
 const port = process.env.PORT
+
+const chunkArray = (array, chunkSize) => {
+  const chunks = []
+  for (let i = 0; i < array.length; i += chunkSize) {
+    chunks.push(array.slice(i, i + chunkSize))
+  }
+  return chunks
+}
 
 async function loadEmails() {
   console.log(`${timestamp()} Attempting to load emails from disk`)
@@ -26,8 +34,8 @@ async function loadEmails() {
 
     console.log(`${timestamp()} Emails not on disk, loading from Firestore`)
     const emailsCollection = collection(firestore, 'emails')
-    const snapshot = await getDocs(emailsCollection)
-    const emails = snapshot.docs.map((doc) => doc.data())
+    const snapshot = await firestoreGetDoc('emails', 'allEmails')
+    const emails = snapshot ? snapshot.emails : []
     console.log(`${timestamp()} Loaded ${emails.length} emails from Firestore`)
     await writeToDisk('emails.json', emails)
     console.log(`${timestamp()} Saved ${emails.length} emails to disk`)
@@ -41,51 +49,42 @@ async function loadEmails() {
 async function saveEmails(emails) {
   console.warn(`${timestamp()} Saving emails to disk and Firestore`)
 
-  // Save to disk
-  try {
-    await writeToDisk('emails.json', emails)
-    console.log(`${timestamp()} Saved ${emails.length} emails to disk`)
-  } catch (error) {
-    console.warn(`${timestamp()} Error saving emails to disk:`, error)
-  }
+  // Check if there are changes compared to the disk version
+  const diskEmails = await readFromDisk('emails.json')
+  const hasChanges = JSON.stringify(diskEmails) !== JSON.stringify(emails)
 
-  // Save to Firestore
-  if (!firestore) {
-    console.warn(`${timestamp()} Firestore is not initialized`)
-    return
-  }
+  if (hasChanges) {
+    // Save to disk
+    try {
+      await writeToDisk('emails.json', emails)
+      console.log(`${timestamp()} Saved ${emails.length} emails to disk`)
+    } catch (error) {
+      console.warn(`${timestamp()} Error saving emails to disk:`, error)
+      return // Don't proceed to Firestore if disk save failed
+    }
 
-  const batch = writeBatch(firestore)
-  const emailsCollection = collection(firestore, 'emails')
+    // Save to Firestore
+    if (!firestore) {
+      console.warn(`${timestamp()} Firestore is not initialized`)
+      return
+    }
 
-  let savedCount = 0
-  try {
-    emails.forEach((email) => {
-      if (email.fingerprint) {
-        const docRef = doc(emailsCollection, email.fingerprint)
-        batch.set(docRef, email)
-        savedCount++
-      } else {
-        console.warn(`${timestamp()} Email without fingerprint:`, email)
-      }
-    })
-    await batch.commit()
-    console.log(`${timestamp()} Saved ${savedCount} emails to Firestore`)
-  } catch (error) {
-    console.warn(`${timestamp()} Error saving emails to Firestore:`, error)
+    console.log(`${timestamp()} Changes detected in emails. Triggering Firestore write`)
+    try {
+      await firestoreSetDoc('emails', 'allEmails', { emails })
+      console.log(`${timestamp()} Saved ${emails.length} emails to Firestore`)
+    } catch (error) {
+      console.warn(`${timestamp()} Error saving emails to Firestore:`, error)
+    }
+  } else {
+    console.log(`${timestamp()} No changes detected, skipping save operation`)
   }
 }
 
 async function deletePreviousEmails() {
   try {
     // Delete from Firestore
-    const emailsCollection = collection(firestore, 'emails')
-    const snapshot = await getDocs(emailsCollection)
-    const batch = writeBatch(firestore)
-    snapshot.forEach((doc) => {
-      batch.delete(doc.ref)
-    })
-    await batch.commit()
+    await firestoreSetDoc('emails', 'allEmails', { emails: [] })
 
     // Delete from disk
     await deleteFromDisk('emails.json')
@@ -135,7 +134,7 @@ export async function GET(req) {
     async start(controller) {
       let responseComplete = false
 
-      function sendData(data, status = 'stream') {
+      function sendData(data, status) {
         // console.log(`${timestamp()} Sending data with status: ${status}`)
         controller.enqueue(
           encoder.encode(
@@ -187,13 +186,13 @@ export async function GET(req) {
             // Streaming response
             emailsJson += chunk
             // console.log(`${timestamp()} sendData(chunk)`)
-            sendData(chunk)
+            sendData(chunk, 'streaming-part')
           } else if (status === 'stop') {
             // Full response end of this streaming chunk
             const emails = parse(emailsJson.trim()).emails || []
             emailsToSave = [...emailsToSave, ...emails]
             console.log(`${timestamp()} sendData('', 'stop')`)
-            sendData('', 'stop')
+            sendData('', 'streaming-part-complete')
           } else {
             console.log(`${timestamp()} sendData('', status)`)
             sendData('', status)
@@ -233,8 +232,8 @@ export async function GET(req) {
           }
 
           if (email) {
-            console.log(`${timestamp()} sendData({ emails: [email] }, 'stop')`)
-            sendData({ emails: [email] }, 'stop')
+            console.log(`${timestamp()} sendData({ emails: [email] }, 'full')`)
+            sendData({ emails: [email] }, 'full')
           } else {
             throw new Error(`Failed to generate or retrieve email for fingerprint: ${fingerprint}`)
           }
@@ -283,8 +282,8 @@ export async function GET(req) {
 
           // Send all prepared emails at once
           console.log(`${timestamp()} // Send all prepared emails at once`)
-          console.log(`${timestamp()} sendData({ emails: emailsToSend }, 'stop')`)
-          sendData({ emails: emailsToSend }, 'stop')
+          console.log(`${timestamp()} sendData({ emails: emailsToSend }, 'full')`)
+          sendData({ emails: emailsToSend }, 'full')
 
           if (emailsToSave.length > 0) {
             // Merge new emails with existing ones, replacing any with the same fingerprint
@@ -300,9 +299,9 @@ export async function GET(req) {
           }
         }
 
-        console.log(`${timestamp()} responseComplete = true, sendData('', 'stop')`)
+        console.log(`${timestamp()} responseComplete = true, sendData('', 'full')`)
         responseComplete = true
-        sendData('', 'stop')
+        sendData('', 'complete')
 
         console.log(`${timestamp()} Closing controller`)
         controller.close()

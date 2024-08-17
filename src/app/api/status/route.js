@@ -2,32 +2,33 @@
 
 import { readFromDisk, writeToDisk } from '../../utils/diskStorage'
 import { firestore } from '../../../firebase.js'
-import { doc, getDoc, setDoc } from 'firebase/firestore'
+import { doc } from 'firebase/firestore'
+import { firestoreGetDoc, firestoreSetDoc } from '../../utils/firestoreHelper'
+import { timestamp } from '../../utils/timestamp'
 
 const STATUS_COLLECTION = 'status'
 const EMAILS_DOC_ID = 'emails'
 
 async function loadStatuses() {
   try {
-    console.log('Attempting to read statuses from disk...')
+    console.log(`${timestamp()} Attempting to read statuses from disk...`)
     const diskStatuses = await readFromDisk('status.json')
     if (diskStatuses && Object.keys(diskStatuses).length > 0) {
       return diskStatuses
     }
 
-    console.log('Statuses not found on disk or empty, loading from Firestore...')
-    const statusesRef = doc(firestore, STATUS_COLLECTION, EMAILS_DOC_ID)
-    const statusesDoc = await getDoc(statusesRef)
-    const statuses = statusesDoc.exists() ? statusesDoc.data() : {}
+    console.log(`${timestamp()} Statuses not found on disk or empty, loading from Firestore...`)
+    const statusesData = await firestoreGetDoc(STATUS_COLLECTION, EMAILS_DOC_ID)
+    const statuses = statusesData || {}
 
     if (Object.keys(statuses).length > 0) {
-      console.log('Writing Firestore data to disk...')
+      console.log(`${timestamp()} Writing Firestore data to disk...`)
       await writeToDisk('status.json', statuses)
     }
 
     return statuses
   } catch (error) {
-    console.error(`Error loading email statuses:`, error)
+    console.error(`${timestamp()} Error loading email statuses:`, error.message)
     return {}
   }
 }
@@ -35,18 +36,29 @@ async function loadStatuses() {
 async function saveStatus(fingerprint, newStatus) {
   try {
     const allStatuses = await loadStatuses()
-    allStatuses[fingerprint] = newStatus
+    const hasChanges = JSON.stringify(allStatuses[fingerprint]) !== JSON.stringify(newStatus)
 
-    await writeToDisk('status.json', allStatuses)
-    console.log('Email status saved to disk')
+    if (hasChanges) {
+      allStatuses[fingerprint] = newStatus
 
-    const statusesRef = doc(firestore, STATUS_COLLECTION, EMAILS_DOC_ID)
-    await setDoc(statusesRef, { [fingerprint]: newStatus }, { merge: true })
-    console.log('Email status saved to Firestore')
+      await writeToDisk('status.json', allStatuses)
+      console.log(`${timestamp()} Email status saved to disk`)
+
+      console.log(`${timestamp()} Changes detected in statuses. Triggering Firestore write`)
+      await firestoreSetDoc(
+        STATUS_COLLECTION,
+        EMAILS_DOC_ID,
+        { [fingerprint]: newStatus },
+        { merge: true },
+      )
+      console.log(`${timestamp()} Email status saved to Firestore`)
+    } else {
+      console.log(`${timestamp()} No changes detected, skipping save operation`)
+    }
 
     return newStatus
   } catch (error) {
-    console.error(`Error saving email status:`, error)
+    console.error(`${timestamp()} Error saving email status:`, error.message)
     throw error
   }
 }
@@ -63,7 +75,9 @@ export async function GET(req) {
       })
     }
 
-    console.log(`Attempting to load statuses for fingerprints: ${fingerprints.join(', ')}`)
+    console.log(
+      `${timestamp()} Attempting to load statuses for fingerprints: ${fingerprints.join(', ')}`,
+    )
     const allStatuses = await loadStatuses()
     const statuses = fingerprints.reduce((acc, fingerprint) => {
       acc[fingerprint] = allStatuses[fingerprint] || null
@@ -74,7 +88,7 @@ export async function GET(req) {
       headers: { 'Content-Type': 'application/json' },
     })
   } catch (error) {
-    console.error('Error fetching statuses:', error)
+    console.error(`${timestamp()} Error fetching statuses:`, error.message)
     return new Response(JSON.stringify({ error: 'Failed to fetch statuses' }), {
       status: 500,
       headers: { 'Content-Type': 'application/json' },
@@ -105,7 +119,7 @@ export async function PATCH(req) {
       },
     )
   } catch (error) {
-    console.error('Error updating status:', error)
+    console.error(`${timestamp()} Error updating status:`, error.message)
     return new Response(JSON.stringify({ error: 'Failed to update status' }), {
       status: 500,
       headers: { 'Content-Type': 'application/json' },

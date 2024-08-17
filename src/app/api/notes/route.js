@@ -5,7 +5,9 @@ import sql from 'mssql/msnodesqlv8.js'
 import hash from 'object-hash'
 import { readFromDisk, writeToDisk } from '../../utils/diskStorage'
 import { firestore } from '../../../firebase'
-import { collection, getDoc, getDocs, doc, writeBatch } from 'firebase/firestore'
+import { collection, doc } from 'firebase/firestore'
+import { firestoreGetDoc, firestoreBatchWrite, firestoreSetDoc } from '../../utils/firestoreHelper'
+import { timestamp } from '../../utils/timestamp'
 
 sql.driver = 'FreeTDS'
 
@@ -116,59 +118,74 @@ async function saveNotes(notes, startDate, endDate) {
     timestamp: new Date().toISOString(),
   }
 
-  // Store in disk
-  await writeToDisk(`${cacheKey}.json`, cacheData)
+  // Check if there are changes compared to the disk version
+  const diskData = await readFromDisk(`${cacheKey}.json`)
+  const hasChanges = JSON.stringify(diskData) !== JSON.stringify(cacheData)
 
-  // Store in Firestore
-  const batch = writeBatch(firestore)
-  const cacheDocRef = doc(firestore, 'notesCache', cacheKey)
-  batch.set(cacheDocRef, {
-    startDate,
-    endDate,
-    timestamp: new Date().toISOString(),
-  })
+  if (hasChanges) {
+    // Store in disk
+    await writeToDisk(`${cacheKey}.json`, cacheData)
+    console.log(`${timestamp()} Notes successfully stored in disk`)
 
-  notes.forEach((note) => {
-    const noteDocRef = doc(firestore, 'notesCache', cacheKey, 'notes', note.fingerprint)
-    batch.set(noteDocRef, note)
-  })
-  await batch.commit()
+    // Store in Firestore only if there were changes
+    console.log(`${timestamp()} Changes detected in notes. Triggering Firestore write`)
+    try {
+      await firestoreSetDoc('notesCache', cacheKey, {
+        startDate,
+        endDate,
+        timestamp: new Date().toISOString(),
+      })
 
-  await updateNotesCacheIndex(cacheKey)
+      const batchOperations = notes.map((note) => ({
+        type: 'set',
+        ref: doc(firestore, 'notesCache', cacheKey, 'notes', note.fingerprint),
+        data: note,
+      }))
 
-  console.log('Notes successfully stored in disk and Firestore')
+      await firestoreBatchWrite(batchOperations)
+      console.log(`${timestamp()} Notes successfully stored in Firestore`)
+
+      await updateNotesCacheIndex(cacheKey)
+    } catch (error) {
+      console.error(`${timestamp()} Error saving notes to Firestore:`, error.message)
+    }
+  } else {
+    console.log(`${timestamp()} No changes detected, skipping save operation`)
+  }
 }
 
 async function getSavedNotes(cacheKey) {
   // Try to read from disk first
   const diskData = await readFromDisk(`${cacheKey}.json`)
   if (diskData) {
-    console.log('Notes found in disk cache')
+    console.log(`${timestamp()} Notes found in disk cache`)
     return diskData.notes
   }
 
   // If not in disk, check Firestore
-  const cacheDocRef = doc(firestore, 'notesCache', cacheKey)
-  const cacheDocSnap = await getDoc(cacheDocRef)
+  try {
+    const cacheDocData = await firestoreGetDoc('notesCache', cacheKey)
+    if (cacheDocData) {
+      const notesCollectionRef = collection(firestore, 'notesCache', cacheKey, 'notes')
+      const notesSnapshot = await firestoreGetDoc(notesCollectionRef)
+      const firestoreNotes = notesSnapshot ? Object.values(notesSnapshot) : []
 
-  if (cacheDocSnap.exists()) {
-    const notesCollectionRef = collection(firestore, 'notesCache', cacheKey, 'notes')
-    const notesSnapshot = await getDocs(notesCollectionRef)
-    const firestoreNotes = notesSnapshot.docs.map((doc) => doc.data())
+      console.log(`${timestamp()} Notes found in Firestore`)
 
-    console.log('Notes found in Firestore')
+      // Save Firestore notes to disk
+      const cacheData = {
+        notes: firestoreNotes,
+        startDate: cacheDocData.startDate,
+        endDate: cacheDocData.endDate,
+        timestamp: cacheDocData.timestamp,
+      }
+      await writeToDisk(`${cacheKey}.json`, cacheData)
+      console.log(`${timestamp()} Notes from Firestore saved to disk cache`)
 
-    // Save Firestore notes to disk
-    const cacheData = {
-      notes: firestoreNotes,
-      startDate: cacheDocSnap.data().startDate,
-      endDate: cacheDocSnap.data().endDate,
-      timestamp: cacheDocSnap.data().timestamp,
+      return firestoreNotes
     }
-    await writeToDisk(`${cacheKey}.json`, cacheData)
-    console.log('Notes from Firestore saved to disk cache')
-
-    return firestoreNotes
+  } catch (error) {
+    console.error(`${timestamp()} Error fetching notes from Firestore:`, error.message)
   }
 
   return null
@@ -189,17 +206,20 @@ async function getNoteByFingerprint(fingerprint) {
   }
 
   // If not found in disk cache, search in Firestore
-  const cacheSnapshots = await getDocs(collection(firestore, 'notesCache'))
-  for (const cacheDoc of cacheSnapshots.docs) {
-    const notesCollectionRef = collection(firestore, 'notesCache', cacheDoc.id, 'notes')
-    const noteDoc = await getDoc(doc(notesCollectionRef, fingerprint))
-    if (noteDoc.exists()) {
-      console.log('Note found in Firestore')
-      return noteDoc.data()
+  try {
+    const cacheSnapshots = await firestoreGetDoc('notesCache')
+    for (const cacheKey in cacheSnapshots) {
+      const noteData = await firestoreGetDoc('notesCache', cacheKey, 'notes', fingerprint)
+      if (noteData) {
+        console.log(`${timestamp()} Note found in Firestore`)
+        return noteData
+      }
     }
+  } catch (error) {
+    console.error(`${timestamp()} Error searching for note in Firestore:`, error.message)
   }
 
-  console.log('Note not found in cache or Firestore')
+  console.log(`${timestamp()} Note not found in cache or Firestore`)
   return null
 }
 

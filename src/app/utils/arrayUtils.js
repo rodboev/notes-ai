@@ -1,21 +1,5 @@
 // src/app/utils/arrayUtils.js
 
-export const merge = (arrayList1, arrayList2) => [
-  ...[]
-    .concat(arrayList1, arrayList2)
-    .reduce((r, c) => r.set(c.fingerprint, Object.assign(r.get(c.fingerprint) || {}, c)), new Map())
-    .values(),
-]
-
-export const leftJoin = (notes, emails) => {
-  if (!notes) return []
-  console.log(`Joining ${notes.length} notes with ${emails?.length || 0} emails`)
-  return notes.map((note) => ({
-    note,
-    email: emails?.find((email) => email.fingerprint === note.fingerprint) || null,
-  }))
-}
-
 export const chunkArray = (array, chunkSize) => {
   const chunks = []
   for (let i = 0; i < array.length; i += chunkSize) {
