@@ -2,9 +2,10 @@
 
 import React from 'react'
 
-const Note = ({ note, index, total }) => {
+const Note = ({ note, index, total, children }) => {
   return (
     <div className="left -ml-full flex min-h-screen flex-1 flex-col justify-center border-s bg-neutral-200 p-10 pl-full pt-32">
+      {children}
       <div className="note w-full rounded-lg bg-white p-10">
         <div className="text-3xl font-bold">{note.code?.split(' ')[0]}</div>
         <div className="text-xl font-bold">

@@ -1,10 +1,9 @@
-// src/app/components/EditableEmail.js
+// src/app/components/Editor.js
 
-import { Editor } from '@tinymce/tinymce-react'
+import { Editor as TinyMCE } from '@tinymce/tinymce-react'
 import { useState, useEffect } from 'react'
-import RefreshButton from './RefreshButton'
 
-const EditableEmail = ({ email, emailStatus, editorRef, children, onRefresh }) => {
+const Editor = ({ email, emailStatus, editorRef, children, onRefresh }) => {
   const [editorReady, setEditorReady] = useState(false)
 
   const autoResizeEditor = () => {
@@ -61,7 +60,7 @@ const EditableEmail = ({ email, emailStatus, editorRef, children, onRefresh }) =
 
   return (
     <div className="relative mb-4 mt-2.5 flex flex-col">
-      <Editor
+      <TinyMCE
         tinymceScriptSrc="/api/tinymce/tinymce.min.js"
         onInit={(evt, editor) => {
           editorRef.current = editor
@@ -91,4 +90,4 @@ const EditableEmail = ({ email, emailStatus, editorRef, children, onRefresh }) =
   )
 }
 
-export default EditableEmail
+export default Editor
