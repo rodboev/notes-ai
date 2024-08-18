@@ -37,40 +37,39 @@ export const useEmails = (notes) => {
       eventSource.onmessage = (event) => {
         const { chunk, status } = JSON.parse(event.data)
 
-        switch (status) {
-          case 'stored':
-            allEmails = [...allEmails, ...chunk.emails]
-            queryClient.setQueryData(['emails'], allEmails)
-            break
-          case 'streaming':
-            if (chunk.chunk) {
-              // Partial streaming data
-              streamingJson += chunk.chunk
+        if (status === 'stored' || status === 'streaming') {
+          try {
+            const parsedChunk = typeof chunk === 'string' ? JSON.parse(chunk) : chunk
+
+            if (status === 'stored') {
+              allEmails = [...allEmails, ...parsedChunk.emails]
+              queryClient.setQueryData(['emails'], allEmails)
+            } else {
+              // Handle streaming data
+              streamingJson += chunk
               try {
                 const partialEmails = parse(streamingJson).emails
                 if (partialEmails) {
-                  allEmails = [...allEmails, ...partialEmails]
+                  const newEmails = partialEmails.filter(
+                    (email) => !allEmails.some((e) => e.fingerprint === email.fingerprint),
+                  )
+                  allEmails = [...allEmails, ...newEmails]
                   queryClient.setQueryData(['emails'], allEmails)
                   streamingJson = '' // Reset streaming JSON after successful parse
                 }
               } catch (error) {
                 // Parsing error, continue accumulating chunks
               }
-            } else if (chunk.emails) {
-              // Complete streaming data for a chunk
-              allEmails = [...allEmails, ...chunk.emails]
-              queryClient.setQueryData(['emails'], allEmails)
-              streamingJson = '' // Reset streaming JSON
             }
-            break
-          case 'complete':
-            eventSource.close()
-            resolve(allEmails)
-            break
-          case 'error':
-            eventSource.close()
-            reject(new Error(chunk.error || 'Unknown error'))
-            break
+          } catch (error) {
+            console.error(`Error parsing ${status} emails:`, error)
+          }
+        } else if (status === 'complete') {
+          eventSource.close()
+          resolve(allEmails)
+        } else if (status === 'error') {
+          eventSource.close()
+          reject(new Error(chunk.error || 'Unknown error'))
         }
       }
 

@@ -124,8 +124,18 @@ export async function GET(req) {
       let sentFingerprints = new Set()
 
       function sendData(data, status) {
-        const payload = JSON.stringify({ chunk: data, status })
-        controller.enqueue(encoder.encode(`data: ${payload}\n\n`))
+        let payload
+        if (status === 'stored' || status === 'streaming') {
+          // Only stringify if the data isn't already a string
+          payload = {
+            chunk: typeof data === 'string' ? data : JSON.stringify(data),
+            status,
+          }
+        } else {
+          // For 'complete' and 'error' statuses
+          payload = { chunk: data, status }
+        }
+        controller.enqueue(encoder.encode(`data: ${JSON.stringify(payload)}\n\n`))
         dataSent = true
       }
 
@@ -139,7 +149,7 @@ export async function GET(req) {
         const systemContent = expand(prompts.system.current || prompts.system.default, prompts)
         const userContent = prompts.user + JSON.stringify(chunk)
 
-        console.log(`${timestamp()} userContent`, userContent)
+        // console.log(`${timestamp()} userContent`, userContent)
         const messages = [
           { role: 'system', content: systemContent },
           { role: 'user', content: userContent },
@@ -167,6 +177,9 @@ export async function GET(req) {
           if (!status) {
             // Streaming response
             emailsJson += chunk
+            console.log(`-------------------------------`)
+            console.log(`[1] sendData(${chunk}, 'streaming')`)
+            console.log(`-------------------------------`)
             sendData(chunk, 'streaming')
           } else if (status === 'stop') {
             // Full response end of this streaming chunk
@@ -175,7 +188,7 @@ export async function GET(req) {
               (email) => !sentFingerprints.has(email.fingerprint),
             )
             if (uniqueNewEmails.length > 0) {
-              sendData({ emails: uniqueNewEmails }, 'streaming')
+              // sendData({ emails: uniqueNewEmails }, 'streaming')
               uniqueNewEmails.forEach((email) => sentFingerprints.add(email.fingerprint))
             }
             return emails
@@ -211,10 +224,8 @@ export async function GET(req) {
             throw new Error(`Failed to generate email for fingerprint: ${fingerprint}`)
           }
         } else if (requestedFingerprints.length > 0) {
-          console.log('requestedFingerprints', requestedFingerprints)
           // Filter out empty strings from requestedFingerprints
           const validRequestedFingerprints = requestedFingerprints.filter((fp) => fp.trim() !== '')
-          console.log('validRequestedFingerprints', validRequestedFingerprints)
 
           // Send stored emails that match the request
           const storedEmailsToSend = storedEmails.filter((email) =>
@@ -226,6 +237,9 @@ export async function GET(req) {
               (email) => !sentFingerprints.has(email.fingerprint),
             )
             if (uniqueStoredEmails.length > 0) {
+              console.log(`-------------------------------`)
+              console.log(`[2] sendData({ emails: ${uniqueStoredEmails} }, 'stored')`)
+              console.log(`-------------------------------`)
               sendData({ emails: uniqueStoredEmails }, 'stored')
               uniqueStoredEmails.forEach((email) => sentFingerprints.add(email.fingerprint))
             }
@@ -233,7 +247,11 @@ export async function GET(req) {
 
           // Determine which fingerprints need to be fetched
           const fingerprintsToFetch = validRequestedFingerprints.filter((fp) => !emailCache[fp])
-          console.log('fingerprintsToFetch', fingerprintsToFetch)
+
+          // Debug logging
+          // console.log('requestedFingerprints', requestedFingerprints)
+          // console.log('validRequestedFingerprints', validRequestedFingerprints)
+          // console.log('fingerprintsToFetch', fingerprintsToFetch)
 
           if (fingerprintsToFetch.length > 0) {
             const response = await fetch(

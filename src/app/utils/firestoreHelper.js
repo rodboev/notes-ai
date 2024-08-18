@@ -13,6 +13,7 @@ const resetQuotaExceededLog = () => {
 setInterval(resetQuotaExceededLog, QUOTA_RESET_INTERVAL)
 
 const handleFirestoreError = (error) => {
+  return null
   if (error.code === 'resource-exhausted' && !quotaExceededLogged) {
     console.error('Firestore quota exceeded. Operations will be paused.')
     quotaExceededLogged = true
@@ -23,6 +24,7 @@ const handleFirestoreError = (error) => {
 }
 
 export const firestoreBatchWrite = async (operations) => {
+  return null
   try {
     const batch = writeBatch(firestore)
     operations.forEach((op) => {
@@ -42,19 +44,18 @@ export const firestoreBatchWrite = async (operations) => {
 }
 
 export const firestoreGetDoc = async (collectionName, docId) => {
-  /*
-	try {
+  return null
+  try {
     const docRef = doc(firestore, collectionName, docId)
     const docSnap = await getDoc(docRef)
     return docSnap.exists() ? docSnap.data() : null
   } catch (error) {
     handleFirestoreError(error)
   }
-	*/
-  return null
 }
 
 export const firestoreSetDoc = async (collectionName, docId, data, options = {}) => {
+  return null
   try {
     const docRef = doc(firestore, collectionName, docId)
     await setDoc(docRef, data, options)
