@@ -191,36 +191,52 @@ async function getSavedNotes(cacheKey) {
   return null
 }
 
-async function getNoteByFingerprint(fingerprint) {
+async function getNotesByFingerprints(fingerprints) {
+  if (!Array.isArray(fingerprints)) {
+    fingerprints = [fingerprints]
+  }
+
+  let foundNotes = []
+
   // Search in disk cache first
   const diskCaches = (await readFromDisk('notesCacheIndex.json')) || {}
   for (const cacheKey of Object.keys(diskCaches)) {
     const diskData = await readFromDisk(`${cacheKey}.json`)
     if (diskData && diskData.notes) {
-      const foundNote = diskData.notes.find((note) => note.fingerprint === fingerprint)
-      if (foundNote) {
-        console.log('Note found in disk cache')
-        return foundNote
+      const matchedNotes = diskData.notes.filter((note) => fingerprints.includes(note.fingerprint))
+      foundNotes = [...foundNotes, ...matchedNotes]
+      if (foundNotes.length === fingerprints.length) {
+        console.log('All notes found in disk cache')
+        return foundNotes
       }
     }
   }
 
-  // If not found in disk cache, search in Firestore
+  // If not all found in disk cache, search in Firestore
   try {
     const cacheSnapshots = await firestoreGetDoc('notesCache')
     for (const cacheKey in cacheSnapshots) {
-      const noteData = await firestoreGetDoc('notesCache', cacheKey, 'notes', fingerprint)
-      if (noteData) {
-        console.log(`${timestamp()} Note found in Firestore`)
-        return noteData
+      const remainingFingerprints = fingerprints.filter(
+        (fp) => !foundNotes.some((note) => note.fingerprint === fp),
+      )
+      for (const fingerprint of remainingFingerprints) {
+        const noteData = await firestoreGetDoc('notesCache', cacheKey, 'notes', fingerprint)
+        if (noteData) {
+          foundNotes.push(noteData)
+          console.log(`Note ${fingerprint} found in Firestore`)
+        }
+      }
+      if (foundNotes.length === fingerprints.length) {
+        console.log('All notes found in Firestore')
+        return foundNotes
       }
     }
   } catch (error) {
-    console.error(`${timestamp()} Error searching for note in Firestore:`, error.message)
+    console.error(`${timestamp()} Error searching for notes in Firestore:`, error.message)
   }
 
-  console.log(`${timestamp()} Note not found in cache or Firestore`)
-  return null
+  console.log(`${timestamp()} ${foundNotes.length} out of ${fingerprints.length} notes found`)
+  return foundNotes
 }
 
 export async function GET(request) {
@@ -228,15 +244,17 @@ export async function GET(request) {
   let startDate = searchParams.get('startDate')
   let endDate = searchParams.get('endDate')
   let fingerprint = searchParams.get('fingerprint')
+  let fingerprints = searchParams.get('fingerprints')
 
-  if (fingerprint) {
-    const note = await getNoteByFingerprint(fingerprint)
-    if (note) {
-      return NextResponse.json([note])
+  if (fingerprint || fingerprints) {
+    const fingerprintsToFetch = fingerprints ? fingerprints.split(',') : [fingerprint]
+    const notes = await getNotesByFingerprints(fingerprintsToFetch)
+    if (notes.length > 0) {
+      return NextResponse.json(notes)
     } else {
       return NextResponse.json(
         {
-          error: 'Note not found',
+          error: 'Notes not found',
         },
         { status: 404 },
       )

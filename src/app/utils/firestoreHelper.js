@@ -42,13 +42,16 @@ export const firestoreBatchWrite = async (operations) => {
 }
 
 export const firestoreGetDoc = async (collectionName, docId) => {
-  try {
+  /*
+	try {
     const docRef = doc(firestore, collectionName, docId)
     const docSnap = await getDoc(docRef)
     return docSnap.exists() ? docSnap.data() : null
   } catch (error) {
     handleFirestoreError(error)
   }
+	*/
+  return null
 }
 
 export const firestoreSetDoc = async (collectionName, docId, data, options = {}) => {

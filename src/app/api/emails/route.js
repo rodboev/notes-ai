@@ -81,20 +81,6 @@ async function saveEmails(emails) {
   }
 }
 
-async function deletePreviousEmails() {
-  try {
-    // Delete from Firestore
-    await firestoreSetDoc('emails', 'allEmails', { emails: [] })
-
-    // Delete from disk
-    await deleteFromDisk('emails.json')
-
-    console.log(`${timestamp()} Emails deleted from Firestore and disk`)
-  } catch (error) {
-    console.warn(`${timestamp()} Error deleting emails:`, error)
-  }
-}
-
 function expand(template, variables) {
   if (typeof template !== 'string') {
     console.warn('Template is not a string:', template)
@@ -114,7 +100,8 @@ export async function GET(req) {
   const startDate = url.searchParams.get('startDate')
   const endDate = url.searchParams.get('endDate')
   const fingerprint = url.searchParams.get('fingerprint')
-  const fingerprints = url.searchParams.get('fingerprints')?.split(',') || []
+  const fingerprints = url.searchParams.get('fingerprints')
+  const requestedFingerprints = fingerprints?.split(',') || []
 
   console.log(
     `${timestamp()} GET /api/emails request params: startDate=${startDate}, endDate=${endDate}, fingerprint=${fingerprint}, fingerprints=${fingerprints}`,
@@ -133,19 +120,13 @@ export async function GET(req) {
   const readableStream = new ReadableStream({
     async start(controller) {
       let responseComplete = false
+      let dataSent = false
+      let sentFingerprints = new Set()
 
       function sendData(data, status) {
-        // console.log(`${timestamp()} Sending data with status: ${status}`)
-        controller.enqueue(
-          encoder.encode(
-            `data: { "chunk": ${JSON.stringify(data)}, "status": ${JSON.stringify(status)} }\n\n`,
-          ),
-        )
-
-        if (responseComplete) {
-          console.log(`${timestamp()} Response complete, sending complete message`)
-          controller.enqueue(encoder.encode(`data: { "status": "complete" }\n\n`))
-        }
+        const payload = JSON.stringify({ chunk: data, status })
+        controller.enqueue(encoder.encode(`data: ${payload}\n\n`))
+        dataSent = true
       }
 
       async function streamResponse(chunk) {
@@ -158,6 +139,7 @@ export async function GET(req) {
         const systemContent = expand(prompts.system.current || prompts.system.default, prompts)
         const userContent = prompts.user + JSON.stringify(chunk)
 
+        console.log(`${timestamp()} userContent`, userContent)
         const messages = [
           { role: 'system', content: systemContent },
           { role: 'user', content: userContent },
@@ -174,10 +156,10 @@ export async function GET(req) {
           })
         } catch (error) {
           console.warn(`${timestamp()} OpenAI API error in streamResponse:`, String(error))
+          throw error
         }
 
         let emailsJson = ''
-        let emailsToSave = []
 
         for await (const data of stream) {
           const chunk = data.choices[0].delta.content
@@ -185,29 +167,29 @@ export async function GET(req) {
           if (!status) {
             // Streaming response
             emailsJson += chunk
-            // console.log(`${timestamp()} sendData(chunk)`)
-            sendData(chunk, 'streaming-part')
+            sendData(chunk, 'streaming')
           } else if (status === 'stop') {
             // Full response end of this streaming chunk
             const emails = parse(emailsJson.trim()).emails || []
-            emailsToSave = [...emailsToSave, ...emails]
-            console.log(`${timestamp()} sendData('', 'stop')`)
-            sendData('', 'streaming-part-complete')
-          } else {
-            console.log(`${timestamp()} sendData('', status)`)
-            sendData('', status)
+            const uniqueNewEmails = emails.filter(
+              (email) => !sentFingerprints.has(email.fingerprint),
+            )
+            if (uniqueNewEmails.length > 0) {
+              sendData({ emails: uniqueNewEmails }, 'streaming')
+              uniqueNewEmails.forEach((email) => sentFingerprints.add(email.fingerprint))
+            }
+            return emails
           }
         }
-        return emailsToSave
       }
 
       try {
         console.log(
-          `${timestamp()} Processing request: fingerprint=${fingerprint}, stored emails: ${storedEmails.length}`,
+          `${timestamp()} Processing request: fingerprint=${fingerprint}, fingerprints=${fingerprints}, stored emails: ${storedEmails.length}`,
         )
 
         if (fingerprint) {
-          // Handle single note refresh
+          // Handle single note refresh (always stream)
           const response = await fetch(
             `http://localhost:${port}/api/notes?fingerprint=${fingerprint}`,
           )
@@ -217,97 +199,82 @@ export async function GET(req) {
             throw new Error(`Note not found for fingerprint: ${fingerprint}`)
           }
 
-          let email = emailCache[fingerprint]
+          // Force refresh the email
+          const [generatedEmail] = await streamResponse([note])
+          if (generatedEmail) {
+            // Update stored emails and cache
+            storedEmails = storedEmails.filter((e) => e.fingerprint !== fingerprint)
+            storedEmails.push(generatedEmail)
+            emailCache[fingerprint] = generatedEmail
+            await saveEmails(storedEmails)
+          } else {
+            throw new Error(`Failed to generate email for fingerprint: ${fingerprint}`)
+          }
+        } else if (requestedFingerprints.length > 0) {
+          console.log('requestedFingerprints', requestedFingerprints)
+          // Filter out empty strings from requestedFingerprints
+          const validRequestedFingerprints = requestedFingerprints.filter((fp) => fp.trim() !== '')
+          console.log('validRequestedFingerprints', validRequestedFingerprints)
 
-          if (!email || fingerprint) {
-            const [generatedEmail] = await streamResponse([note[0]])
-            if (generatedEmail) {
-              email = generatedEmail
-              // Update stored emails and cache
-              storedEmails = storedEmails.filter((e) => e.fingerprint !== fingerprint)
-              storedEmails.push(email)
-              emailCache[fingerprint] = email
-              await saveEmails(storedEmails)
+          // Send stored emails that match the request
+          const storedEmailsToSend = storedEmails.filter((email) =>
+            validRequestedFingerprints.includes(email.fingerprint),
+          )
+
+          if (storedEmailsToSend.length > 0) {
+            const uniqueStoredEmails = storedEmailsToSend.filter(
+              (email) => !sentFingerprints.has(email.fingerprint),
+            )
+            if (uniqueStoredEmails.length > 0) {
+              sendData({ emails: uniqueStoredEmails }, 'stored')
+              uniqueStoredEmails.forEach((email) => sentFingerprints.add(email.fingerprint))
             }
           }
 
-          if (email) {
-            console.log(`${timestamp()} sendData({ emails: [email] }, 'full')`)
-            sendData({ emails: [email] }, 'full')
+          // Determine which fingerprints need to be fetched
+          const fingerprintsToFetch = validRequestedFingerprints.filter((fp) => !emailCache[fp])
+          console.log('fingerprintsToFetch', fingerprintsToFetch)
+
+          if (fingerprintsToFetch.length > 0) {
+            const response = await fetch(
+              `http://localhost:${port}/api/notes?fingerprints=${fingerprintsToFetch.join(',')}`,
+            )
+            const notesToProcess = await response.json()
+
+            if (notesToProcess.length > 0) {
+              // Process all notes at once
+              const newEmails = await streamResponse(notesToProcess)
+              if (newEmails.length > 0) {
+                const uniqueNewEmails = newEmails.filter((email) => !emailCache[email.fingerprint])
+                storedEmails = [...storedEmails, ...uniqueNewEmails]
+                uniqueNewEmails.forEach((email) => {
+                  emailCache[email.fingerprint] = email
+                })
+              }
+
+              await saveEmails(storedEmails)
+            } else {
+              console.log(`${timestamp()} No new emails to generate`)
+            }
           } else {
-            throw new Error(`Failed to generate or retrieve email for fingerprint: ${fingerprint}`)
+            console.log(`${timestamp()} All requested emails are already cached`)
           }
         } else {
-          // Handle multiple emails
-          let notesToProcess = []
-          if (fingerprints.length > 0) {
-            const response = await fetch(
-              `http://localhost:${port}/api/notes?startDate=${startDate}&endDate=${endDate}`,
-            )
-            const allNotes = await response.json()
-            notesToProcess = allNotes.filter((note) => fingerprints.includes(note.fingerprint))
-          } else {
-            const response = await fetch(
-              `http://localhost:${port}/api/notes?startDate=${startDate}&endDate=${endDate}`,
-            )
-            notesToProcess = await response.json()
-          }
-
-          console.log(`${timestamp()} Fetched ${notesToProcess.length} notes to process`)
-
-          const noteChunks = chunkArray(notesToProcess, 10)
-          console.log(`${timestamp()} Created ${noteChunks.length} note chunks`)
-
-          let emailsToSave = []
-          let emailsToSend = []
-
-          for (const chunk of noteChunks) {
-            const chunkToProcess = chunk.filter((note) => !emailCache[note.fingerprint])
-
-            if (chunkToProcess.length > 0) {
-              const emailChunk = await streamResponse(chunkToProcess)
-              emailsToSave = [...emailsToSave, ...emailChunk]
-              console.log(`${timestamp()} Generated ${emailsToSave.length} new emails`)
-            }
-
-            chunk.forEach((note) => {
-              const email =
-                emailCache[note.fingerprint] ||
-                emailsToSave.find((e) => e.fingerprint === note.fingerprint)
-              if (email) {
-                emailsToSend.push(email)
-              }
-            })
-          }
-
-          // Send all prepared emails at once
-          console.log(`${timestamp()} // Send all prepared emails at once`)
-          console.log(`${timestamp()} sendData({ emails: emailsToSend }, 'full')`)
-          sendData({ emails: emailsToSend }, 'full')
-
-          if (emailsToSave.length > 0) {
-            // Merge new emails with existing ones, replacing any with the same fingerprint
-            const updatedEmails = [
-              ...storedEmails.filter(
-                (email) =>
-                  !emailsToSave.some((newEmail) => newEmail.fingerprint === email.fingerprint),
-              ),
-              ...emailsToSave,
-            ]
-            console.log(`${timestamp()} Merged emails, total count: ${updatedEmails.length}`)
-            await saveEmails(updatedEmails)
-          }
+          throw new Error('Invalid request parameters')
         }
 
-        console.log(`${timestamp()} responseComplete = true, sendData('', 'full')`)
+        console.log(`${timestamp()} responseComplete = true`)
         responseComplete = true
-        sendData('', 'complete')
-
-        console.log(`${timestamp()} Closing controller`)
-        controller.close()
+        sendData({}, 'complete')
       } catch (error) {
         console.error(`${timestamp()} Error processing emails:`, error)
         sendData({ error: error.message || 'Internal server error' }, 'error')
+      } finally {
+        if (!dataSent) {
+          // If no data was sent, send an empty 'complete' message
+          sendData({}, 'complete')
+        }
+        controller.close()
       }
     },
   })

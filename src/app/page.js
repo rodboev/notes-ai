@@ -3,6 +3,7 @@
 'use client'
 
 import { useState, useRef, useEffect } from 'react'
+import { useLocalStorage } from './hooks/useLocalStorage' // Import the hook
 import Nav from './components/Nav'
 import Note from './components/Note'
 import Email from './components/Email'
@@ -26,10 +27,12 @@ export default function Home() {
   const yesterday = new Date(today)
   yesterday.setDate(yesterday.getDate() - 1)
 
-  const [date, setDate] = useState({
+  const defaultDateRange = {
     startDate: yesterday.toISOString().split('T')[0],
     endDate: today.toISOString().split('T')[0],
-  })
+  }
+
+  const [date, setDate, syncDate] = useLocalStorage('notesDateRange', defaultDateRange)
 
   const [pairs, setPairs] = useState([])
 
@@ -70,11 +73,9 @@ export default function Home() {
     return <div>An error occurred: {notesError?.message || emailsError?.message}</div>
   }
 
-  /*
-  if (isLoadingNotes || isLoadingEmails) {
-    return <div>Loading...</div>
-  }
-	*/
+  useEffect(() => {
+    syncDate()
+  }, [])
 
   return (
     <div className="flex h-screen max-w-full snap-y snap-mandatory flex-col items-center overflow-y-scroll">
