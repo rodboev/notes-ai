@@ -61,8 +61,8 @@ export const useEmails = (notes) => {
           // Update the query data after each merge
           queryClient.setQueryData(['emails'], allEmails)
           setEmailsUpdateCounter((prev) => prev + 1) // Add this line
-          console.log('Updated setEmailsUpdateCounter')
-          console.log(`Updated emails query cache to ${allEmails.length} emails`)
+          // console.log('Updated setEmailsUpdateCounter')
+          // console.log(`Updated emails query cache to ${allEmails.length} emails`)
         } else if (status === 'complete') {
           eventSource.close()
           resolve(allEmails)
@@ -134,7 +134,7 @@ export const useSingleEmail = (fingerprint) => {
               return oldData
             })
             queryClient.setQueryData(['email', fingerprint], singleEmail)
-            console.log('Updated single email:', singleEmail)
+            // console.log('Updated single email:', singleEmail)
           }
         }
 

@@ -53,7 +53,7 @@ export default function Home() {
     const latestEmails = queryClient.getQueryData(['emails']) || emailsData
     if (notes && latestEmails && Array.isArray(notes) && Array.isArray(latestEmails)) {
       const newPairs = leftJoin(notes, latestEmails)
-      console.log('Updated pairs:', newPairs)
+      // console.log('Updated pairs:', newPairs)
       return newPairs
     }
     return []
