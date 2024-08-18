@@ -177,9 +177,11 @@ export async function GET(req) {
           if (!status) {
             // Streaming response
             emailsJson += chunk
-            console.log(`-------------------------------`)
+            /*
+						console.log(`-------------------------------`)
             console.log(`[1] sendData(${chunk}, 'streaming')`)
             console.log(`-------------------------------`)
+						*/
             sendData(chunk, 'streaming')
           } else if (status === 'stop') {
             // Full response end of this streaming chunk
@@ -237,9 +239,11 @@ export async function GET(req) {
               (email) => !sentFingerprints.has(email.fingerprint),
             )
             if (uniqueStoredEmails.length > 0) {
-              console.log(`-------------------------------`)
+              /*
+							console.log(`-------------------------------`)
               console.log(`[2] sendData({ emails: ${uniqueStoredEmails} }, 'stored')`)
               console.log(`-------------------------------`)
+							*/
               sendData({ emails: uniqueStoredEmails }, 'stored')
               uniqueStoredEmails.forEach((email) => sentFingerprints.add(email.fingerprint))
             }

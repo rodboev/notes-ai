@@ -2,8 +2,7 @@
 
 'use client'
 
-import { useState, useRef, useEffect } from 'react'
-import { useLocalStorage } from './hooks/useLocalStorage' // Import the hook
+import { useState, useRef, useEffect, useMemo } from 'react'
 import Nav from './components/Nav'
 import Note from './components/Note'
 import Email from './components/Email'
@@ -11,6 +10,8 @@ import Datepicker from 'react-tailwindcss-datepicker'
 import { useNotes } from './hooks/useNotes'
 import { useEmails } from './hooks/useEmails'
 import { useEmailStatuses } from './hooks/useEmailStatus'
+import { useLocalStorage } from './hooks/useLocalStorage.js' // Import the hook
+import { useQueryClient } from '@tanstack/react-query'
 
 const leftJoin = (notes, emails) => {
   if (!notes || !emails) return []
@@ -21,6 +22,7 @@ const leftJoin = (notes, emails) => {
 }
 
 export default function Home() {
+  const queryClient = useQueryClient()
   const pairRefs = useRef([])
 
   const today = new Date()
@@ -34,30 +36,28 @@ export default function Home() {
 
   const [date, setDate, syncDate] = useLocalStorage('notesDateRange', defaultDateRange)
 
-  const [pairs, setPairs] = useState([])
-
   const {
     data: notes,
     isLoading: isLoadingNotes,
     error: notesError,
   } = useNotes(date.startDate, date.endDate)
 
-  const { data: emails, isLoading: isLoadingEmails, error: emailsError } = useEmails(notes)
-
-  const fingerprints = notes?.map((note) => note.fingerprint) || []
   const {
-    data: emailStatuses,
-    isLoading: isLoadingStatuses,
-    updateStatus,
-  } = useEmailStatuses(fingerprints)
+    data: emailsData,
+    isLoading: isLoadingEmails,
+    error: emailsError,
+    emailsUpdateCounter,
+  } = useEmails(notes)
 
-  useEffect(() => {
-    if (notes && emails && Array.isArray(notes) && Array.isArray(emails)) {
-      const newPairs = leftJoin(notes, emails)
-      setPairs(newPairs)
+  const pairs = useMemo(() => {
+    const latestEmails = queryClient.getQueryData(['emails']) || emailsData
+    if (notes && latestEmails && Array.isArray(notes) && Array.isArray(latestEmails)) {
+      const newPairs = leftJoin(notes, latestEmails)
       console.log('Updated pairs:', newPairs)
+      return newPairs
     }
-  }, [notes, emails])
+    return []
+  }, [notes, emailsData, emailsUpdateCounter]) // Add emailsUpdateCounter to dependencies
 
   const handleDateChange = (newDate) => {
     console.log('newDate:', newDate)
@@ -67,6 +67,13 @@ export default function Home() {
   const scrollToNextPair = (index) => {
     pairRefs.current[index]?.scrollIntoView({ behavior: 'smooth' })
   }
+
+  const fingerprints = notes?.map((note) => note.fingerprint) || []
+  const {
+    data: emailStatuses,
+    isLoading: isLoadingStatuses,
+    updateStatus,
+  } = useEmailStatuses(fingerprints)
 
   if (notesError || emailsError) {
     console.error('Error:', notesError || emailsError)

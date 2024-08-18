@@ -3,7 +3,7 @@
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { parse } from 'best-effort-json-parser'
 import { timestamp } from '../utils/timestamp'
-import { useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 
 const merge = (arrayList1, arrayList2) => [
   ...[]
@@ -21,6 +21,7 @@ const createEventSource = (url, onMessage, onError) => {
 
 export const useEmails = (notes) => {
   const queryClient = useQueryClient()
+  const [emailsUpdateCounter, setEmailsUpdateCounter] = useState(0)
 
   const fetchEmails = useCallback(async () => {
     if (!notes || notes.length === 0) return []
@@ -38,32 +39,30 @@ export const useEmails = (notes) => {
         const { chunk, status } = JSON.parse(event.data)
 
         if (status === 'stored' || status === 'streaming') {
-          try {
-            const parsedChunk = typeof chunk === 'string' ? JSON.parse(chunk) : chunk
-
-            if (status === 'stored') {
-              allEmails = [...allEmails, ...parsedChunk.emails]
-              queryClient.setQueryData(['emails'], allEmails)
-            } else {
-              // Handle streaming data
-              streamingJson += chunk
-              try {
-                const partialEmails = parse(streamingJson).emails
-                if (partialEmails) {
-                  const newEmails = partialEmails.filter(
-                    (email) => !allEmails.some((e) => e.fingerprint === email.fingerprint),
-                  )
-                  allEmails = [...allEmails, ...newEmails]
-                  queryClient.setQueryData(['emails'], allEmails)
-                  streamingJson = '' // Reset streaming JSON after successful parse
-                }
-              } catch (error) {
-                // Parsing error, continue accumulating chunks
-              }
+          if (status === 'stored') {
+            const parsedChunk = parse(chunk)
+            // console.log('parsedChunk', parsedChunk)
+            allEmails = merge(allEmails, parsedChunk?.emails || [])
+          } else {
+            // Handle streaming data
+            streamingJson += chunk
+            const parsedJson = parse(streamingJson.trim())
+            try {
+              // console.log('parsedJson', parsedJson)
+              const validParsedEmails = parsedJson?.emails?.filter(
+                (email) => email.fingerprint && email.fingerprint.length === 40,
+              )
+              allEmails = merge(allEmails, validParsedEmails || [])
+            } catch (error) {
+              console.error('Error processing streaming data:', error)
             }
-          } catch (error) {
-            console.error(`Error parsing ${status} emails:`, error)
           }
+
+          // Update the query data after each merge
+          queryClient.setQueryData(['emails'], allEmails)
+          setEmailsUpdateCounter((prev) => prev + 1) // Add this line
+          console.log('Updated setEmailsUpdateCounter')
+          console.log(`Updated emails query cache to ${allEmails.length} emails`)
         } else if (status === 'complete') {
           eventSource.close()
           resolve(allEmails)
@@ -86,7 +85,7 @@ export const useEmails = (notes) => {
     enabled: !!notes && notes.length > 0,
   })
 
-  return query
+  return { ...query, emailsUpdateCounter }
 }
 
 export const useSingleEmail = (fingerprint) => {

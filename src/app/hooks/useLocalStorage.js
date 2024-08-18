@@ -1,4 +1,4 @@
-// src/app/utils/useLocalStorage.js
+// src/app/hooks/useLocalStorage.js
 
 import { useState, useEffect } from 'react'
 
