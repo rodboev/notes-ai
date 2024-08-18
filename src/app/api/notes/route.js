@@ -110,8 +110,9 @@ async function loadNotes() {
   }
 
   console.log(`${timestamp()} Notes not on disk or empty, loading from Firestore`)
-  const notesDoc = await firestoreGetDoc('notes', 'allNotes')
-  const notes = notesDoc ? notesDoc.notes : []
+  const notesCollection = collection(firestore, 'notes')
+  const snapshot = await getDocs(notesCollection)
+  const notes = snapshot.docs.map((doc) => doc.data())
   console.log(`${timestamp()} Loaded ${notes.length} notes from Firestore`)
 
   if (notes.length > 0) {
@@ -139,9 +140,6 @@ async function saveNotes(notes) {
       data: note,
     }))
     await firestoreBatchWrite(operations)
-
-    // Also update the allNotes document
-    await firestoreSetDoc('notes', 'allNotes', { notes })
 
     console.log(`${timestamp()} Saved ${notes.length} notes to Firestore`)
   } else {

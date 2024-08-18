@@ -38,31 +38,26 @@ export const useEmails = (notes) => {
       eventSource.onmessage = (event) => {
         const { chunk, status } = JSON.parse(event.data)
 
-        if (status === 'stored' || status === 'streaming') {
-          if (status === 'stored') {
-            const parsedChunk = parse(chunk)
-            // console.log('parsedChunk', parsedChunk)
-            allEmails = merge(allEmails, parsedChunk?.emails || [])
-          } else {
-            // Handle streaming data
-            streamingJson += chunk
-            const parsedJson = parse(streamingJson.trim())
-            try {
-              // console.log('parsedJson', parsedJson)
-              const validParsedEmails = parsedJson?.emails?.filter(
-                (email) => email.fingerprint && email.fingerprint.length === 40,
-              )
-              allEmails = merge(allEmails, validParsedEmails || [])
-            } catch (error) {
-              console.error('Error processing streaming data:', error)
-            }
-          }
-
+        if (status === 'stored') {
+          const parsedChunk = parse(chunk)
+          // console.log('parsedChunk', parsedChunk)
+          allEmails = merge(allEmails, parsedChunk?.emails || [])
+        } else if (status === 'streaming') {
+          // Handle streaming data
+          streamingJson += chunk
+          const parsedJson = parse(streamingJson.trim())
+          const validParsedEmails = parsedJson?.emails?.filter(
+            (email) => email.fingerprint && email.fingerprint.length === 40,
+          )
+          allEmails = merge(allEmails, validParsedEmails || [])
           // Update the query data after each merge
           queryClient.setQueryData(['emails'], allEmails)
           setEmailsUpdateCounter((prev) => prev + 1) // Add this line
           // console.log('Updated setEmailsUpdateCounter')
           // console.log(`Updated emails query cache to ${allEmails.length} emails`)
+        } else if (status === 'streaming-object-complete') {
+          // We are clearing the previous streamed object here so adjacent objects in the response can be parsed separately
+          streamingJson = ''
         } else if (status === 'complete') {
           eventSource.close()
           resolve(allEmails)
@@ -95,13 +90,15 @@ export const useSingleEmail = (fingerprint) => {
     if (!fingerprint) return null
 
     const url = `/api/emails?fingerprint=${fingerprint}`
-    let emailsJson = ''
+    let streamingJson = ''
 
     return new Promise((resolve, reject) => {
       const onMessage = (event) => {
         const data = parse(event.data)
         const chunk = data?.chunk
         const status = data?.status
+
+        console.log(status)
 
         if (chunk && chunk.error) {
           console.warn(`${timestamp()} Error from server:`, chunk.error)
@@ -113,12 +110,8 @@ export const useSingleEmail = (fingerprint) => {
         if (typeof chunk === 'object') {
           newEmails = chunk?.emails
         } else if (typeof chunk === 'string') {
-          emailsJson += chunk
-          try {
-            newEmails = parse(emailsJson)?.emails
-          } catch (error) {
-            console.error('Error parsing emails:', error)
-          }
+          streamingJson += chunk
+          newEmails = parse(streamingJson)?.emails
         }
 
         if (newEmails?.length > 0) {
@@ -138,9 +131,10 @@ export const useSingleEmail = (fingerprint) => {
           }
         }
 
-        if (status === 'streaming-part-complete') {
-          console.log('streaming-part-complete for single email')
-          emailsJson = ''
+        if (status === 'streaming-object-complete') {
+          console.log('streaming-object-complete for single email')
+          // We are clearing the previous streamed object here so adjacent objects in the response can be parsed separately
+          streamingJson = ''
         }
 
         if (status === 'complete') {

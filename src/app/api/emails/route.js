@@ -6,14 +6,13 @@ import { firestore } from '../../../firebase.js'
 import { readFromDisk, writeToDisk, deleteFromDisk } from '../../utils/diskStorage'
 import { collection, doc, writeBatch, getDocs } from 'firebase/firestore'
 import { timestamp } from '../../utils/timestamp'
-import dotenv from 'dotenv'
 import { getPrompts } from '../prompts/route.js'
 import { firestoreGetDoc, firestoreBatchWrite, firestoreSetDoc } from '../../utils/firestoreHelper'
 
-dotenv.config()
 const isProduction = process.env.NEXT_PUBLIC_NODE_ENV === 'production'
 const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY })
 const port = process.env.PORT
+const NOTES_PER_GROUP = !isProduction ? 3 : 10
 
 const chunkArray = (array, chunkSize) => {
   const chunks = []
@@ -24,25 +23,20 @@ const chunkArray = (array, chunkSize) => {
 }
 
 async function loadEmails() {
-  try {
-    const diskEmails = await readFromDisk('emails.json')
-    if (diskEmails) {
-      console.log(`${timestamp()} Loaded ${diskEmails.length} emails from disk`)
-      return diskEmails
-    }
-
-    console.log(`${timestamp()} Emails not on disk, loading from Firestore`)
-    const emailsCollection = collection(firestore, 'emails')
-    const snapshot = await firestoreGetDoc('emails', 'allEmails')
-    const emails = snapshot ? snapshot.emails : []
-    console.log(`${timestamp()} Loaded ${emails.length} emails from Firestore`)
-    await writeToDisk('emails.json', emails)
-    console.log(`${timestamp()} Saved ${emails.length} emails to disk`)
-    return emails
-  } catch (error) {
-    console.warn(`${timestamp()} Error loading emails:`, error)
-    return []
+  const diskEmails = await readFromDisk('emails.json')
+  if (diskEmails) {
+    console.log(`${timestamp()} Loaded ${diskEmails.length} emails from disk`)
+    return diskEmails
   }
+
+  console.log(`${timestamp()} Emails not on disk, loading from Firestore`)
+  const emailsCollection = collection(firestore, 'emails')
+  const snapshot = await getDocs(emailsCollection)
+  const emails = snapshot.docs.map((doc) => doc.data())
+  console.log(`${timestamp()} Loaded ${emails.length} emails from Firestore`)
+  await writeToDisk('emails.json', emails)
+  console.log(`${timestamp()} Saved ${emails.length} emails to disk`)
+  return emails
 }
 
 async function saveEmails(emails) {
@@ -53,13 +47,18 @@ async function saveEmails(emails) {
   const hasChanges = JSON.stringify(diskEmails) !== JSON.stringify(emails)
 
   if (hasChanges) {
-    // Save to disk using the helper function
+    // Save to disk
     await writeToDisk('emails.json', emails)
     console.log(`${timestamp()} Saved ${emails.length} emails to disk`)
 
-    // Save to Firestore using the helper function
+    // Save to Firestore
     console.log(`${timestamp()} Changes detected in emails. Triggering Firestore write`)
-    await firestoreSetDoc('emails', 'allEmails', { emails })
+    const operations = emails.map((email) => ({
+      type: 'set',
+      ref: doc(firestore, 'emails', email.fingerprint),
+      data: email,
+    }))
+    await firestoreBatchWrite(operations)
     console.log(`${timestamp()} Saved ${emails.length} emails to Firestore`)
   } else {
     console.log(`${timestamp()} No changes detected, skipping save operation`)
@@ -142,7 +141,7 @@ export async function GET(req) {
         let stream
         try {
           stream = await openai.chat.completions.create({
-            model: isProduction ? 'gpt-4o' : 'gpt-4o-mini',
+            model: isProduction ? 'gpt-4o-2024-08-06' : 'gpt-4o-mini-2024-07-18',
             stream: true,
             response_format: { type: 'json_object' },
             messages,
@@ -161,22 +160,12 @@ export async function GET(req) {
           if (!status) {
             // Streaming response
             emailsJson += chunk
-            /*
-						console.log(`-------------------------------`)
-            console.log(`[1] sendData(${chunk}, 'streaming')`)
-            console.log(`-------------------------------`)
-						*/
             sendData(chunk, 'streaming')
           } else if (status === 'stop') {
             // Full response end of this streaming chunk
+            // The status here tells the front-end to stop concatenating emailsJson, so it can parse streaming objects separately
+            sendData('', 'streaming-object-complete')
             const emails = parse(emailsJson.trim()).emails || []
-            const uniqueNewEmails = emails.filter(
-              (email) => !sentFingerprints.has(email.fingerprint),
-            )
-            if (uniqueNewEmails.length > 0) {
-              // sendData({ emails: uniqueNewEmails }, 'streaming')
-              uniqueNewEmails.forEach((email) => sentFingerprints.add(email.fingerprint))
-            }
             return emails
           }
         }
@@ -219,11 +208,6 @@ export async function GET(req) {
               (email) => !sentFingerprints.has(email.fingerprint),
             )
             if (uniqueStoredEmails.length > 0) {
-              /*
-							console.log(`-------------------------------`)
-              console.log(`[2] sendData({ emails: ${uniqueStoredEmails} }, 'stored')`)
-              console.log(`-------------------------------`)
-							*/
               sendData({ emails: uniqueStoredEmails }, 'stored')
               uniqueStoredEmails.forEach((email) => sentFingerprints.add(email.fingerprint))
             }
@@ -244,26 +228,29 @@ export async function GET(req) {
             const notesToProcess = await response.json()
             console.log(`${timestamp()} Fetched ${notesToProcess.length} notes to process`)
 
-            if (notesToProcess.length > 0) {
-              // Process all notes at once
-              const newEmails = await streamResponse(notesToProcess)
-              if (newEmails.length > 0) {
-                const uniqueNewEmails = newEmails.filter((email) => !emailCache[email.fingerprint])
-                storedEmails = [...storedEmails, ...uniqueNewEmails]
-                uniqueNewEmails.forEach((email) => {
-                  emailCache[email.fingerprint] = email
-                })
-              }
+            // Process notes in groups of 10 or less at a time
+            const noteGroups = chunkArray(notesToProcess, NOTES_PER_GROUP)
+            console.log(
+              `${timestamp()} Created ${noteGroups.length} note groups (${NOTES_PER_GROUP} notes each)`,
+            )
 
+            for (const [index, noteGroup] of noteGroups.entries()) {
+              console.log(`${timestamp()} Processing group ${index + 1} of ${noteGroups.length}`)
+              const newEmailGroup = await streamResponse(noteGroup)
+              storedEmails = [...storedEmails, ...newEmailGroup]
+              newEmailGroup.forEach((email) => {
+                emailCache[email.fingerprint] = email
+              })
+              console.log(
+                `${timestamp()} Generated ${newEmailGroup.length} new emails in group ${index + 1}`,
+              )
               await saveEmails(storedEmails)
-            } else {
-              console.log(`${timestamp()} No new emails to generate`)
             }
           } else {
-            console.log(`${timestamp()} All requested emails are already cached`)
+            console.log(`${timestamp()} No new emails to generate`)
           }
         } else {
-          throw new Error('Invalid request parameters')
+          console.log(`${timestamp()} All requested emails are already cached`)
         }
 
         console.log(`${timestamp()} responseComplete = true`)
