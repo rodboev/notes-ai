@@ -54,28 +54,14 @@ async function saveEmails(emails) {
   const hasChanges = JSON.stringify(diskEmails) !== JSON.stringify(emails)
 
   if (hasChanges) {
-    // Save to disk
-    try {
-      await writeToDisk('emails.json', emails)
-      console.log(`${timestamp()} Saved ${emails.length} emails to disk`)
-    } catch (error) {
-      console.warn(`${timestamp()} Error saving emails to disk:`, error)
-      return // Don't proceed to Firestore if disk save failed
-    }
+    // Save to disk using the helper function
+    await writeToDisk('emails.json', emails)
+    console.log(`${timestamp()} Saved ${emails.length} emails to disk`)
 
-    // Save to Firestore
-    if (!firestore) {
-      console.warn(`${timestamp()} Firestore is not initialized`)
-      return
-    }
-
+    // Save to Firestore using the helper function
     console.log(`${timestamp()} Changes detected in emails. Triggering Firestore write`)
-    try {
-      await firestoreSetDoc('emails', 'allEmails', { emails })
-      console.log(`${timestamp()} Saved ${emails.length} emails to Firestore`)
-    } catch (error) {
-      console.warn(`${timestamp()} Error saving emails to Firestore:`, error)
-    }
+    await firestoreSetDoc('emails', 'allEmails', { emails })
+    console.log(`${timestamp()} Saved ${emails.length} emails to Firestore`)
   } else {
     console.log(`${timestamp()} No changes detected, skipping save operation`)
   }
@@ -262,6 +248,7 @@ export async function GET(req) {
               `http://localhost:${port}/api/notes?fingerprints=${fingerprintsToFetch.join(',')}`,
             )
             const notesToProcess = await response.json()
+            console.log(`${timestamp()} Fetched ${notesToProcess.length} notes to process`)
 
             if (notesToProcess.length > 0) {
               // Process all notes at once
