@@ -196,12 +196,7 @@ export async function GET(request) {
     if (notes.length > 0) {
       return NextResponse.json(notes)
     } else {
-      return NextResponse.json(
-        {
-          error: 'Notes not found',
-        },
-        { status: 404 },
-      )
+      return NextResponse.json({ error: 'Notes not found' }, { status: 404 })
     }
   }
 
@@ -217,10 +212,18 @@ export async function GET(request) {
     console.log(`Using default dates: startDate=${startDate}, endDate=${endDate}`)
   }
 
+  console.log(`Fetching notes for date range: ${startDate} to ${endDate}`)
+
+  // Ensure endDate is exclusive
+  const queryEndDate = new Date(endDate)
+  queryEndDate.setDate(queryEndDate.getDate() + 1)
+  const formattedQueryEndDate = queryEndDate.toISOString().split('T')[0]
+
   // Try to get stored notes first
-  let notes = await loadNotes()
-  notes = notes.filter(
-    (note) => note.date >= startDate && note.date < endDate && note.code === '911 EMER',
+  let allNotes = await loadNotes()
+  let notes = allNotes.filter(
+    (note) =>
+      note.date >= startDate && note.date < formattedQueryEndDate && note.code === '911 EMER',
   )
 
   if (notes.length > 0) {
@@ -228,16 +231,11 @@ export async function GET(request) {
     return NextResponse.json(notes)
   }
 
-  // If not in cache, try to fetch from database
+  // If not in cache, fetch from database
   let pool
   try {
-    console.log('Attempting to connect to the database...')
+    console.log('Fetching notes from database...')
     pool = await sql.connect(config)
-    console.log('Connected successfully')
-
-    const queryEndDate = new Date(endDate)
-    queryEndDate.setDate(queryEndDate.getDate() + 1)
-    const formattedQueryEndDate = queryEndDate.toISOString().split('T')[0]
 
     notes = await getJoinedNotes(pool, startDate, formattedQueryEndDate)
 
@@ -251,30 +249,25 @@ export async function GET(request) {
       fingerprint: hash(note),
     }))
 
-    // Store the notes in disk and Firestore
-    await saveNotes(notes)
+    // Update the cache with new notes
+    allNotes = [...allNotes, ...notes]
+    await saveNotes(allNotes)
 
     console.log(`Returning ${notes.length} notes from database`)
     return NextResponse.json(notes)
   } catch (error) {
     console.error('Error fetching from database:', error)
-
     return NextResponse.json(
-      {
-        error: 'Internal Server Error',
-        details: error.message,
-      },
-      {
-        status: 500,
-      },
+      { error: 'Internal Server Error', details: error.message },
+      { status: 500 },
     )
   } finally {
     if (pool) {
       try {
         await pool.close()
-        console.log('Connection closed')
+        console.log('Database connection closed')
       } catch (closeErr) {
-        console.error('Error closing connection:', closeErr)
+        console.error('Error closing database connection:', closeErr)
       }
     }
   }

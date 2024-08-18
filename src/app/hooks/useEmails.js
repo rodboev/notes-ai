@@ -111,14 +111,6 @@ const createEventSourceHandler = ({
   })
 }
 
-const handleAbortError = (error) => {
-  if (error.name === 'AbortError') {
-    console.log('Request was aborted')
-    return []
-  }
-  throw error
-}
-
 export const useEmails = (notes) => {
   const queryClient = useQueryClient()
   const [emailsUpdateCounter, setEmailsUpdateCounter] = useState(0)
@@ -147,17 +139,13 @@ export const useEmails = (notes) => {
     const fingerprints = notes.map((note) => note.fingerprint).join(',')
     const url = `/api/emails?fingerprints=${fingerprints}`
 
-    try {
-      const emails = await createEventSourceHandler({
-        url,
-        queryClient,
-        setEmailsUpdateCounter,
-        signal: abortControllerRef.current.signal,
-      })
-      return emails
-    } catch (error) {
-      return handleAbortError(error)
-    }
+    const emails = await createEventSourceHandler({
+      url,
+      queryClient,
+      setEmailsUpdateCounter,
+      signal: abortControllerRef.current.signal,
+    })
+    return emails
   }, [notes, queryClient])
 
   const query = useQuery({
@@ -193,16 +181,12 @@ export const useSingleEmail = (fingerprint) => {
     abortControllerRef.current = new AbortController()
 
     const url = `/api/emails?fingerprint=${fingerprint}`
-    try {
-      return await createEventSourceHandler({
-        url,
-        queryClient,
-        fingerprint,
-        signal: abortControllerRef.current.signal,
-      })
-    } catch (error) {
-      return handleAbortError(error)
-    }
+    return await createEventSourceHandler({
+      url,
+      queryClient,
+      fingerprint,
+      signal: abortControllerRef.current.signal,
+    })
   }, [fingerprint, queryClient])
 
   const query = useQuery({
