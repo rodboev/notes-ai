@@ -2,8 +2,7 @@
 
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { parse } from 'best-effort-json-parser'
-import { timestamp } from '../utils/timestamp'
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useCallback } from 'react'
 
 const merge = (arrayList1, arrayList2) => [
   ...[]
@@ -12,11 +11,88 @@ const merge = (arrayList1, arrayList2) => [
     .values(),
 ]
 
-const createEventSource = (url, onMessage, onError) => {
-  const emailEvents = new EventSource(url)
-  emailEvents.addEventListener('message', onMessage)
-  emailEvents.addEventListener('error', onError)
-  return emailEvents
+const processServerMessage = ({
+  event,
+  streamingJson,
+  allEmails,
+  queryClient,
+  setEmailsUpdateCounter,
+  fingerprint,
+}) => {
+  const { chunk, status } = JSON.parse(event.data)
+
+  if (status === 'stored') {
+    // Handle full response
+    const parsedChunk = parse(chunk)
+    allEmails = merge(allEmails, parsedChunk?.emails || [])
+    if (fingerprint && parsedChunk?.emails?.length > 0) {
+      queryClient.setQueryData(['email', fingerprint], parsedChunk.emails[0])
+    }
+  } else if (status === 'streaming') {
+    // Handle streaming data
+    streamingJson += chunk
+    const parsedJson = parse(streamingJson.trim())
+    const validEmails =
+      parsedJson?.emails?.filter((email) => email.fingerprint?.length === 40) || []
+
+    if (fingerprint) {
+      if (validEmails.length > 0) {
+        queryClient.setQueryData(['email', fingerprint], validEmails[0])
+      }
+    } else {
+      allEmails = merge(allEmails, validEmails)
+      // Update the query data after each merge
+      queryClient.setQueryData(['emails'], allEmails)
+      setEmailsUpdateCounter?.((prev) => prev + 1)
+    }
+  } else if (status === 'streaming-object-complete') {
+    // We are clearing the previous streamed object here so adjacent objects in the response can be parsed separately
+    streamingJson = ''
+  } else if (status === 'complete' || status === 'error') {
+    return {
+      status,
+      allEmails,
+      streamingJson,
+      error: status === 'error' ? new Error(chunk.error || 'Unknown error') : null,
+    }
+  }
+
+  return { status, allEmails, streamingJson, error: null }
+}
+
+const createEventSourceHandler = ({ url, queryClient, setEmailsUpdateCounter, fingerprint }) => {
+  return new Promise((resolve, reject) => {
+    let allEmails = [],
+      streamingJson = ''
+    const eventSource = new EventSource(url)
+
+    const handleMessage = (event) => {
+      const result = processServerMessage({
+        event,
+        streamingJson,
+        allEmails,
+        queryClient,
+        setEmailsUpdateCounter,
+        fingerprint,
+      })
+      streamingJson = result.streamingJson
+      allEmails = result.allEmails
+
+      if (result.status === 'complete') {
+        eventSource.close()
+        resolve(fingerprint ? queryClient.getQueryData(['email', fingerprint]) : allEmails)
+      } else if (result.status === 'error') {
+        eventSource.close()
+        reject(result.error)
+      }
+    }
+
+    eventSource.onmessage = handleMessage
+    eventSource.onerror = (error) => {
+      eventSource.close()
+      reject(error)
+    }
+  })
 }
 
 export const useEmails = (notes) => {
@@ -24,60 +100,25 @@ export const useEmails = (notes) => {
   const [emailsUpdateCounter, setEmailsUpdateCounter] = useState(0)
 
   const fetchEmails = useCallback(async () => {
-    if (!notes || notes.length === 0) return []
+    if (!notes?.length) return []
 
-    const fingerprints = notes.map((note) => note.fingerprint)
-    const url = `/api/emails?fingerprints=${fingerprints.join(',')}`
-
-    return new Promise((resolve, reject) => {
-      let allEmails = []
-      let streamingJson = ''
-
-      const eventSource = new EventSource(url)
-
-      eventSource.onmessage = (event) => {
-        const { chunk, status } = JSON.parse(event.data)
-
-        if (status === 'stored') {
-          const parsedChunk = parse(chunk)
-          // console.log('parsedChunk', parsedChunk)
-          allEmails = merge(allEmails, parsedChunk?.emails || [])
-        } else if (status === 'streaming') {
-          // Handle streaming data
-          streamingJson += chunk
-          const parsedJson = parse(streamingJson.trim())
-          const validParsedEmails = parsedJson?.emails?.filter(
-            (email) => email.fingerprint && email.fingerprint.length === 40,
-          )
-          allEmails = merge(allEmails, validParsedEmails || [])
-          // Update the query data after each merge
-          queryClient.setQueryData(['emails'], allEmails)
-          setEmailsUpdateCounter((prev) => prev + 1) // Add this line
-          // console.log('Updated setEmailsUpdateCounter')
-          // console.log(`Updated emails query cache to ${allEmails.length} emails`)
-        } else if (status === 'streaming-object-complete') {
-          // We are clearing the previous streamed object here so adjacent objects in the response can be parsed separately
-          streamingJson = ''
-        } else if (status === 'complete') {
-          eventSource.close()
-          resolve(allEmails)
-        } else if (status === 'error') {
-          eventSource.close()
-          reject(new Error(chunk.error || 'Unknown error'))
-        }
-      }
-
-      eventSource.onerror = (error) => {
-        eventSource.close()
-        reject(error)
-      }
-    })
+    const url = `/api/emails?fingerprints=${notes.map((note) => note.fingerprint).join(',')}`
+    try {
+      return await createEventSourceHandler({
+        url,
+        queryClient,
+        setEmailsUpdateCounter,
+      })
+    } catch (error) {
+      console.error('Failed to fetch emails:', error)
+      throw error
+    }
   }, [notes, queryClient])
 
   const query = useQuery({
     queryKey: ['emails', notes],
     queryFn: fetchEmails,
-    enabled: !!notes && notes.length > 0,
+    enabled: !!notes?.length,
   })
 
   return { ...query, emailsUpdateCounter }
@@ -90,83 +131,23 @@ export const useSingleEmail = (fingerprint) => {
     if (!fingerprint) return null
 
     const url = `/api/emails?fingerprint=${fingerprint}`
-    let streamingJson = ''
-
-    return new Promise((resolve, reject) => {
-      const onMessage = (event) => {
-        const data = parse(event.data)
-        const chunk = data?.chunk
-        const status = data?.status
-
-        console.log(status)
-
-        if (chunk && chunk.error) {
-          console.warn(`${timestamp()} Error from server:`, chunk.error)
-          return
-        }
-
-        let newEmails = []
-
-        if (typeof chunk === 'object') {
-          newEmails = chunk?.emails
-        } else if (typeof chunk === 'string') {
-          streamingJson += chunk
-          newEmails = parse(streamingJson)?.emails
-        }
-
-        if (newEmails?.length > 0) {
-          const filteredEmails = newEmails.filter((email) => email?.fingerprint?.length === 40)
-          if (filteredEmails.length > 0) {
-            const singleEmail = filteredEmails[0]
-            queryClient.setQueryData(['emails'], (oldData) => {
-              if (Array.isArray(oldData)) {
-                return oldData.map((email) =>
-                  email.fingerprint === fingerprint ? singleEmail : email,
-                )
-              }
-              return oldData
-            })
-            queryClient.setQueryData(['email', fingerprint], singleEmail)
-            // console.log('Updated single email:', singleEmail)
-          }
-        }
-
-        if (status === 'streaming-object-complete') {
-          console.log('streaming-object-complete for single email')
-          // We are clearing the previous streamed object here so adjacent objects in the response can be parsed separately
-          streamingJson = ''
-        }
-
-        if (status === 'complete') {
-          console.log(
-            `${timestamp()} Received complete message for single email, closing event source`,
-          )
-          emailEvents.close()
-          resolve(queryClient.getQueryData(['email', fingerprint]))
-        }
-      }
-
-      const onError = (event) => {
-        console.warn('SSE error for single email:', event)
-        emailEvents.close()
-        reject(new Error('Failed to fetch single email'))
-      }
-
-      const emailEvents = createEventSource(url, onMessage, onError)
-    })
+    try {
+      return await createEventSourceHandler({
+        url,
+        queryClient,
+        fingerprint,
+      })
+    } catch (error) {
+      console.error('Failed to fetch single email:', error)
+      throw error
+    }
   }, [fingerprint, queryClient])
 
   const query = useQuery({
     queryKey: ['email', fingerprint],
     queryFn: fetchSingleEmail,
-    enabled: false, // This ensures the query doesn't run automatically
+    enabled: false,
   })
 
-  const refreshEmail = useCallback(() => {
-    if (fingerprint) {
-      query.refetch()
-    }
-  }, [fingerprint, query])
-
-  return { ...query, refreshEmail }
+  return { ...query, refreshEmail: query.refetch }
 }
