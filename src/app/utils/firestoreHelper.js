@@ -3,6 +3,8 @@
 import { firestore } from '../../firebase'
 import { writeBatch, doc, getDoc, setDoc } from 'firebase/firestore'
 
+const enabled = true
+
 let quotaExceededLogged = false
 const QUOTA_RESET_INTERVAL = 60 * 60 * 1000 // 1 hour
 
@@ -23,6 +25,7 @@ const handleFirestoreError = (error) => {
 }
 
 export const firestoreBatchWrite = async (operations) => {
+  if (!enabled) return null
   try {
     const batch = writeBatch(firestore)
     operations.forEach((op) => {
@@ -42,6 +45,7 @@ export const firestoreBatchWrite = async (operations) => {
 }
 
 export const firestoreGetDoc = async (collectionName, docId) => {
+  if (!enabled) return null
   try {
     const docRef = doc(firestore, collectionName, docId)
     const docSnap = await getDoc(docRef)
@@ -52,6 +56,7 @@ export const firestoreGetDoc = async (collectionName, docId) => {
 }
 
 export const firestoreSetDoc = async (collectionName, docId, data, options = {}) => {
+  if (!enabled) return null
   try {
     const docRef = doc(firestore, collectionName, docId)
     await setDoc(docRef, data, options)
