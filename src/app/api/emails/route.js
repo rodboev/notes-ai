@@ -24,7 +24,6 @@ const chunkArray = (array, chunkSize) => {
 }
 
 async function loadEmails() {
-  console.log(`${timestamp()} Attempting to load emails from disk`)
   try {
     const diskEmails = await readFromDisk('emails.json')
     if (diskEmails) {
@@ -100,7 +99,6 @@ export async function GET(req) {
     }
     return acc
   }, {})
-  console.log(`${timestamp()} Created email cache with ${Object.keys(emailCache).length} entries`)
 
   const encoder = new TextEncoder()
   const readableStream = new ReadableStream({
@@ -185,10 +183,6 @@ export async function GET(req) {
       }
 
       try {
-        console.log(
-          `${timestamp()} Processing request: fingerprint=${fingerprint}, fingerprints=${fingerprints}, stored emails: ${storedEmails.length}`,
-        )
-
         if (fingerprint) {
           // Handle single note refresh (always stream)
           const response = await fetch(

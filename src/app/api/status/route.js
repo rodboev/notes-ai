@@ -11,7 +11,6 @@ const EMAILS_DOC_ID = 'emails'
 
 async function loadStatuses() {
   try {
-    console.log(`${timestamp()} Attempting to read statuses from disk...`)
     const diskStatuses = await readFromDisk('status.json')
     if (diskStatuses && Object.keys(diskStatuses).length > 0) {
       return diskStatuses
@@ -75,9 +74,6 @@ export async function GET(req) {
       })
     }
 
-    console.log(
-      `${timestamp()} Attempting to load statuses for fingerprints: ${fingerprints.join(', ')}`,
-    )
     const allStatuses = await loadStatuses()
     const statuses = fingerprints.reduce((acc, fingerprint) => {
       acc[fingerprint] = allStatuses[fingerprint] || null

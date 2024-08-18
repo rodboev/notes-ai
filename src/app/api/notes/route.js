@@ -40,7 +40,6 @@ const config = {
 
 async function runQuery(pool, query) {
   try {
-    // console.log(`Executing query: ${query}`)
     const result = await pool.request().query(query)
     console.log('Query successful')
     return result.recordset
@@ -84,7 +83,6 @@ async function getJoinedNotes(pool, startDate, endDate, limit = 500) {
       AND n.NoteCode IN (${noteCodesString})
     ORDER BY n.NoteDate ASC
   `
-  console.log(query)
 
   return await runQuery(pool, query)
 }
@@ -103,136 +101,84 @@ function transformNotes(notes) {
   }))
 }
 
-async function updateNotesCacheIndex(cacheKey) {
-  const index = (await readFromDisk('notesCacheIndex.json')) || {}
-  index[cacheKey] = new Date().toISOString()
-  await writeToDisk('notesCacheIndex.json', index)
-}
-
-async function saveNotes(notes, startDate, endDate) {
-  const cacheKey = `notes_${startDate}_${endDate}`
-  const cacheData = {
-    notes,
-    startDate,
-    endDate,
-    timestamp: new Date().toISOString(),
+async function loadNotes() {
+  console.log(`${timestamp()} Attempting to load notes from disk`)
+  const diskNotes = await readFromDisk('notes.json')
+  if (diskNotes && diskNotes.length > 0) {
+    console.log(`${timestamp()} Loaded ${diskNotes.length} notes from disk`)
+    return diskNotes
   }
 
-  // Check if there are changes compared to the disk version
-  const diskData = await readFromDisk(`${cacheKey}.json`)
-  const hasChanges = JSON.stringify(diskData) !== JSON.stringify(cacheData)
+  console.log(`${timestamp()} Notes not on disk or empty, loading from Firestore`)
+  const notesDoc = await firestoreGetDoc('notes', 'allNotes')
+  const notes = notesDoc ? notesDoc.notes : []
+  console.log(`${timestamp()} Loaded ${notes.length} notes from Firestore`)
+
+  if (notes.length > 0) {
+    await writeToDisk('notes.json', notes)
+    console.log(`${timestamp()} Saved ${notes.length} notes to disk`)
+  }
+
+  return notes
+}
+
+async function saveNotes(notes) {
+  console.warn(`${timestamp()} Saving notes to disk and Firestore`)
+
+  const diskNotes = await readFromDisk('notes.json')
+  const hasChanges = !diskNotes || JSON.stringify(diskNotes) !== JSON.stringify(notes)
 
   if (hasChanges) {
-    // Store in disk
-    await writeToDisk(`${cacheKey}.json`, cacheData)
-    console.log(`${timestamp()} Notes successfully stored in disk`)
+    await writeToDisk('notes.json', notes)
+    console.log(`${timestamp()} Saved ${notes.length} notes to disk`)
 
-    // Store in Firestore only if there were changes
-    console.log(`${timestamp()} Changes detected in notes. Triggering Firestore write`)
-    try {
-      await firestoreSetDoc('notesCache', cacheKey, {
-        startDate,
-        endDate,
-        timestamp: new Date().toISOString(),
-      })
+    console.log(`${timestamp()} Saving notes to Firestore`)
+    const operations = notes.map((note) => ({
+      type: 'set',
+      ref: doc(firestore, 'notes', note.fingerprint),
+      data: note,
+    }))
+    await firestoreBatchWrite(operations)
 
-      const batchOperations = notes.map((note) => ({
-        type: 'set',
-        ref: doc(firestore, 'notesCache', cacheKey, 'notes', note.fingerprint),
-        data: note,
-      }))
+    // Also update the allNotes document
+    await firestoreSetDoc('notes', 'allNotes', { notes })
 
-      await firestoreBatchWrite(batchOperations)
-      console.log(`${timestamp()} Notes successfully stored in Firestore`)
-
-      await updateNotesCacheIndex(cacheKey)
-    } catch (error) {
-      console.error(`${timestamp()} Error saving notes to Firestore:`, error.message)
-    }
+    console.log(`${timestamp()} Saved ${notes.length} notes to Firestore`)
   } else {
     console.log(`${timestamp()} No changes detected, skipping save operation`)
   }
 }
 
-async function getSavedNotes(cacheKey) {
-  // Try to read from disk first
-  const diskData = await readFromDisk(`${cacheKey}.json`)
-  if (diskData) {
-    console.log(`${timestamp()} Notes found in disk cache`)
-    return diskData.notes
-  }
-
-  // If not in disk, check Firestore
-  try {
-    const cacheDocData = await firestoreGetDoc('notesCache', cacheKey)
-    if (cacheDocData) {
-      const notesCollectionRef = collection(firestore, 'notesCache', cacheKey, 'notes')
-      const notesSnapshot = await firestoreGetDoc(notesCollectionRef)
-      const firestoreNotes = notesSnapshot ? Object.values(notesSnapshot) : []
-
-      console.log(`${timestamp()} Notes found in Firestore`)
-
-      // Save Firestore notes to disk
-      const cacheData = {
-        notes: firestoreNotes,
-        startDate: cacheDocData.startDate,
-        endDate: cacheDocData.endDate,
-        timestamp: cacheDocData.timestamp,
-      }
-      await writeToDisk(`${cacheKey}.json`, cacheData)
-      console.log(`${timestamp()} Notes from Firestore saved to disk cache`)
-
-      return firestoreNotes
-    }
-  } catch (error) {
-    console.error(`${timestamp()} Error fetching notes from Firestore:`, error.message)
-  }
-
-  return null
-}
-
 async function getNotesByFingerprints(fingerprints) {
+  console.log(`Searching for fingerprints: ${fingerprints}`)
+
   if (!Array.isArray(fingerprints)) {
     fingerprints = [fingerprints]
   }
 
-  let foundNotes = []
+  let allNotes = await loadNotes()
+  let foundNotes = allNotes.filter((note) => fingerprints.includes(note.fingerprint))
 
-  // Search in disk cache first
-  const diskCaches = (await readFromDisk('notesCacheIndex.json')) || {}
-  for (const cacheKey of Object.keys(diskCaches)) {
-    const diskData = await readFromDisk(`${cacheKey}.json`)
-    if (diskData && diskData.notes) {
-      const matchedNotes = diskData.notes.filter((note) => fingerprints.includes(note.fingerprint))
-      foundNotes = [...foundNotes, ...matchedNotes]
-      if (foundNotes.length === fingerprints.length) {
-        console.log('All notes found in disk cache')
-        return foundNotes
+  // If not all notes were found in the cache, fetch the missing ones from Firestore
+  if (foundNotes.length < fingerprints.length) {
+    const missingFingerprints = fingerprints.filter(
+      (fp) => !foundNotes.some((note) => note.fingerprint === fp),
+    )
+    console.log(`Fetching ${missingFingerprints.length} missing notes from Firestore`)
+
+    for (const fp of missingFingerprints) {
+      const noteDoc = await firestoreGetDoc('notes', fp)
+      if (noteDoc) {
+        foundNotes.push(noteDoc)
+        // Add to local cache
+        allNotes.push(noteDoc)
       }
     }
-  }
 
-  // If not all found in disk cache, search in Firestore
-  try {
-    const cacheSnapshots = await firestoreGetDoc('notesCache')
-    for (const cacheKey in cacheSnapshots) {
-      const remainingFingerprints = fingerprints.filter(
-        (fp) => !foundNotes.some((note) => note.fingerprint === fp),
-      )
-      for (const fingerprint of remainingFingerprints) {
-        const noteData = await firestoreGetDoc('notesCache', cacheKey, 'notes', fingerprint)
-        if (noteData) {
-          foundNotes.push(noteData)
-          console.log(`Note ${fingerprint} found in Firestore`)
-        }
-      }
-      if (foundNotes.length === fingerprints.length) {
-        console.log('All notes found in Firestore')
-        return foundNotes
-      }
+    // Update local cache if new notes were found
+    if (foundNotes.length > allNotes.length) {
+      await writeToDisk('notes.json', allNotes)
     }
-  } catch (error) {
-    console.error(`${timestamp()} Error searching for notes in Firestore:`, error.message)
   }
 
   console.log(`${timestamp()} ${foundNotes.length} out of ${fingerprints.length} notes found`)
@@ -274,10 +220,12 @@ export async function GET(request) {
   }
 
   // Try to get stored notes first
-  const cacheKey = `notes_${startDate}_${endDate}`
-  let notes = await getSavedNotes(cacheKey)
+  let notes = await loadNotes()
+  notes = notes.filter(
+    (note) => note.date >= startDate && note.date < endDate && note.code === '911 EMER',
+  )
 
-  if (notes) {
+  if (notes.length > 0) {
     console.log(`Returning ${notes.length} notes from cache`)
     return NextResponse.json(notes)
   }
@@ -306,21 +254,13 @@ export async function GET(request) {
     }))
 
     // Store the notes in disk and Firestore
-    await saveNotes(notes, startDate, endDate)
+    await saveNotes(notes)
 
     console.log(`Returning ${notes.length} notes from database`)
     return NextResponse.json(notes)
   } catch (error) {
     console.error('Error fetching from database:', error)
 
-    // If database fetch fails, try to get from disk one last time
-    notes = await getSavedNotes(cacheKey)
-    if (notes) {
-      console.log(`Returning ${notes.length} notes from cache after database failure`)
-      return NextResponse.json(notes)
-    }
-
-    // If still no notes, return an error
     return NextResponse.json(
       {
         error: 'Internal Server Error',
