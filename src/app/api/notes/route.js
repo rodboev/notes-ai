@@ -143,14 +143,15 @@ async function saveNotes(notes) {
     console.log(`${timestamp()} Saved ${notes.length} notes to disk`)
 
     console.log(`${timestamp()} Saving notes to Firestore`)
-    const operations = notes.map((note) => ({
-      type: 'set',
-      ref: doc(firestore, 'notes', note.fingerprint),
-      data: note,
-    }))
-    await firestoreBatchWrite(operations)
+    const { validOperations, skippedOperations, error } = await firestoreBatchWrite('notes', notes)
 
-    console.log(`${timestamp()} Saved ${notes.length} notes to Firestore`)
+    if (error) {
+      console.error('Error during batch write:', error)
+    } else {
+      console.log(
+        `${timestamp()} Saved ${validOperations} notes to Firestore, skipped ${skippedOperations}`,
+      )
+    }
   } else {
     console.log(`${timestamp()} No changes detected, skipping save operation`)
   }

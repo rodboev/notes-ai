@@ -4,15 +4,9 @@ import OpenAI from 'openai'
 import { parse } from 'best-effort-json-parser'
 import { firestore } from '../../../firebase.js'
 import { readFromDisk, writeToDisk, deleteFromDisk } from '../../utils/diskStorage'
-import { collection, doc, writeBatch, getDocs } from 'firebase/firestore'
 import { timestamp } from '../../utils/timestamp'
 import { getPrompts } from '../prompts/route.js'
-import {
-  firestoreGetDoc,
-  firestoreBatchWrite,
-  firestoreSetDoc,
-  firestoreGetAllDocs,
-} from '../../utils/firestoreHelper'
+import { firestoreBatchWrite, firestoreGetAllDocs } from '../../utils/firestoreHelper'
 
 const isProduction = process.env.NEXT_PUBLIC_NODE_ENV === 'production'
 const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY })
@@ -50,14 +44,24 @@ async function saveEmails(emails) {
   const hasChanges = JSON.stringify(diskEmails) !== JSON.stringify(emails)
 
   if (hasChanges) {
-    // Save to disk using the helper function
+    // Save to disk
     await writeToDisk('emails.json', emails)
     console.log(`${timestamp()} Saved ${emails.length} emails to disk`)
 
-    // Save to Firestore using the helper function
+    // Save to Firestore
     console.log(`${timestamp()} Changes detected in emails. Triggering Firestore write`)
-    await firestoreSetDoc('emails', emails)
-    console.log(`${timestamp()} Saved ${emails.length} emails to Firestore`)
+    const { validOperations, skippedOperations, error } = await firestoreBatchWrite(
+      'emails',
+      emails,
+    )
+
+    if (error) {
+      console.error('Error during batch write:', error)
+    } else {
+      console.log(
+        `${timestamp()} Saved ${validOperations} emails to Firestore, skipped ${skippedOperations}`,
+      )
+    }
   } else {
     console.log(`${timestamp()} No changes detected, skipping save operation`)
   }

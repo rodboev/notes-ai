@@ -14,14 +14,26 @@ const resetQuotaExceededLog = () => {
 
 setInterval(resetQuotaExceededLog, QUOTA_RESET_INTERVAL)
 
-const handleFirestoreError = (error) => {
-  if (error.code === 'resource-exhausted' && !quotaExceededLogged) {
-    console.error('Firestore quota exceeded. Operations will be paused.')
-    quotaExceededLogged = true
-  } else if (error.code !== 'resource-exhausted') {
-    console.error('Firestore error:', error)
+export const safeDocRef = (firestore, collectionName, document) => {
+  if (!document || typeof document !== 'object' || Array.isArray(document)) {
+    console.warn(`Invalid document:`, document)
+    return null
   }
-  throw error
+
+  if (
+    !document.fingerprint ||
+    typeof document.fingerprint !== 'string' ||
+    document.fingerprint.trim() === ''
+  ) {
+    return null
+  }
+
+  try {
+    return doc(firestore, collectionName, document.fingerprint)
+  } catch (error) {
+    console.error(`Error creating doc reference for document:`, document, error)
+    return null
+  }
 }
 
 export const firestoreBatchGet = async (collectionName, docIds) => {
@@ -36,24 +48,41 @@ export const firestoreBatchGet = async (collectionName, docIds) => {
   }
 }
 
-export const firestoreBatchWrite = async (operations) => {
+export const firestoreBatchWrite = async (collectionName, documents) => {
   if (!enabled) return null
+
+  const batch = writeBatch(firestore)
+  let validOperations = 0
+  let skippedOperations = 0
+
+  documents.forEach((document, index) => {
+    const ref = safeDocRef(firestore, collectionName, document)
+    if (ref) {
+      batch.set(ref, document)
+      validOperations++
+    } else {
+      skippedOperations++
+    }
+  })
+
+  if (validOperations === 0) {
+    console.warn('No valid operations to write to Firestore')
+    return { validOperations, skippedOperations }
+  }
+
   try {
-    const batch = writeBatch(firestore)
-    operations.forEach((op) => {
-      const { type, ref, data } = op
-      if (type === 'set') {
-        batch.set(ref, data)
-      } else if (type === 'update') {
-        batch.update(ref, data)
-      } else if (type === 'delete') {
-        batch.delete(ref)
-      }
-    })
     await batch.commit()
+    console.log(`Successfully wrote ${validOperations} documents to Firestore`)
   } catch (error) {
     handleFirestoreError(error)
+    return { validOperations: 0, skippedOperations: documents.length, error }
   }
+
+  if (skippedOperations > 0) {
+    console.warn(`Skipped ${skippedOperations} invalid documents`)
+  }
+
+  return { validOperations, skippedOperations }
 }
 
 export const firestoreGetDoc = async (collectionName, docId) => {
