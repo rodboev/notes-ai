@@ -50,13 +50,23 @@ async function saveEmails(emails) {
   const hasChanges = JSON.stringify(diskEmails) !== JSON.stringify(emails)
 
   if (hasChanges) {
-    // Save to disk using the helper function
+    // Save to disk
     await writeToDisk('emails.json', emails)
     console.log(`${timestamp()} Saved ${emails.length} emails to disk`)
 
-    // Save to Firestore using the helper function
-    console.log(`${timestamp()} Changes detected in emails. Triggering Firestore write`)
-    await firestoreSetDoc('emails', emails)
+    // Save to Firestore
+    console.log(`${timestamp()} Saving notes to Firestore`)
+    const operations = emails
+      .filter(
+        (email) =>
+          email && typeof email.fingerprint === 'string' && email.fingerprint.trim() !== '',
+      )
+      .map((email) => ({
+        type: 'set',
+        ref: doc(firestore, 'emails', email.fingerprint),
+        data: email,
+      }))
+    await firestoreBatchWrite(operations)
     console.log(`${timestamp()} Saved ${emails.length} emails to Firestore`)
   } else {
     console.log(`${timestamp()} No changes detected, skipping save operation`)
