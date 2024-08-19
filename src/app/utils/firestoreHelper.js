@@ -24,6 +24,18 @@ const handleFirestoreError = (error) => {
   throw error
 }
 
+export const firestoreBatchGet = async (collectionName, docIds) => {
+  if (!enabled) return []
+  try {
+    const collectionRef = collection(firestore, collectionName)
+    const docSnapshots = await Promise.all(docIds.map((id) => getDoc(doc(collectionRef, id))))
+    return docSnapshots.map((snap) => (snap.exists() ? snap.data() : null))
+  } catch (error) {
+    handleFirestoreError(error)
+    return []
+  }
+}
+
 export const firestoreBatchWrite = async (operations) => {
   if (!enabled) return null
   try {

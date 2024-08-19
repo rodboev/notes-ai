@@ -7,9 +7,8 @@ import { readFromDisk, writeToDisk } from '../../utils/diskStorage'
 import { firestore } from '../../../firebase'
 import { doc } from 'firebase/firestore'
 import {
-  firestoreGetDoc,
+  firestoreBatchGet,
   firestoreBatchWrite,
-  firestoreSetDoc,
   firestoreGetAllDocs,
 } from '../../utils/firestoreHelper'
 import { timestamp } from '../../utils/timestamp'
@@ -174,17 +173,12 @@ async function getNotesByFingerprints(fingerprints) {
     )
     console.log(`Fetching ${missingFingerprints.length} missing notes from Firestore`)
 
-    for (const fp of missingFingerprints) {
-      const noteDoc = await firestoreGetDoc('notes', fp)
-      if (noteDoc) {
-        foundNotes.push(noteDoc)
-        // Add to local cache
-        allNotes.push(noteDoc)
-      }
-    }
+    const missingNotes = await firestoreBatchGet('notes', missingFingerprints)
+    foundNotes = [...foundNotes, ...missingNotes.filter(Boolean)]
 
     // Update local cache if new notes were found
-    if (foundNotes.length > allNotes.length) {
+    if (missingNotes.some(Boolean)) {
+      allNotes = [...allNotes, ...missingNotes.filter(Boolean)]
       await writeToDisk('notes.json', allNotes)
     }
   }

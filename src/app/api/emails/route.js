@@ -7,7 +7,12 @@ import { readFromDisk, writeToDisk, deleteFromDisk } from '../../utils/diskStora
 import { doc } from 'firebase/firestore'
 import { timestamp } from '../../utils/timestamp'
 import { getPrompts } from '../prompts/route.js'
-import { firestoreGetDoc, firestoreBatchWrite, firestoreSetDoc } from '../../utils/firestoreHelper'
+import {
+  firestoreGetDoc,
+  firestoreBatchWrite,
+  firestoreSetDoc,
+  firestoreGetAllDocs,
+} from '../../utils/firestoreHelper'
 
 const isProduction = process.env.NEXT_PUBLIC_NODE_ENV === 'production'
 const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY })
