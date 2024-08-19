@@ -79,11 +79,32 @@ export const firestoreGetAllDocs = async (collectionName) => {
   }
 }
 
-export const firestoreSetDoc = async (collectionName, docId, data, options = {}) => {
+export const firestoreSetDoc = async (collectionName, data, options = {}) => {
   if (!enabled) return null
   try {
-    const docRef = doc(firestore, collectionName, docId)
-    await setDoc(docRef, data, options)
+    const batch = writeBatch(firestore)
+
+    if (Array.isArray(data)) {
+      // Handle array of documents
+      data.forEach((item) => {
+        if (item.fingerprint) {
+          const docRef = doc(firestore, collectionName, item.fingerprint)
+          batch.set(docRef, item, options)
+        } else {
+          console.warn('Item missing fingerprint:', item)
+        }
+      })
+    } else if (data.fingerprint) {
+      // Handle single document
+      const docRef = doc(firestore, collectionName, data.fingerprint)
+      batch.set(docRef, data, options)
+    } else {
+      throw new Error(
+        'Invalid data format: must be an array of emails or a single email with a fingerprint',
+      )
+    }
+
+    await batch.commit()
   } catch (error) {
     handleFirestoreError(error)
   }

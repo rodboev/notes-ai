@@ -4,7 +4,7 @@ import OpenAI from 'openai'
 import { parse } from 'best-effort-json-parser'
 import { firestore } from '../../../firebase.js'
 import { readFromDisk, writeToDisk, deleteFromDisk } from '../../utils/diskStorage'
-import { doc } from 'firebase/firestore'
+import { collection, doc, writeBatch, getDocs } from 'firebase/firestore'
 import { timestamp } from '../../utils/timestamp'
 import { getPrompts } from '../prompts/route.js'
 import {
@@ -50,18 +50,13 @@ async function saveEmails(emails) {
   const hasChanges = JSON.stringify(diskEmails) !== JSON.stringify(emails)
 
   if (hasChanges) {
-    // Save to disk
+    // Save to disk using the helper function
     await writeToDisk('emails.json', emails)
     console.log(`${timestamp()} Saved ${emails.length} emails to disk`)
 
-    // Save to Firestore
+    // Save to Firestore using the helper function
     console.log(`${timestamp()} Changes detected in emails. Triggering Firestore write`)
-    const operations = emails.map((email) => ({
-      type: 'set',
-      ref: doc(firestore, 'emails', email.fingerprint),
-      data: email,
-    }))
-    await firestoreBatchWrite(operations)
+    await firestoreSetDoc('emails', emails)
     console.log(`${timestamp()} Saved ${emails.length} emails to Firestore`)
   } else {
     console.log(`${timestamp()} No changes detected, skipping save operation`)
@@ -144,7 +139,7 @@ export async function GET(req) {
         let stream
         try {
           stream = await openai.chat.completions.create({
-            model: isProduction ? 'gpt-4o-2024-08-06' : 'gpt-4o-mini-2024-07-18',
+            model: 'gpt-4o-2024-08-06', // isProduction ? 'gpt-4o-2024-08-06' : 'gpt-4o-mini-2024-07-18',
             stream: true,
             response_format: { type: 'json_object' },
             messages,
@@ -163,12 +158,24 @@ export async function GET(req) {
           if (!status) {
             // Streaming response
             emailsJson += chunk
+            /*
+						console.log(`-------------------------------`)
+            console.log(`[1] sendData(${chunk}, 'streaming')`)
+            console.log(`-------------------------------`)
+						*/
             sendData(chunk, 'streaming')
           } else if (status === 'stop') {
             // Full response end of this streaming chunk
             // The status here tells the front-end to stop concatenating emailsJson, so it can parse streaming objects separately
             sendData('', 'streaming-object-complete')
             const emails = parse(emailsJson.trim()).emails || []
+            const uniqueNewEmails = emails.filter(
+              (email) => !sentFingerprints.has(email.fingerprint),
+            )
+            if (uniqueNewEmails.length > 0) {
+              // sendData({ emails: uniqueNewEmails }, 'streaming')
+              uniqueNewEmails.forEach((email) => sentFingerprints.add(email.fingerprint))
+            }
             return emails
           }
         }
@@ -211,6 +218,11 @@ export async function GET(req) {
               (email) => !sentFingerprints.has(email.fingerprint),
             )
             if (uniqueStoredEmails.length > 0) {
+              /*
+							console.log(`-------------------------------`)
+              console.log(`[2] sendData({ emails: ${uniqueStoredEmails} }, 'stored')`)
+              console.log(`-------------------------------`)
+							*/
               sendData({ emails: uniqueStoredEmails }, 'stored')
               uniqueStoredEmails.forEach((email) => sentFingerprints.add(email.fingerprint))
             }
