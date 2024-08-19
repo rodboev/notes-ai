@@ -1,15 +1,13 @@
 // src/app/api/status/route.js
 
 import { readFromDisk, writeToDisk } from '../../utils/diskStorage'
-import { firestore } from '../../../firebase.js'
-import { doc } from 'firebase/firestore'
 import { firestoreGetDoc, firestoreSetDoc } from '../../utils/firestoreHelper'
 import { timestamp } from '../../utils/timestamp'
 
 const STATUS_COLLECTION = 'status'
 const EMAILS_DOC_ID = 'emails'
 
-async function loadStatuses() {
+export async function loadStatuses() {
   try {
     const diskStatuses = await readFromDisk('status.json')
     if (diskStatuses && Object.keys(diskStatuses).length > 0) {
@@ -32,7 +30,7 @@ async function loadStatuses() {
   }
 }
 
-async function saveStatus(fingerprint, newStatus) {
+export async function saveStatus(fingerprint, newStatus) {
   try {
     const allStatuses = await loadStatuses()
     const hasChanges = JSON.stringify(allStatuses[fingerprint]) !== JSON.stringify(newStatus)
