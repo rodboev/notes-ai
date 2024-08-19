@@ -4,7 +4,7 @@ import OpenAI from 'openai'
 import { parse } from 'best-effort-json-parser'
 import { firestore } from '../../../firebase.js'
 import { readFromDisk, writeToDisk, deleteFromDisk } from '../../utils/diskStorage'
-import { collection, doc, writeBatch, getDocs } from 'firebase/firestore'
+import { doc } from 'firebase/firestore'
 import { timestamp } from '../../utils/timestamp'
 import { getPrompts } from '../prompts/route.js'
 import { firestoreGetDoc, firestoreBatchWrite, firestoreSetDoc } from '../../utils/firestoreHelper'
@@ -30,9 +30,7 @@ async function loadEmails() {
   }
 
   console.log(`${timestamp()} Emails not on disk, loading from Firestore`)
-  const emailsCollection = collection(firestore, 'emails')
-  const snapshot = await getDocs(emailsCollection)
-  const emails = snapshot.docs.map((doc) => doc.data())
+  const emails = await firestoreGetAllDocs('emails')
   console.log(`${timestamp()} Loaded ${emails.length} emails from Firestore`)
   await writeToDisk('emails.json', emails)
   console.log(`${timestamp()} Saved ${emails.length} emails to disk`)

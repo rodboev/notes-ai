@@ -5,8 +5,13 @@ import sql from 'mssql/msnodesqlv8.js'
 import hash from 'object-hash'
 import { readFromDisk, writeToDisk } from '../../utils/diskStorage'
 import { firestore } from '../../../firebase'
-import { collection, doc } from 'firebase/firestore'
-import { firestoreGetDoc, firestoreBatchWrite, firestoreSetDoc } from '../../utils/firestoreHelper'
+import { doc } from 'firebase/firestore'
+import {
+  firestoreGetDoc,
+  firestoreBatchWrite,
+  firestoreSetDoc,
+  firestoreGetAllDocs,
+} from '../../utils/firestoreHelper'
 import { timestamp } from '../../utils/timestamp'
 
 sql.driver = 'FreeTDS'
@@ -117,9 +122,7 @@ async function loadNotes() {
   }
 
   console.log(`${timestamp()} Notes not on disk or empty, loading from Firestore`)
-  const notesCollection = collection(firestore, 'notes')
-  const snapshot = await getDocs(notesCollection)
-  const notes = snapshot.docs.map((doc) => doc.data())
+  const notes = await firestoreGetAllDocs('notes')
   console.log(`${timestamp()} Loaded ${notes.length} notes from Firestore`)
 
   if (notes.length > 0) {

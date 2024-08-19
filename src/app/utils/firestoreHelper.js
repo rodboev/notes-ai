@@ -1,7 +1,7 @@
 // src/utils/firestoreHelper.js
 
 import { firestore } from '../../firebase'
-import { writeBatch, doc, getDoc, setDoc } from 'firebase/firestore'
+import { writeBatch, doc, getDoc, setDoc, collection, getDocs } from 'firebase/firestore'
 
 const enabled = true
 
@@ -52,6 +52,18 @@ export const firestoreGetDoc = async (collectionName, docId) => {
     return docSnap.exists() ? docSnap.data() : null
   } catch (error) {
     handleFirestoreError(error)
+  }
+}
+
+export const firestoreGetAllDocs = async (collectionName) => {
+  if (!enabled) return []
+  try {
+    const collectionRef = collection(firestore, collectionName)
+    const snapshot = await getDocs(collectionRef)
+    return snapshot.docs.map((doc) => doc.data())
+  } catch (error) {
+    handleFirestoreError(error)
+    return []
   }
 }
 
