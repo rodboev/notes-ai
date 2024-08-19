@@ -48,7 +48,7 @@ const Email = ({
         ) : (
           email && (
             <>
-              {email.emailAddress && (
+              {email.emailAddress && email.body ? (
                 <>
                   {email.subject && (
                     <h2 className="mb-1 text-2xl font-bold text-teal">{email.subject}</h2>
@@ -56,31 +56,29 @@ const Email = ({
                   <p className="text-base text-gray-600">
                     To: {email.emailAddress.toLowerCase().replace(/,/g, ', ')}
                   </p>
-                </>
-              )}
-              {email.emailAddress && email.body ? (
-                <Editor email={email} emailStatus={emailStatus} editorRef={editorRef}>
-                  {!(emailStatus?.status === 'sending' || emailStatus?.status === 'success') && (
-                    <RefreshButton onClick={refreshEmail} />
-                  )}
-                  <div className="buttons mt-4 flex items-center justify-between">
-                    <SendEmailButton
-                      fingerprint={noteFingerprint}
-                      subject={email.subject}
-                      getEmailContent={() => editorRef.current?.getContent()}
-                      onEmailSent={handleEmailSent}
-                      updateStatus={updateStatus}
-                    />
-                    {(!emailStatus ||
-                      (emailStatus.status !== 'sending' && emailStatus.status !== 'success')) && (
-                      <FeedbackButton
-                        note={email.noteContent}
-                        subject={email.subject}
-                        email={() => editorRef.current?.getContent()}
-                      />
+                  <Editor email={email} emailStatus={emailStatus} editorRef={editorRef}>
+                    {!(emailStatus?.status === 'sending' || emailStatus?.status === 'success') && (
+                      <RefreshButton onClick={refreshEmail} />
                     )}
-                  </div>
-                </Editor>
+                    <div className="buttons mt-4 flex items-center justify-between">
+                      <SendEmailButton
+                        fingerprint={noteFingerprint}
+                        subject={email.subject}
+                        getEmailContent={() => editorRef.current?.getContent()}
+                        onEmailSent={handleEmailSent}
+                        updateStatus={updateStatus}
+                      />
+                      {(!emailStatus ||
+                        (emailStatus.status !== 'sending' && emailStatus.status !== 'success')) && (
+                        <FeedbackButton
+                          note={email.noteContent}
+                          subject={email.subject}
+                          email={() => editorRef.current?.getContent()}
+                        />
+                      )}
+                    </div>
+                  </Editor>
+                </>
               ) : email.error ? (
                 <div className="relative -mt-4 inline-flex min-w-96 max-w-2xl flex-col items-center self-center rounded-lg border-2 border-dashed px-10 py-14 text-neutral-500">
                   <RefreshButton onClick={refreshEmail} />

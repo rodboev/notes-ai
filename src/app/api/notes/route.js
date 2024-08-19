@@ -88,17 +88,24 @@ async function getJoinedNotes(pool, startDate, endDate, limit = 500) {
 }
 
 function transformNotes(notes) {
-  return notes.map((note) => ({
-    locationID: note.LocationID,
-    date: note.NoteDate,
-    code: note.NoteCode,
-    content: note.Note,
-    tech: note.Tech,
-    address: note.Address,
-    company: note.Company,
-    locationCode: note.LocationCode,
-    emailAddress: note.EMail,
-  }))
+  return notes.map((note) => {
+    const transformedNote = {
+      locationID: note.LocationID,
+      date: note.NoteDate,
+      code: note.NoteCode,
+      content: note.Note,
+      tech: note.Tech,
+      address: note.Address,
+      company: note.Company,
+      locationCode: note.LocationCode,
+    }
+
+    if (note.EMail && note.EMail.trim() !== '') {
+      transformedNote.emailAddress = note.EMail
+    }
+
+    return transformedNote
+  })
 }
 
 async function loadNotes() {

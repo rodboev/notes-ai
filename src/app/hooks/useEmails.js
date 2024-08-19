@@ -65,7 +65,7 @@ const createEventSourceHandler = ({
   queryClient,
   setEmailsUpdateCounter,
   fingerprint,
-  signal,
+  cleanupRef,
 }) => {
   return new Promise((resolve, reject) => {
     let allEmails = [],
@@ -74,13 +74,16 @@ const createEventSourceHandler = ({
 
     const cleanup = () => {
       eventSource.close()
-      setEmailsUpdateCounter(0) // Reset counter when request is aborted or completed
+      // Reset counter when request is aborted or completed
+      if (typeof setEmailsUpdateCounter === 'function') {
+        setEmailsUpdateCounter(0)
+      }
     }
 
-    signal.addEventListener('abort', () => {
-      cleanup()
-      reject(new DOMException('Aborted', 'AbortError'))
-    })
+    // Store the cleanup function in the ref
+    if (cleanupRef) {
+      cleanupRef.current = cleanup
+    }
 
     const handleMessage = (event) => {
       const result = processServerMessage({
@@ -114,13 +117,13 @@ const createEventSourceHandler = ({
 export const useEmails = (notes) => {
   const queryClient = useQueryClient()
   const [emailsUpdateCounter, setEmailsUpdateCounter] = useState(0)
-  const abortControllerRef = useRef(null)
+  const cleanupRef = useRef(null)
 
   useEffect(() => {
-    // Cleanup function to abort ongoing requests when component unmounts or notes change
     return () => {
-      if (abortControllerRef.current) {
-        abortControllerRef.current.abort()
+      // Call cleanup when component unmounts or notes change
+      if (cleanupRef.current) {
+        cleanupRef.current()
       }
     }
   }, [notes])
@@ -128,13 +131,10 @@ export const useEmails = (notes) => {
   const fetchEmails = useCallback(async () => {
     if (!notes?.length) return []
 
-    // Abort previous request if it exists
-    if (abortControllerRef.current) {
-      abortControllerRef.current.abort()
+    // Call previous cleanup if it exists
+    if (cleanupRef.current) {
+      cleanupRef.current()
     }
-
-    // Create new AbortController for this request
-    abortControllerRef.current = new AbortController()
 
     const fingerprints = notes.map((note) => note.fingerprint).join(',')
     const url = `/api/emails?fingerprints=${fingerprints}`
@@ -143,7 +143,7 @@ export const useEmails = (notes) => {
       url,
       queryClient,
       setEmailsUpdateCounter,
-      signal: abortControllerRef.current.signal,
+      cleanupRef,
     })
     return emails
   }, [notes, queryClient])
@@ -156,17 +156,21 @@ export const useEmails = (notes) => {
     cacheTime: 3600000, // Keep unused data in cache for 1 hour
   })
 
+  useEffect(() => {
+    setEmailsUpdateCounter(0)
+  }, [notes])
+
   return { ...query, emailsUpdateCounter }
 }
 
 export const useSingleEmail = (fingerprint) => {
   const queryClient = useQueryClient()
-  const abortControllerRef = useRef(null)
+  const cleanupRef = useRef(null)
 
   useEffect(() => {
     return () => {
-      if (abortControllerRef.current) {
-        abortControllerRef.current.abort()
+      if (cleanupRef.current) {
+        cleanupRef.current()
       }
     }
   }, [fingerprint])
@@ -174,18 +178,16 @@ export const useSingleEmail = (fingerprint) => {
   const fetchSingleEmail = useCallback(async () => {
     if (!fingerprint) return null
 
-    if (abortControllerRef.current) {
-      abortControllerRef.current.abort()
+    if (cleanupRef.current) {
+      cleanupRef.current()
     }
-
-    abortControllerRef.current = new AbortController()
 
     const url = `/api/emails?fingerprint=${fingerprint}`
     return await createEventSourceHandler({
       url,
       queryClient,
       fingerprint,
-      signal: abortControllerRef.current.signal,
+      cleanupRef,
     })
   }, [fingerprint, queryClient])
 
