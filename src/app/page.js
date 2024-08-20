@@ -57,7 +57,7 @@ export default function Home() {
       return newPairs
     }
     return []
-  }, [notes, emailsData, emailsUpdateCounter]) // Add emailsUpdateCounter to dependencies
+  }, [notes, emailsData, emailsUpdateCounter])
 
   const handleDateChange = (newDate) => {
     console.log('newDate:', newDate)
@@ -74,11 +74,6 @@ export default function Home() {
     isLoading: isLoadingStatuses,
     updateStatus,
   } = useEmailStatuses(fingerprints)
-
-  if (notesError || emailsError) {
-    console.error('Error:', notesError || emailsError)
-    return <div>An error occurred: {notesError?.message || emailsError?.message}</div>
-  }
 
   useEffect(() => {
     syncDate()
@@ -105,6 +100,18 @@ export default function Home() {
           onChange={handleDateChange}
         />
       </Nav>
+
+      {notesError || emailsError ? (
+        <div className="flex items-center text-neutral-700">
+          {notesError?.message || emailsError?.message || 'An unexpected error occurred'}
+        </div>
+      ) : (
+        pairs.length === 0 && (
+          <div className="flex items-center text-neutral-700">
+            No notes found for the selected date range.
+          </div>
+        )
+      )}
 
       {pairs.map(({ note, email }, index) => (
         <div

@@ -13,7 +13,7 @@ export default function Nav({ children }) {
   }
 
   return (
-    <div className="align-center fixed z-20 -ml-4 flex w-full flex-col">
+    <div className="nav align-center fixed z-20 -ml-4 flex w-full flex-col">
       <nav className="z-30 ml-4 flex h-20 justify-center border-b bg-white/50 p-3 backdrop-blur-md">
         <div className="container flex w-full max-w-screen-2xl items-center justify-between">
           <div className="left tracking-tighter">
