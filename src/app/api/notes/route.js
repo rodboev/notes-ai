@@ -60,32 +60,42 @@ async function getJoinedNotes(pool, startDate, endDate, limit = 500) {
 
   const query = `
     SELECT TOP ${limit}
-      n.LocationID,
-      n.NoteDate,
-      n.NoteCode,
-      n.Note,
+      Notes.LocationID,
+      Notes.NoteDate,
+      Notes.NoteCode,
+      Notes.Note,
       CASE
-        WHEN LEN(LTRIM(RTRIM(t.LName))) > 0
-        THEN CONCAT(t.FName, ' ', LEFT(t.LName, 1), '.')
-        ELSE t.FName
+        WHEN LEN(LTRIM(RTRIM(Technicians.LName))) > 0
+        THEN CONCAT(Technicians.FName, ' ', LEFT(Technicians.LName, 1), '.')
+        ELSE Technicians.FName
       END AS Tech,
       LTRIM(RTRIM(CONCAT(
-        COALESCE(l.Address, ''), ', ',
-        COALESCE(l.City, ''), ', ',
-        COALESCE(l.State, ''), ' ',
-        COALESCE(l.Zip, '')
+        COALESCE(Locations.Address, ''), ', ',
+        COALESCE(Locations.City, ''), ', ',
+        COALESCE(Locations.State, ''), ' ',
+        COALESCE(Locations.Zip, '')
       ))) AS Address,
-      l.Company,
-      l.LocationCode,
-      l.EMail
-    FROM Notes n
-    LEFT JOIN Locations l ON n.LocationID = l.LocationID
-    LEFT JOIN Employees e ON n.AddUserID = e.UserID
-    LEFT JOIN Technicians t ON e.TechID = t.TechID
-    WHERE n.NoteDate >= '${formattedStartDate}' 
-      AND n.NoteDate < '${formattedEndDate}'
-      AND n.NoteCode IN (${noteCodesString})
-    ORDER BY n.NoteDate ASC
+      Locations.Company,
+      Locations.LocationCode,
+      Locations.EMail,
+      COALESCE(AnnualOccurrences.TotalAnnualOccurrences, 1) AS TotalAnnualOccurrences
+    FROM Notes
+    LEFT JOIN Locations ON Notes.LocationID = Locations.LocationID
+    LEFT JOIN Employees ON Notes.AddUserID = Employees.UserID
+    LEFT JOIN Technicians ON Employees.TechID = Technicians.TechID
+    OUTER APPLY (
+      SELECT 
+        SUM(FrequencyClasses.AnnualOccurrences) AS TotalAnnualOccurrences
+      FROM ServiceSetups
+      LEFT JOIN Schedules ON ServiceSetups.ScheduleID = Schedules.ScheduleID
+      LEFT JOIN FrequencyClasses ON Schedules.FrequencyID = FrequencyClasses.FrequencyID
+      WHERE ServiceSetups.LocationID = Notes.LocationID
+        AND ServiceSetups.Active = 1
+    ) AS AnnualOccurrences
+    WHERE Notes.NoteDate >= '${formattedStartDate}' 
+      AND Notes.NoteDate < '${formattedEndDate}'
+      AND Notes.NoteCode IN (${noteCodesString})
+    ORDER BY Notes.NoteDate ASC
   `
 
   return await runQuery(pool, query)
@@ -102,6 +112,7 @@ function transformNotes(notes) {
       address: note.Address,
       company: note.Company,
       locationCode: note.LocationCode,
+      annualOccurrences: note.TotalAnnualOccurrences,
     }
 
     if (note.EMail && note.EMail.trim() !== '') {

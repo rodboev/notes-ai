@@ -6,6 +6,7 @@ import { useState, useRef, useEffect, useMemo } from 'react'
 import Nav from './components/Nav'
 import Note from './components/Note'
 import Email from './components/Email'
+import SpinnerIcon from './components/Icons/SpinnerIcon'
 import Datepicker from 'react-tailwindcss-datepicker'
 import { useNotes } from './hooks/useNotes'
 import { useEmails } from './hooks/useEmails'
@@ -101,13 +102,17 @@ export default function Home() {
         />
       </Nav>
 
-      {notesError || emailsError ? (
-        <div className="flex items-center text-neutral-700">
+      {isLoadingNotes || isLoadingEmails ? (
+        <div className="flex h-full items-center text-neutral-500">
+          <SpinnerIcon />
+        </div>
+      ) : notesError || emailsError ? (
+        <div className="flex h-full items-center text-neutral-700">
           {notesError?.message || emailsError?.message || 'An unexpected error occurred'}
         </div>
       ) : (
         pairs.length === 0 && (
-          <div className="flex items-center text-neutral-700">
+          <div className="flex h-full items-center text-neutral-700">
             No notes found for the selected date range.
           </div>
         )
