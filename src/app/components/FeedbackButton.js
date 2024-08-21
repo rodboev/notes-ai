@@ -1,6 +1,6 @@
 // src/app/components/FeedbackButton.js
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { CheckIcon, ExclamationTriangleIcon } from '@heroicons/react/16/solid'
 import SpinnerIcon from './Icons/SpinnerIcon'
 import SendIcon from './Icons/SendIcon-v1'
@@ -21,7 +21,7 @@ const FeedbackInput = ({ value, onChange, disabled }) => (
         value={value}
         onChange={onChange}
         className={`mr-2 w-[calc(8rem+11vw)] rounded border-2 p-1.5 px-3 ${
-          disabled ? 'cursor-not-allowed' : ''
+          disabled ? 'cursor-not-allowed bg-gray-100' : ''
         }`}
         placeholder="Enter feedback"
         disabled={disabled}
@@ -33,7 +33,16 @@ const FeedbackInput = ({ value, onChange, disabled }) => (
 const FeedbackButton = ({ note, email, subject }) => {
   const [feedbackFieldVisible, setFeedbackFieldVisible] = useState(false)
   const [feedbackText, setFeedbackText] = useState('')
+  const [isSubmitting, setIsSubmitting] = useState(false)
   const sendFeedbackMutation = useSendFeedback()
+
+  useEffect(() => {
+    if (sendFeedbackMutation.isSuccess) {
+      setIsSubmitting(false)
+    } else if (sendFeedbackMutation.isError) {
+      setIsSubmitting(false)
+    }
+  }, [sendFeedbackMutation.isSuccess, sendFeedbackMutation.isError])
 
   const handleFeedbackClick = async () => {
     if (!feedbackFieldVisible) {
@@ -41,8 +50,9 @@ const FeedbackButton = ({ note, email, subject }) => {
       return
     }
 
-    if (sendFeedbackMutation.isLoading || sendFeedbackMutation.isSuccess) return
+    if (isSubmitting || sendFeedbackMutation.isSuccess) return
 
+    setIsSubmitting(true)
     try {
       await sendFeedbackMutation.mutateAsync({
         feedback: feedbackText,
@@ -52,20 +62,21 @@ const FeedbackButton = ({ note, email, subject }) => {
       })
     } catch (error) {
       console.error('Error sending feedback:', error)
+      setIsSubmitting(false)
     }
   }
 
   return (
     <div className="mx-2 flex items-center justify-end">
-      {feedbackFieldVisible && (
+      {(feedbackFieldVisible || sendFeedbackMutation.isSuccess) && (
         <FeedbackInput
           value={feedbackText}
           onChange={(e) => setFeedbackText(e.target.value)}
-          disabled={sendFeedbackMutation.isLoading || sendFeedbackMutation.isSuccess}
+          disabled={isSubmitting || sendFeedbackMutation.isSuccess}
         />
       )}
 
-      {!feedbackFieldVisible && (
+      {!feedbackFieldVisible && !sendFeedbackMutation.isSuccess && (
         <button
           onClick={handleFeedbackClick}
           className="btn inline-block w-fit bg-neutral-500 text-white"
@@ -74,7 +85,7 @@ const FeedbackButton = ({ note, email, subject }) => {
         </button>
       )}
 
-      {feedbackFieldVisible && sendFeedbackMutation.isIdle && (
+      {feedbackFieldVisible && !isSubmitting && sendFeedbackMutation.isIdle && (
         <button
           onClick={handleFeedbackClick}
           className="btn inline-block w-fit bg-neutral-500 text-white"
@@ -84,7 +95,7 @@ const FeedbackButton = ({ note, email, subject }) => {
         </button>
       )}
 
-      {sendFeedbackMutation.isLoading && (
+      {(isSubmitting || sendFeedbackMutation.isLoading) && (
         <button
           disabled
           className="btn inline-block w-fit cursor-not-allowed bg-neutral-500 text-white"
