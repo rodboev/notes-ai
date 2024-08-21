@@ -110,31 +110,63 @@ export const firestoreGetAllDocs = async (collectionName) => {
 
 export const firestoreSetDoc = async (collectionName, data, options = {}) => {
   if (!enabled) return null
-  try {
-    const batch = writeBatch(firestore)
 
+  try {
     if (Array.isArray(data)) {
       // Handle array of documents
+      const batch = writeBatch(firestore)
+      let validOperations = 0
+      let skippedOperations = 0
+
       data.forEach((item) => {
         if (item.fingerprint) {
           const docRef = doc(firestore, collectionName, item.fingerprint)
           batch.set(docRef, item, options)
+          validOperations++
         } else {
           console.warn('Item missing fingerprint:', item)
+          skippedOperations++
         }
       })
-    } else if (data.fingerprint) {
+
+      if (validOperations === 0) {
+        console.warn('No valid operations to write to Firestore')
+        return { validOperations, skippedOperations }
+      }
+
+      await batch.commit()
+      console.log(`Successfully wrote ${validOperations} documents to Firestore`)
+
+      if (skippedOperations > 0) {
+        console.warn(`Skipped ${skippedOperations} invalid documents`)
+      }
+
+      return { validOperations, skippedOperations }
+    } else if (typeof data === 'object' && data !== null) {
       // Handle single document
+      if (!data.fingerprint) {
+        throw new Error('Invalid data format: single document must have a fingerprint')
+      }
       const docRef = doc(firestore, collectionName, data.fingerprint)
-      batch.set(docRef, data, options)
+      await setDoc(docRef, data, options)
+      console.log(`Successfully wrote document with fingerprint ${data.fingerprint} to Firestore`)
+      return { validOperations: 1, skippedOperations: 0 }
     } else {
       throw new Error(
-        'Invalid data format: must be an array of emails or a single email with a fingerprint',
+        'Invalid data format: must be an array of documents or a single document object with a fingerprint',
       )
     }
-
-    await batch.commit()
   } catch (error) {
     handleFirestoreError(error)
+    return { validOperations: 0, skippedOperations: Array.isArray(data) ? data.length : 1, error }
   }
+}
+
+const handleFirestoreError = (error) => {
+  console.error('Firestore operation failed:', error)
+  if (error.code === 'resource-exhausted' && !quotaExceededLogged) {
+    console.error('Firestore quota exceeded. Further writes will be disabled for this session.')
+    quotaExceededLogged = true
+  }
+  throw error
 }

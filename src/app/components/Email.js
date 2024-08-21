@@ -12,12 +12,12 @@ import { useSingleEmail } from '../hooks/useEmails'
 const Email = ({
   initialEmail,
   noteFingerprint,
-  emailStatus,
-  updateStatus,
   index,
   total,
   scrollToNextPair,
   children,
+  emailStatus,
+  updateStatus,
 }) => {
   const editorRef = useRef(null)
   const { data, isLoading, error, refreshEmail } = useSingleEmail(noteFingerprint)
@@ -67,6 +67,7 @@ const Email = ({
                         getEmailContent={() => editorRef.current?.getContent()}
                         onEmailSent={handleEmailSent}
                         updateStatus={updateStatus}
+                        emailStatus={emailStatus}
                       />
                       {(!emailStatus ||
                         (emailStatus.status !== 'sending' && emailStatus.status !== 'success')) && (

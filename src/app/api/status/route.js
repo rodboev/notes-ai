@@ -1,11 +1,10 @@
 // src/app/api/status/route.js
 
 import { readFromDisk, writeToDisk } from '../../utils/diskStorage'
-import { firestoreGetDoc, firestoreSetDoc } from '../../utils/firestoreHelper'
+import { firestoreGetAllDocs, firestoreSetDoc } from '../../utils/firestoreHelper'
 import { timestamp } from '../../utils/timestamp'
 
 const STATUS_COLLECTION = 'status'
-const EMAILS_DOC_ID = 'emails'
 
 export async function loadStatuses() {
   try {
@@ -15,8 +14,13 @@ export async function loadStatuses() {
     }
 
     console.log(`${timestamp()} Statuses not found on disk or empty, loading from Firestore...`)
-    const statusesData = await firestoreGetDoc(STATUS_COLLECTION, EMAILS_DOC_ID)
-    const statuses = statusesData || {}
+    const statusesArray = await firestoreGetAllDocs(STATUS_COLLECTION)
+    const statuses = statusesArray.reduce((acc, status) => {
+      if (status.fingerprint) {
+        acc[status.fingerprint] = status
+      }
+      return acc
+    }, {})
 
     if (Object.keys(statuses).length > 0) {
       console.log(`${timestamp()} Writing Firestore data to disk...`)
@@ -33,27 +37,30 @@ export async function loadStatuses() {
 export async function saveStatus(fingerprint, newStatus) {
   try {
     const allStatuses = await loadStatuses()
-    const hasChanges = JSON.stringify(allStatuses[fingerprint]) !== JSON.stringify(newStatus)
+    const currentStatus = allStatuses[fingerprint] || {}
+
+    const updatedStatus = {
+      ...newStatus,
+      fingerprint,
+      updatedAt: new Date().toISOString(),
+    }
+
+    const hasChanges = JSON.stringify(currentStatus) !== JSON.stringify(updatedStatus)
 
     if (hasChanges) {
-      allStatuses[fingerprint] = newStatus
+      allStatuses[fingerprint] = updatedStatus
 
       await writeToDisk('status.json', allStatuses)
       console.log(`${timestamp()} Email status saved to disk`)
 
       console.log(`${timestamp()} Changes detected in statuses. Triggering Firestore write`)
-      await firestoreSetDoc(
-        STATUS_COLLECTION,
-        EMAILS_DOC_ID,
-        { [fingerprint]: newStatus },
-        { merge: true },
-      )
+      await firestoreSetDoc(STATUS_COLLECTION, fingerprint, updatedStatus)
       console.log(`${timestamp()} Email status saved to Firestore`)
     } else {
       console.log(`${timestamp()} No changes detected, skipping save operation`)
     }
 
-    return newStatus
+    return updatedStatus
   } catch (error) {
     console.error(`${timestamp()} Error saving email status:`, error.message)
     throw error

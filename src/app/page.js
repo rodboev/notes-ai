@@ -11,7 +11,7 @@ import Datepicker from 'react-tailwindcss-datepicker'
 import { useNotes } from './hooks/useNotes'
 import { useEmails } from './hooks/useEmails'
 import { useEmailStatuses } from './hooks/useEmailStatus'
-import { useLocalStorage } from './hooks/useLocalStorage.js' // Import the hook
+import { useLocalStorage } from './hooks/useLocalStorage.js'
 import { useQueryClient } from '@tanstack/react-query'
 
 const leftJoin = (notes, emails) => {
@@ -50,6 +50,9 @@ export default function Home() {
     emailsUpdateCounter,
   } = useEmails(notes)
 
+  const fingerprints = notes?.map((note) => note.fingerprint) || []
+  const { data: emailStatuses, updateStatus } = useEmailStatuses(fingerprints)
+
   const pairs = useMemo(() => {
     const latestEmails = queryClient.getQueryData(['emails']) || emailsData
     if (notes && latestEmails && Array.isArray(notes) && Array.isArray(latestEmails)) {
@@ -69,16 +72,9 @@ export default function Home() {
     pairRefs.current[index]?.scrollIntoView({ behavior: 'smooth' })
   }
 
-  const fingerprints = notes?.map((note) => note.fingerprint) || []
-  const {
-    data: emailStatuses,
-    isLoading: isLoadingStatuses,
-    updateStatus,
-  } = useEmailStatuses(fingerprints)
-
   useEffect(() => {
     syncDate()
-  }, [])
+  }, [syncDate])
 
   return (
     <div className="flex h-screen max-w-full snap-y snap-mandatory flex-col items-center overflow-y-scroll">
@@ -124,16 +120,16 @@ export default function Home() {
           ref={(el) => (pairRefs.current[index] = el)}
           className="pair container -m-4 flex max-w-screen-2xl snap-center snap-always p-4 pb-0"
         >
-          <Note note={note} index={index} total={pairs.length}></Note>
+          <Note note={note} index={index} total={pairs.length} />
           <Email
             initialEmail={email}
             noteFingerprint={note.fingerprint}
-            emailStatus={emailStatuses?.[note.fingerprint]}
-            updateStatus={updateStatus}
             index={index}
             total={pairs.length}
             scrollToNextPair={scrollToNextPair}
-          ></Email>
+            emailStatus={emailStatuses?.[note.fingerprint]}
+            updateStatus={updateStatus}
+          />
         </div>
       ))}
     </div>

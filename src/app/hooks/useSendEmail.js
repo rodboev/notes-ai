@@ -21,9 +21,8 @@ export const useSendEmail = (fingerprint) => {
 
   return useMutation({
     mutationFn: sendEmail,
-    onSuccess: (data) => {
-      // Update the email status in the cache
-      queryClient.setQueryData(['emailStatus', fingerprint], data)
+    onSuccess: () => {
+      queryClient.invalidateQueries(['emailStatuses', [fingerprint]])
     },
   })
 }
