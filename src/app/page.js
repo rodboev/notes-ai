@@ -74,7 +74,7 @@ export default function Home() {
 
   useEffect(() => {
     syncDate()
-  }, [syncDate])
+  }, [])
 
   return (
     <div className="flex h-screen max-w-full snap-y snap-mandatory flex-col items-center overflow-y-scroll">
