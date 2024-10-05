@@ -11,6 +11,7 @@
   },
   "dependencies": {
     "@heroicons/react": "^2.1.5",
+    "@openai/realtime-api-beta": "openai/openai-realtime-api-beta",
     "@tanstack/react-query": "^5.51.23",
     "@tanstack/react-query-devtools": "^5.51.23",
     "@tinymce/tinymce-react": "^5.1.1",
@@ -37,7 +38,8 @@
     "react-tailwindcss-datepicker": "^1.6.6",
     "react-textarea-autosize": "^8.5.3",
     "tiktoken": "^1.0.15",
-    "tinymce": "^7.3.0"
+    "tinymce": "^7.3.0",
+    "ws": "^8.18.0"
   },
   "devDependencies": {
     "@types/react": "^18.3.3",
