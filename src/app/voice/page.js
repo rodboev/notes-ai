@@ -1,77 +1,43 @@
 'use client'
 
 import { useState, useEffect, useRef } from 'react'
-import {
-  initializeClient,
-  initializeRecorder,
-  initializePlayer,
-  TECHNICIAN_NOTE,
-  SYSTEM_PROMPT,
-} from './logic'
+import { useRealtimeClient } from '@/app/hooks/useRealtimeClient'
+import { WavRecorder, WavStreamPlayer } from '@/app/lib/wavtools'
+import { TECHNICIAN_NOTE } from '@/app/voice/consts'
 
 export default function VoiceChat() {
+  const { client, connect } = useRealtimeClient()
   const [conversation, setConversation] = useState([])
   const [isSessionActive, setIsSessionActive] = useState(false)
   const [currentUserTranscription, setCurrentUserTranscription] = useState('')
   const [currentAssistantResponse, setCurrentAssistantResponse] = useState('')
-  const clientRef = useRef(null)
   const recorderRef = useRef(null)
   const playerRef = useRef(null)
 
   useEffect(() => {
-    const setup = async () => {
-      clientRef.current = await initializeClient(handleEvent)
-      recorderRef.current = await initializeRecorder()
-      playerRef.current = await initializePlayer()
+    if (client) {
+      client.on('error', handleError)
+      client.on('conversation.interrupted', handleInterrupted)
+      client.on('conversation.updated', handleConversationUpdated)
+      client.on('conversation.item.completed', handleConversationItemCompleted)
 
-      // Send system prompt
-      clientRef.current.sendUserMessageContent([
-        {
-          type: 'input_text',
-          text: SYSTEM_PROMPT,
-        },
-      ])
-
-      // Initialize conversation with technician note
-      clientRef.current.sendUserMessageContent([
-        {
-          type: 'input_text',
-          text: `Here's the technician note for this customer: ${TECHNICIAN_NOTE}. Please start the conversation with the customer based on this information.`,
-        },
-      ])
-      clientRef.current.createResponse()
+      connect().then(() => {
+        initializeConversation()
+      })
     }
+  }, [client, connect])
 
-    setup()
+  const handleError = (event) => {
+    console.error('RealtimeClient error:', event)
+  }
 
-    return () => {
-      if (clientRef.current) {
-        clientRef.current.disconnect()
-      }
-    }
-  }, [])
-
-  const handleEvent = (type, event) => {
-    switch (type) {
-      case 'error':
-        console.error('RealtimeClient error:', event)
-        break
-      case 'interrupted':
-        if (playerRef.current) {
-          playerRef.current.interrupt()
-        }
-        break
-      case 'updated':
-        handleUpdatedEvent(event)
-        break
-      case 'completed':
-        handleCompletedEvent(event)
-        break
+  const handleInterrupted = () => {
+    if (playerRef.current) {
+      playerRef.current.interrupt()
     }
   }
 
-  const handleUpdatedEvent = (event) => {
-    const { item, delta } = event
+  const handleConversationUpdated = ({ item, delta }) => {
     if (item.role === 'user' && delta && delta.transcript) {
       setCurrentUserTranscription((prev) => prev + delta.transcript)
     } else if (item.role === 'assistant' && delta && delta.content) {
@@ -82,8 +48,7 @@ export default function VoiceChat() {
     }
   }
 
-  const handleCompletedEvent = (event) => {
-    const { item } = event
+  const handleConversationItemCompleted = ({ item }) => {
     if (item.role === 'user') {
       setConversation((prev) => [...prev, { role: 'user', content: currentUserTranscription }])
       setCurrentUserTranscription('')
@@ -93,18 +58,43 @@ export default function VoiceChat() {
     }
   }
 
+  const initializeConversation = async () => {
+    await client.sendUserMessageContent([
+      {
+        type: 'input_text',
+        text: `Here's the technician note for this customer: ${TECHNICIAN_NOTE}. Please start the conversation with the customer based on this information.`,
+      },
+    ])
+    await client.createResponse()
+  }
+
   const startSession = async () => {
     setIsSessionActive(true)
+    if (!playerRef.current) {
+      playerRef.current = new WavStreamPlayer({ sampleRate: 24000 })
+      await playerRef.current.connect()
+    }
+    if (!recorderRef.current) {
+      recorderRef.current = new WavRecorder({ sampleRate: 24000 })
+      await recorderRef.current.begin()
+    }
     await recorderRef.current.record((data) => {
-      clientRef.current.appendInputAudio(data.mono)
+      if (client && client.isConnected()) {
+        client.appendInputAudio(data.mono)
+      }
     })
   }
 
   const endSession = async () => {
     setIsSessionActive(false)
-    await recorderRef.current.pause()
-    await recorderRef.current.end()
-    clientRef.current.createResponse()
+    if (recorderRef.current) {
+      await recorderRef.current.pause()
+      await recorderRef.current.end()
+      recorderRef.current = null
+    }
+    if (client && client.isConnected()) {
+      client.createResponse()
+    }
   }
 
   return (
