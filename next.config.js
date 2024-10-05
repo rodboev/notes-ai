@@ -13,6 +13,9 @@ const nextConfig = {
         crypto: false,
       }
     }
+    if (isServer) {
+      config.externals.push('ws')
+    }
     return config
   },
   serverExternalPackages: ['mssql'],
