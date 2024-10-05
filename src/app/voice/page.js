@@ -5,13 +5,14 @@ import { RealtimeClient } from '@openai/realtime-api-beta'
 import { WavRecorder, WavStreamPlayer } from '@/app/lib/wavtools'
 import { Zap, X, Mic, MicOff } from 'react-feather'
 
-const ConnectButton = ({ onClick, isConnected }) => {
+const ConnectButton = ({ onClick, isConnected, disabled }) => {
   return (
     <button
       onClick={onClick}
+      disabled={disabled}
       className={`rounded px-4 py-2 ${
         isConnected ? 'bg-red-500 hover:bg-red-600' : 'bg-blue-500 hover:bg-blue-600'
-      } flex items-center font-bold text-white`}
+      } flex items-center font-bold text-white ${disabled ? 'cursor-not-allowed opacity-50' : ''}`}
     >
       {isConnected ? (
         <>
@@ -51,6 +52,7 @@ export default function VoiceChat() {
   const [items, setItems] = useState([])
   const [isRecording, setIsRecording] = useState(false)
   const [canPushToTalk, setCanPushToTalk] = useState(true)
+  const [isWebSocketReady, setIsWebSocketReady] = useState(false)
 
   const wsRef = useRef(null)
   const clientRef = useRef(null)
@@ -71,9 +73,13 @@ export default function VoiceChat() {
           socket.send(JSON.stringify(event))
         },
         isConnected: () => socket.readyState === WebSocket.OPEN,
+        disconnect: () => {
+          console.log('Sending disconnect message to server')
+          socket.send(JSON.stringify({ type: 'disconnect' }))
+        },
       }
 
-      setupClientEventListeners()
+      setIsWebSocketReady(true)
     }
 
     socket.onmessage = (event) => {
@@ -83,11 +89,29 @@ export default function VoiceChat() {
         console.log('Updating connection status:', data.status)
         setIsConnected(data.status === 'connected')
         if (data.status === 'connected') {
-          processMessageQueue()
+          // Send session update and initial message after connection is established
+          clientRef.current.send({
+            type: 'session.update',
+            session: {
+              instructions: SYSTEM_PROMPT,
+              input_audio_transcription: { model: 'whisper-1' },
+            },
+          })
+          clientRef.current.send({
+            type: 'conversation.user_message',
+            content: [
+              {
+                type: 'input_text',
+                text: 'Hello!',
+              },
+            ],
+          })
+          console.log('Sent session update and initial message')
         }
-      } else if (clientRef.current) {
-        console.log('Forwarding message to RealtimeClient:', data.type)
-        clientRef.current.realtime.receive(data.type, data)
+      } else if (data.type === 'conversation.updated') {
+        handleConversationUpdated(data)
+      } else if (data.type === 'error') {
+        handleError(data)
       }
     }
 
@@ -98,6 +122,7 @@ export default function VoiceChat() {
     socket.onclose = () => {
       console.log('WebSocket connection closed')
       setIsConnected(false)
+      setIsWebSocketReady(false)
     }
 
     return () => {
@@ -107,27 +132,43 @@ export default function VoiceChat() {
     }
   }, [])
 
-  const setupClientEventListeners = () => {
-    if (wsRef.current) {
-      wsRef.current.onmessage = (event) => {
-        const data = JSON.parse(event.data)
-        if (data.type === 'connection_status') {
-          setIsConnected(data.status === 'connected')
-        } else if (data.type === 'conversation.updated') {
-          handleConversationUpdated(data)
-        } else if (data.type === 'error') {
-          handleError(data)
-        }
-      }
-    }
-  }
+  const disconnectConversation = useCallback(async () => {
+    try {
+      console.log('Disconnecting...')
+      setIsConnected(false)
+      setItems([])
 
-  const processMessageQueue = () => {
-    while (messageQueueRef.current.length > 0) {
-      const message = messageQueueRef.current.shift()
-      clientRef.current.realtime.send(message.type, message)
+      if (clientRef.current) {
+        clientRef.current.disconnect()
+      }
+
+      if (recorderRef.current) {
+        await recorderRef.current.end()
+      }
+
+      if (playerRef.current) {
+        await playerRef.current.interrupt()
+      }
+
+      console.log('Disconnected')
+    } catch (error) {
+      console.error('Error disconnecting:', error)
     }
-  }
+  }, [])
+
+  const handleConnect = useCallback(async () => {
+    if (!isWebSocketReady) {
+      console.error('WebSocket is not ready yet.')
+      return
+    }
+
+    if (!isConnected) {
+      clientRef.current.send({ type: 'connect' })
+      console.log('Sent connect message to relay server')
+    } else {
+      await disconnectConversation()
+    }
+  }, [isConnected, isWebSocketReady, disconnectConversation])
 
   const handleError = (event) => {
     console.error('RealtimeClient error:', event)
@@ -209,38 +250,6 @@ export default function VoiceChat() {
     }
   }, [])
 
-  const disconnectConversation = useCallback(async () => {
-    try {
-      console.log('Disconnecting...')
-      setIsConnected(false)
-      setItems([])
-
-      if (clientRef.current) {
-        clientRef.current.disconnect()
-      }
-
-      if (recorderRef.current) {
-        await recorderRef.current.end()
-      }
-
-      if (playerRef.current) {
-        await playerRef.current.interrupt()
-      }
-
-      console.log('Disconnected')
-    } catch (error) {
-      console.error('Error disconnecting:', error)
-    }
-  }, [])
-
-  const handleConnect = useCallback(async () => {
-    if (!isConnected) {
-      await connectConversation()
-    } else {
-      await disconnectConversation()
-    }
-  }, [isConnected, connectConversation, disconnectConversation])
-
   const changeTurnEndType = async (value) => {
     const client = clientRef.current
     const wavRecorder = recorderRef.current
@@ -281,7 +290,11 @@ export default function VoiceChat() {
     <div className="container mx-auto p-4">
       <h1 className="mb-4 text-2xl font-bold">Liberty Pest Control Voice Assistant</h1>
       <div className="mb-4">
-        <ConnectButton onClick={handleConnect} isConnected={isConnected} />
+        <ConnectButton
+          onClick={handleConnect}
+          isConnected={isConnected}
+          disabled={!isWebSocketReady}
+        />
       </div>
       <div className="mb-4">
         <button
