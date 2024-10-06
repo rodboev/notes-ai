@@ -34,7 +34,7 @@ export default function VoiceChat() {
   const [isConnected, setIsConnected] = useState(false)
   const [items, setItems] = useState([])
   const [isRecording, setIsRecording] = useState(false)
-  const [canPushToTalk, setCanPushToTalk] = useState(true)
+  const [canPushToTalk, setCanPushToTalk] = useState(false)
 
   const wavRecorderRef = useRef(new WavRecorder({ sampleRate: 24000 }))
   const wavStreamPlayerRef = useRef(new WavStreamPlayer({ sampleRate: 24000 }))
@@ -62,6 +62,9 @@ export default function VoiceChat() {
     if (client.getTurnDetectionType() === 'server_vad') {
       await wavRecorder.record((data) => client.appendInputAudio(data.mono))
     }
+
+    // Start in VAD mode by default
+    await changeTurnEndType('server_vad')
   }, [])
 
   const disconnectConversation = useCallback(async () => {
@@ -73,6 +76,9 @@ export default function VoiceChat() {
 
     const wavRecorder = wavRecorderRef.current
     await wavRecorder.end()
+
+    // Reset the WavRecorder
+    wavRecorderRef.current = new WavRecorder({ sampleRate: 24000 })
 
     const wavStreamPlayer = wavStreamPlayerRef.current
     await wavStreamPlayer.interrupt()
@@ -119,6 +125,7 @@ export default function VoiceChat() {
     const wavStreamPlayer = wavStreamPlayerRef.current
 
     client.updateSession({ instructions })
+    client.updateSession({ voice: 'echo' })
     client.updateSession({ input_audio_transcription: { model: 'whisper-1' } })
 
     client.on('error', (event) => console.error(event))
@@ -155,12 +162,12 @@ export default function VoiceChat() {
         />
       </div>
       <div className="mb-4">
-        <button
+        {/* <button
           onClick={() => changeTurnEndType(canPushToTalk ? 'server_vad' : 'none')}
           className="rounded bg-gray-500 px-4 py-2 font-bold text-white hover:bg-gray-600"
         >
           {canPushToTalk ? 'Switch to VAD' : 'Switch to Manual'}
-        </button>
+        </button> */}
       </div>
       {isConnected && canPushToTalk && (
         <div className="mb-4">
@@ -181,7 +188,7 @@ export default function VoiceChat() {
             key={item.id}
             className={`mb-2 ${item.role === 'assistant' ? 'text-blue-600' : 'text-green-600'}`}
           >
-            <strong>{item.role === 'assistant' ? 'Jerry: ' : 'You: '}</strong>
+            <strong>{item.role === 'assistant' ? 'Jerry: ' : 'Alex: '}</strong>
             {item.formatted.transcript || item.formatted.text}
           </div>
         ))}
