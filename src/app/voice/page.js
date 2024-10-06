@@ -52,207 +52,73 @@ export default function VoiceChat() {
   const [items, setItems] = useState([])
   const [isRecording, setIsRecording] = useState(false)
   const [canPushToTalk, setCanPushToTalk] = useState(true)
-  const [isWebSocketReady, setIsWebSocketReady] = useState(false)
 
-  const wsRef = useRef(null)
-  const clientRef = useRef(null)
-  const recorderRef = useRef(null)
-  const playerRef = useRef(null)
-  const messageQueueRef = useRef([])
+  const wavRecorderRef = useRef(new WavRecorder({ sampleRate: 24000 }))
+  const wavStreamPlayerRef = useRef(new WavStreamPlayer({ sampleRate: 24000 }))
+  const clientRef = useRef(new RealtimeClient({ url: LOCAL_RELAY_SERVER_URL }))
 
-  useEffect(() => {
-    console.log('Initializing WebSocket connection...')
-    const socket = new WebSocket(LOCAL_RELAY_SERVER_URL)
+  const connectConversation = useCallback(async () => {
+    const client = clientRef.current
+    const wavRecorder = wavRecorderRef.current
+    const wavStreamPlayer = wavStreamPlayerRef.current
 
-    socket.onopen = () => {
-      console.log('WebSocket connection established with relay server')
-      wsRef.current = socket
-      clientRef.current = {
-        send: (event) => {
-          console.log('Sending event to server:', event)
-          socket.send(JSON.stringify(event))
-        },
-        isConnected: () => socket.readyState === WebSocket.OPEN,
-        disconnect: () => {
-          console.log('Sending disconnect message to server')
-          socket.send(JSON.stringify({ type: 'disconnect' }))
-        },
-      }
+    setIsConnected(true)
+    setItems(client.conversation.getItems())
 
-      setIsWebSocketReady(true)
-    }
+    await wavRecorder.begin()
+    await wavStreamPlayer.connect()
 
-    socket.onmessage = (event) => {
-      console.log('Received message from server:', event.data)
-      const data = JSON.parse(event.data)
-      if (data.type === 'connection_status') {
-        console.log('Updating connection status:', data.status)
-        setIsConnected(data.status === 'connected')
-        if (data.status === 'connected') {
-          // Send session update and initial message after connection is established
-          clientRef.current.send({
-            type: 'session.update',
-            session: {
-              instructions: SYSTEM_PROMPT,
-              input_audio_transcription: { model: 'whisper-1' },
-            },
-          })
-          clientRef.current.send({
-            type: 'conversation.user_message',
-            content: [
-              {
-                type: 'input_text',
-                text: 'Hello!',
-              },
-            ],
-          })
-          console.log('Sent session update and initial message')
-        }
-      } else if (data.type === 'conversation.updated') {
-        handleConversationUpdated(data)
-      } else if (data.type === 'error') {
-        handleError(data)
-      }
-    }
+    await client.connect()
+    client.sendUserMessageContent([
+      {
+        type: 'input_text',
+        text: 'Hello!',
+      },
+    ])
 
-    socket.onerror = (error) => {
-      console.error('WebSocket error:', error)
-    }
-
-    socket.onclose = () => {
-      console.log('WebSocket connection closed')
-      setIsConnected(false)
-      setIsWebSocketReady(false)
-    }
-
-    return () => {
-      if (socket.readyState === WebSocket.OPEN) {
-        socket.close()
-      }
+    if (client.getTurnDetectionType() === 'server_vad') {
+      await wavRecorder.record((data) => client.appendInputAudio(data.mono))
     }
   }, [])
 
   const disconnectConversation = useCallback(async () => {
-    try {
-      console.log('Disconnecting...')
-      setIsConnected(false)
-      setItems([])
+    setIsConnected(false)
+    setItems([])
 
-      if (clientRef.current) {
-        clientRef.current.disconnect()
-      }
+    const client = clientRef.current
+    client.disconnect()
 
-      if (recorderRef.current) {
-        await recorderRef.current.end()
-      }
+    const wavRecorder = wavRecorderRef.current
+    await wavRecorder.end()
 
-      if (playerRef.current) {
-        await playerRef.current.interrupt()
-      }
-
-      console.log('Disconnected')
-    } catch (error) {
-      console.error('Error disconnecting:', error)
-    }
+    const wavStreamPlayer = wavStreamPlayerRef.current
+    await wavStreamPlayer.interrupt()
   }, [])
 
-  const handleConnect = useCallback(async () => {
-    if (!isWebSocketReady) {
-      console.error('WebSocket is not ready yet.')
-      return
+  const startRecording = async () => {
+    setIsRecording(true)
+    const client = clientRef.current
+    const wavRecorder = wavRecorderRef.current
+    const wavStreamPlayer = wavStreamPlayerRef.current
+    const trackSampleOffset = await wavStreamPlayer.interrupt()
+    if (trackSampleOffset?.trackId) {
+      const { trackId, offset } = trackSampleOffset
+      await client.cancelResponse(trackId, offset)
     }
-
-    if (!isConnected) {
-      clientRef.current.send({ type: 'connect' })
-      console.log('Sent connect message to relay server')
-    } else {
-      await disconnectConversation()
-    }
-  }, [isConnected, isWebSocketReady, disconnectConversation])
-
-  const handleError = (event) => {
-    console.error('RealtimeClient error:', event)
+    await wavRecorder.record((data) => client.appendInputAudio(data.mono))
   }
 
-  const handleInterrupted = async () => {
-    if (playerRef.current) {
-      const trackSampleOffset = await playerRef.current.interrupt()
-      if (trackSampleOffset?.trackId) {
-        const { trackId, offset } = trackSampleOffset
-        await clientRef.current.cancelResponse(trackId, offset)
-      }
-    }
+  const stopRecording = async () => {
+    setIsRecording(false)
+    const client = clientRef.current
+    const wavRecorder = wavRecorderRef.current
+    await wavRecorder.pause()
+    client.createResponse()
   }
-
-  const handleConversationUpdated = ({ item, delta }) => {
-    console.log('Conversation updated:', item, delta)
-    setItems((prevItems) => {
-      const updatedItems = [...prevItems]
-      const existingItemIndex = updatedItems.findIndex((i) => i.id === item.id)
-
-      if (existingItemIndex !== -1) {
-        updatedItems[existingItemIndex] = {
-          ...updatedItems[existingItemIndex],
-          ...item,
-          formatted: {
-            ...updatedItems[existingItemIndex].formatted,
-            ...item.formatted,
-          },
-        }
-      } else {
-        updatedItems.push(item)
-      }
-
-      if (delta?.audio && playerRef.current) {
-        playerRef.current.add16BitPCM(delta.audio, item.id)
-      }
-
-      return updatedItems
-    })
-  }
-
-  const connectConversation = useCallback(async () => {
-    try {
-      console.log('Connecting...')
-      const client = clientRef.current
-
-      if (client && client.isConnected()) {
-        client.send({ type: 'connect' })
-
-        // Initialize conversation
-        client.send({
-          type: 'session.update',
-          session: {
-            instructions: SYSTEM_PROMPT,
-            input_audio_transcription: { model: 'whisper-1' },
-          },
-        })
-
-        // Send initial message
-        client.send({
-          type: 'conversation.user_message',
-          content: [
-            {
-              type: 'input_text',
-              text: `Hello!`,
-            },
-          ],
-        })
-
-        setIsConnected(true)
-        console.log('Connected and initialized')
-      } else {
-        console.error('WebSocket is not connected')
-      }
-    } catch (error) {
-      console.error('Error connecting:', error)
-      setIsConnected(false)
-    }
-  }, [])
 
   const changeTurnEndType = async (value) => {
     const client = clientRef.current
-    const wavRecorder = recorderRef.current
+    const wavRecorder = wavRecorderRef.current
     if (value === 'none' && wavRecorder.getStatus() === 'recording') {
       await wavRecorder.pause()
     }
@@ -265,35 +131,44 @@ export default function VoiceChat() {
     setCanPushToTalk(value === 'none')
   }
 
-  const startRecording = async () => {
-    setIsRecording(true)
+  useEffect(() => {
     const client = clientRef.current
-    const wavRecorder = recorderRef.current
-    const wavStreamPlayer = playerRef.current
-    const trackSampleOffset = await wavStreamPlayer.interrupt()
-    if (trackSampleOffset?.trackId) {
-      const { trackId, offset } = trackSampleOffset
-      await client.cancelResponse(trackId, offset)
-    }
-    await wavRecorder.record((data) => client.appendInputAudio(data.mono))
-  }
+    const wavStreamPlayer = wavStreamPlayerRef.current
 
-  const stopRecording = async () => {
-    setIsRecording(false)
-    const client = clientRef.current
-    const wavRecorder = recorderRef.current
-    await wavRecorder.pause()
-    client.createResponse()
-  }
+    client.updateSession({ instructions: SYSTEM_PROMPT })
+    client.updateSession({ input_audio_transcription: { model: 'whisper-1' } })
+
+    client.on('error', (event) => console.error(event))
+    client.on('conversation.interrupted', async () => {
+      const trackSampleOffset = await wavStreamPlayer.interrupt()
+      if (trackSampleOffset?.trackId) {
+        const { trackId, offset } = trackSampleOffset
+        await client.cancelResponse(trackId, offset)
+      }
+    })
+    client.on('conversation.updated', async ({ item, delta }) => {
+      const items = client.conversation.getItems()
+      if (delta?.audio) {
+        wavStreamPlayer.add16BitPCM(delta.audio, item.id)
+      }
+      setItems(items)
+    })
+
+    setItems(client.conversation.getItems())
+
+    return () => {
+      client.reset()
+    }
+  }, [])
 
   return (
     <div className="container mx-auto p-4">
       <h1 className="mb-4 text-2xl font-bold">Liberty Pest Control Voice Assistant</h1>
       <div className="mb-4">
         <ConnectButton
-          onClick={handleConnect}
+          onClick={isConnected ? disconnectConversation : connectConversation}
           isConnected={isConnected}
-          disabled={!isWebSocketReady}
+          disabled={false}
         />
       </div>
       <div className="mb-4">

@@ -2,23 +2,18 @@ import { WebSocketServer } from 'ws'
 import { RealtimeClient } from '@openai/realtime-api-beta'
 import dotenv from 'dotenv'
 
-dotenv.config({ override: true })
+dotenv.config()
 
-// Ensure consistency in environment variable naming
-const OPENAI_API_KEY = process.env.OPENAI_API_KEY // Changed from OPENAI_API_VOICE_KEY to OPENAI_API_KEY
-
-if (!OPENAI_API_KEY) {
-  console.error(
-    `Environment variable "OPENAI_API_KEY" is required.\n` + `Please set it in your .env file.`,
-  )
-  process.exit(1)
-}
+const OPENAI_API_KEY =
+  process.env.OPENAI_API_KEY_VOICE ||
+  (console.error(`Environment variable "OPENAI_API_KEY_VOICE" is missing.`), process.exit(1))
 
 const PORT = 49152
 
 class RealtimeRelay {
   constructor(apiKey) {
     this.apiKey = apiKey
+    this.sockets = new WeakMap()
     this.wss = null
   }
 
@@ -44,107 +39,51 @@ class RealtimeRelay {
       return
     }
 
-    // Instantiate new RealtimeClient but do not connect yet
-    this.log(`Received new WebSocket connection. Awaiting 'connect' message.`)
+    // Instantiate new client
+    this.log(`Connecting with key "${this.apiKey.slice(0, 3)}..."`)
     const client = new RealtimeClient({ apiKey: this.apiKey })
 
-    let openAIConnected = false
-    const messageQueue = []
-
-    client.on('connected', () => {
-      this.log('Connected to OpenAI Realtime API')
-      openAIConnected = true
-      ws.send(JSON.stringify({ type: 'connection_status', status: 'connected' }))
-      this.processMessageQueue(messageQueue, client, ws)
-    })
-
-    client.on('disconnected', () => {
-      this.log('Disconnected from OpenAI Realtime API')
-      openAIConnected = false
-      ws.send(JSON.stringify({ type: 'connection_status', status: 'disconnected' }))
-    })
-
-    client.on('error', (error) => {
-      this.log('OpenAI Realtime API error:', error)
-      ws.send(JSON.stringify({ type: 'error', message: error.message }))
-    })
-
+    // Relay: OpenAI Realtime API Event -> Browser Event
     client.realtime.on('server.*', (event) => {
-      this.log(`Relaying from OpenAI to client: ${event.type}`)
+      this.log(`Relaying "${event.type}" to Client`)
       ws.send(JSON.stringify(event))
     })
+    client.realtime.on('close', () => ws.close())
 
-    const messageHandler = (event) => {
-      try {
-        const parsedEvent = JSON.parse(event)
-        this.log(`Relaying from client: ${parsedEvent.type}`)
-
-        if (parsedEvent.type === 'connect') {
-          if (!openAIConnected) {
-            client.connect().catch((error) => {
-              this.log('Error connecting to OpenAI:', error)
-              ws.send(JSON.stringify({ type: 'error', message: 'Failed to connect to OpenAI' }))
-            })
-          } else {
-            this.log('Already connected to OpenAI. Ignoring connect message.')
-          }
-        } else if (parsedEvent.type === 'disconnect') {
-          if (openAIConnected) {
-            client.disconnect()
-          } else {
-            this.log('Already disconnected from OpenAI.')
-          }
-        } else if (openAIConnected) {
-          client.realtime.send(parsedEvent.type, parsedEvent)
-        } else {
-          this.log('Received message while not connected to OpenAI')
-          ws.send(JSON.stringify({ type: 'error', message: 'Not connected to OpenAI' }))
-        }
-      } catch (e) {
-        this.log('Error processing message:', e)
-        ws.send(JSON.stringify({ type: 'error', message: 'Error processing message' }))
-      }
-    }
-
-    ws.on('message', (data) => {
+    // Relay: Browser Event -> OpenAI Realtime API Event
+    // We need to queue data waiting for the OpenAI connection
+    const messageQueue = []
+    const messageHandler = (data) => {
       try {
         const event = JSON.parse(data)
-        if (event.type === 'connect' || event.type === 'disconnect') {
-          // Always handle 'connect' and 'disconnect' messages immediately
-          messageHandler(data)
-        } else if (openAIConnected) {
-          // Handle other messages only if connected
-          messageHandler(data)
-        } else {
-          // Queue messages that aren't 'connect' or 'disconnect'
-          this.log('OpenAI not connected yet, queueing message')
-          messageQueue.push(data)
-        }
-      } catch (e) {
-        this.log('Error parsing incoming message:', e)
-        ws.send(JSON.stringify({ type: 'error', message: 'Invalid message format' }))
-      }
-    })
-
-    ws.on('close', () => {
-      this.log('WebSocket connection closed with client')
-      if (openAIConnected) {
-        client.disconnect()
-      }
-    })
-  }
-
-  processMessageQueue(queue, client, ws) {
-    while (queue.length > 0) {
-      const message = queue.shift()
-      try {
-        const event = JSON.parse(message)
-        this.log(`Relaying queued message: ${event.type}`)
+        this.log(`Relaying "${event.type}" to OpenAI`)
         client.realtime.send(event.type, event)
       } catch (e) {
-        this.log('Error processing queued message:', e)
-        ws.send(JSON.stringify({ type: 'error', message: 'Error processing queued message' }))
+        console.error(e.message)
+        this.log(`Error parsing event from client: ${data}`)
       }
+    }
+    ws.on('message', (data) => {
+      if (!client.isConnected()) {
+        messageQueue.push(data)
+      } else {
+        messageHandler(data)
+      }
+    })
+    ws.on('close', () => client.disconnect())
+
+    // Connect to OpenAI Realtime API
+    try {
+      this.log(`Connecting to OpenAI...`)
+      await client.connect()
+    } catch (e) {
+      this.log(`Error connecting to OpenAI: ${e.message}`)
+      ws.close()
+      return
+    }
+    this.log(`Connected to OpenAI successfully!`)
+    while (messageQueue.length) {
+      messageHandler(messageQueue.shift())
     }
   }
 
