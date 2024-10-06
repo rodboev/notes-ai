@@ -3,25 +3,28 @@
 import { useState, useEffect, useRef, useCallback } from 'react'
 import { RealtimeClient } from '@openai/realtime-api-beta'
 import { WavRecorder, WavStreamPlayer } from '@/app/lib/wavtools'
-import { Zap, X, Mic, MicOff } from 'react-feather'
 import { instructions } from '@/app/voice/conversation_config'
+import Nav from '../components/Nav'
+import { Phone, PhoneOff } from 'lucide-react'
 
 const ConnectButton = ({ onClick, isConnected, disabled }) => {
   return (
     <button
       onClick={onClick}
       disabled={disabled}
-      className={`rounded px-4 py-2 ${
-        isConnected ? 'bg-red-500 hover:bg-red-600' : 'bg-blue-500 hover:bg-blue-600'
+      className={`rounded px-4 py-2 pr-5 ${
+        isConnected ? 'bg-neutral-500 hover:bg-neutral-600' : 'hover:bg-teal-600 bg-teal-500'
       } flex items-center font-bold text-white ${disabled ? 'cursor-not-allowed opacity-50' : ''}`}
     >
-      {isConnected ? (
+      {!isConnected ? (
         <>
-          Disconnect <X className="ml-2" />
+          <Phone className="mr-3 h-4 w-4" />
+          <span>Start call</span>
         </>
       ) : (
         <>
-          Connect <Zap className="ml-2" />
+          <PhoneOff className="mr-2 h-4 w-4" />
+          <span>End call</span>
         </>
       )}
     </button>
@@ -152,47 +155,26 @@ export default function VoiceChat() {
   }, [])
 
   return (
-    <div className="container mx-auto p-4">
-      <h1 className="mb-4 text-2xl font-bold">Liberty Pest Control Voice Assistant</h1>
-      <div className="mb-4">
-        <ConnectButton
-          onClick={isConnected ? disconnectConversation : connectConversation}
-          isConnected={isConnected}
-          disabled={false}
-        />
-      </div>
-      <div className="mb-4">
-        {/* <button
-          onClick={() => changeTurnEndType(canPushToTalk ? 'server_vad' : 'none')}
-          className="rounded bg-gray-500 px-4 py-2 font-bold text-white hover:bg-gray-600"
-        >
-          {canPushToTalk ? 'Switch to VAD' : 'Switch to Manual'}
-        </button> */}
-      </div>
-      {isConnected && canPushToTalk && (
-        <div className="mb-4">
-          <button
-            onMouseDown={startRecording}
-            onMouseUp={stopRecording}
-            className={`${
-              isRecording ? 'bg-red-500 hover:bg-red-600' : 'bg-blue-500 hover:bg-blue-600'
-            } rounded px-4 py-2 font-bold text-white`}
-          >
-            {isRecording ? 'Release to Send' : 'Push to Talk'}
-          </button>
+    <>
+      <Nav />
+      <div className="flex h-dvh max-w-full snap-y snap-mandatory flex-col items-center justify-center overflow-y-scroll pb-8 pt-20">
+        <div className="m-4 h-full w-1/2 min-w-96 overflow-y-auto border p-4">
+          {items.map((item) => (
+            <div
+              key={item.id}
+              className={`mb-2 ${item.role === 'assistant' ? 'text-blue-600' : 'text-green-600'}`}
+            >
+              <strong>{item.role === 'assistant' ? 'Jerry: ' : 'Alex: '}</strong>
+              {item.formatted.transcript || item.formatted.text}
+            </div>
+          ))}
         </div>
-      )}
-      <div className="h-96 overflow-y-auto border p-4">
-        {items.map((item) => (
-          <div
-            key={item.id}
-            className={`mb-2 ${item.role === 'assistant' ? 'text-blue-600' : 'text-green-600'}`}
-          >
-            <strong>{item.role === 'assistant' ? 'Jerry: ' : 'Alex: '}</strong>
-            {item.formatted.transcript || item.formatted.text}
-          </div>
-        ))}
+        {!isConnected ? (
+          <ConnectButton onClick={connectConversation} isConnected={false} disabled={false} />
+        ) : (
+          <ConnectButton onClick={disconnectConversation} isConnected={true} disabled={false} />
+        )}
       </div>
-    </div>
+    </>
   )
 }
