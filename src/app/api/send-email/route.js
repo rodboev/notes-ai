@@ -4,7 +4,7 @@ import { NextResponse } from 'next/server'
 import nodemailer from 'nodemailer'
 import { google } from 'googleapis'
 import dotenv from 'dotenv'
-import { loadStatuses, saveStatuses } from '../status/route'
+import { loadStatuses, saveStatus } from '../status/route'
 
 dotenv.config()
 
@@ -82,17 +82,14 @@ export async function POST(req) {
       to: email,
     }
 
-    // Update status directly using functions from status/route.js
-    const existingStatuses = await loadStatuses()
-    const updatedStatuses = { ...existingStatuses, [fingerprint]: emailData }
-    await saveStatuses(updatedStatuses)
+    // Update status using saveStatus function
+    await saveStatus(fingerprint, emailData)
 
     return NextResponse.json({ message: 'Email sent successfully', status: emailData })
   } catch (error) {
     console.error('Error sending email:', error)
 
-    // Update status to error
-    const existingStatuses = await loadStatuses()
+    // Update status to error using saveStatus function
     const errorStatus = {
       status: 'error',
       sentAt: new Date().toISOString(),
@@ -101,8 +98,7 @@ export async function POST(req) {
       to: email,
       error: error.message,
     }
-    const updatedStatuses = { ...existingStatuses, [fingerprint]: errorStatus }
-    await saveStatuses(updatedStatuses)
+    await saveStatus(fingerprint, errorStatus)
 
     return NextResponse.json(
       { error: 'Error sending email', details: error.message, status: errorStatus },
