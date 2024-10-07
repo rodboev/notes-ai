@@ -8,9 +8,17 @@ import Nav from '../components/Nav'
 import { Phone, PhoneOff } from 'lucide-react'
 import SpinnerIcon from '../components/Icons/SpinnerIcon'
 
-// Move the relayServerUrl logic inside the component
 export default function VoiceChat() {
   const [relayServerUrl, setRelayServerUrl] = useState('')
+  const [isConnected, setIsConnected] = useState(false)
+  const [items, setItems] = useState([])
+  const [isRecording, setIsRecording] = useState(false)
+  const [canPushToTalk, setCanPushToTalk] = useState(false)
+  const [isPending, setIsPending] = useState(false)
+
+  const wavRecorderRef = useRef(new WavRecorder({ sampleRate: 24000 }))
+  const wavStreamPlayerRef = useRef(new WavStreamPlayer({ sampleRate: 24000 }))
+  const clientRef = useRef(null)
 
   useEffect(() => {
     const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:'
@@ -18,23 +26,10 @@ export default function VoiceChat() {
     const port = process.env.NEXT_PUBLIC_RELAY_SERVER_PORT || '49152'
     const url = `${protocol}//${host}:${port}`
     setRelayServerUrl(url)
-    console.log('Relay Server URL:', url)
   }, [])
 
-  const [isConnected, setIsConnected] = useState(false)
-  const [items, setItems] = useState([])
-  const [isRecording, setIsRecording] = useState(false)
-  const [canPushToTalk, setCanPushToTalk] = useState(false)
-  const [isPending, setIsPending] = useState(false)
-  const [error, setError] = useState(null)
-  const [logs, setLogs] = useState([])
-
-  const wavRecorderRef = useRef(new WavRecorder({ sampleRate: 24000 }))
-  const wavStreamPlayerRef = useRef(new WavStreamPlayer({ sampleRate: 24000 }))
-  const clientRef = useRef(null)
-
   useEffect(() => {
-    if (!relayServerUrl) return // Don't initialize if URL is not set yet
+    if (!relayServerUrl) return
 
     clientRef.current = new RealtimeClient({ url: relayServerUrl })
 
@@ -45,7 +40,6 @@ export default function VoiceChat() {
     client.updateSession({ voice: 'echo' })
     client.updateSession({ input_audio_transcription: { model: 'whisper-1' } })
 
-    client.on('error', (event) => console.error(event))
     client.on('conversation.interrupted', async () => {
       const trackSampleOffset = await wavStreamPlayer.interrupt()
       if (trackSampleOffset?.trackId) {
@@ -69,35 +63,21 @@ export default function VoiceChat() {
   }, [relayServerUrl])
 
   const connectConversation = useCallback(async () => {
-    if (!clientRef.current || !relayServerUrl) {
-      console.error('RealtimeClient not initialized or relayServerUrl not set')
-      setError('RealtimeClient not initialized or relayServerUrl not set')
-      return
-    }
+    if (!clientRef.current || !relayServerUrl) return
 
-    console.log('Starting connection...')
-    console.log('RELAY_SERVER_URL:', relayServerUrl)
     setIsPending(true)
     const client = clientRef.current
     const wavRecorder = wavRecorderRef.current
     const wavStreamPlayer = wavStreamPlayerRef.current
 
     try {
-      console.log('Attempting to connect client...')
       await client.connect()
-      console.log('Client connected successfully')
       setIsConnected(true)
       setItems(client.conversation.getItems())
 
-      console.log('Initializing wavRecorder...')
       await wavRecorder.begin()
-      console.log('WavRecorder initialized')
-
-      console.log('Connecting wavStreamPlayer...')
       await wavStreamPlayer.connect()
-      console.log('WavStreamPlayer connected')
 
-      console.log('Sending initial message...')
       client.sendUserMessageContent([
         {
           type: 'input_text',
@@ -106,19 +86,12 @@ export default function VoiceChat() {
       ])
 
       if (client.getTurnDetectionType() === 'server_vad') {
-        console.log('Setting up audio recording...')
         await wavRecorder.record((data) => client.appendInputAudio(data.mono))
       }
 
-      console.log('Changing turn end type...')
       await changeTurnEndType('server_vad')
-      console.log('Connection process completed')
-    } catch (error) {
-      console.error('Error in connectConversation:', error)
-      setError(error.message)
     } finally {
       setIsPending(false)
-      console.log('Connection attempt finished')
     }
   }, [relayServerUrl])
 
@@ -132,7 +105,6 @@ export default function VoiceChat() {
     const wavRecorder = wavRecorderRef.current
     await wavRecorder.end()
 
-    // Reset the WavRecorder
     wavRecorderRef.current = new WavRecorder({ sampleRate: 24000 })
 
     const wavStreamPlayer = wavStreamPlayerRef.current
@@ -175,11 +147,6 @@ export default function VoiceChat() {
     setCanPushToTalk(value === 'none')
   }
 
-  const log = (message) => {
-    setLogs((prevLogs) => [...prevLogs, `${new Date().toISOString()}: ${message}`])
-    console.log(message)
-  }
-
   return (
     <>
       <Nav />
@@ -201,23 +168,11 @@ export default function VoiceChat() {
           disabled={false}
           isPending={isPending}
         />
-        {error ||
-          (logs.length > 0 && (
-            <div className="p-4 text-xs">
-              <ul>{error && <div className="mt-2 text-red-500">Error: {error}</div>}</ul>
-              <ul>
-                {logs.slice(-5).map((log, index) => (
-                  <li key={index}>{log}</li>
-                ))}
-              </ul>
-            </div>
-          ))}
       </div>
     </>
   )
 }
 
-// Keep the ConnectButton component as is
 const ConnectButton = ({ onClick, isConnected, disabled, isPending }) => {
   return (
     <button
