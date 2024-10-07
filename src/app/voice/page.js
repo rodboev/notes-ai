@@ -5,12 +5,24 @@ import { RealtimeClient } from '@openai/realtime-api-beta'
 import { WavRecorder, WavStreamPlayer } from '@/app/lib/wavtools'
 import { instructions } from '@/app/voice/conversation_config'
 import Nav from '../components/Nav'
-import { Phone, PhoneOff } from 'lucide-react'
+import { Phone, PhoneOff, Check, X } from 'lucide-react'
 import SpinnerIcon from '../components/Icons/SpinnerIcon'
+
+const ConnectionIndicator = ({ isConnected, url, isAvailable }) => {
+  return (
+    <div className="flex items-center space-x-2">
+      <div className={`flex items-center ${isAvailable ? 'text-green-500' : 'text-red-500'}`}>
+        {isAvailable ? <Check className="h-4 w-4" /> : <X className="h-4 w-4" />}
+      </div>
+      <span className="text-gray-500">{url}</span>
+    </div>
+  )
+}
 
 export default function VoiceChat() {
   const [relayServerUrl, setRelayServerUrl] = useState('')
   const [isConnected, setIsConnected] = useState(false)
+  const [isServerAvailable, setIsServerAvailable] = useState(false)
   const [items, setItems] = useState([])
   const [isRecording, setIsRecording] = useState(false)
   const [canPushToTalk, setCanPushToTalk] = useState(false)
@@ -26,6 +38,23 @@ export default function VoiceChat() {
     const port = process.env.NEXT_PUBLIC_RELAY_SERVER_PORT || '49152'
     const url = `${protocol}//${host}:${port}`
     setRelayServerUrl(url)
+
+    // Check if the server is available
+    const checkServerAvailability = () => {
+      const ws = new WebSocket(url)
+      ws.onopen = () => {
+        setIsServerAvailable(true)
+        ws.close()
+      }
+      ws.onerror = () => {
+        setIsServerAvailable(false)
+      }
+    }
+
+    checkServerAvailability()
+    const intervalId = setInterval(checkServerAvailability, 10000) // Check every 10 seconds
+
+    return () => clearInterval(intervalId)
   }, [])
 
   useEffect(() => {
@@ -47,17 +76,40 @@ export default function VoiceChat() {
         await client.cancelResponse(trackId, offset)
       }
     })
+
     client.on('conversation.updated', async ({ item, delta }) => {
-      const items = client.conversation.getItems()
+      setItems((prevItems) => {
+        const existingItemIndex = prevItems.findIndex((i) => i.id === item.id)
+        if (existingItemIndex !== -1) {
+          // Update existing item
+          const updatedItems = [...prevItems]
+          updatedItems[existingItemIndex] = { ...updatedItems[existingItemIndex], ...item }
+          return updatedItems
+        } else {
+          // Add new item
+          return [...prevItems, item]
+        }
+      })
+
       if (delta?.audio) {
         wavStreamPlayer.add16BitPCM(delta.audio, item.id)
       }
-      setItems(items)
     })
 
-    setItems(client.conversation.getItems())
+    // Initial items setup
+    client.on('ready', () => {
+      setItems(client.conversation.getItems())
+    })
+
+    // Set up WebSocket connection check
+    const checkConnection = () => {
+      setIsConnected(client.isConnected())
+    }
+
+    const intervalId = setInterval(checkConnection, 5000) // Check every 5 seconds
 
     return () => {
+      clearInterval(intervalId)
       client.reset()
     }
   }, [relayServerUrl])
@@ -72,7 +124,7 @@ export default function VoiceChat() {
 
     try {
       await client.connect()
-      setIsConnected(true)
+      setIsConnected(client.isConnected())
       setItems(client.conversation.getItems())
 
       await wavRecorder.begin()
@@ -96,9 +148,6 @@ export default function VoiceChat() {
   }, [relayServerUrl])
 
   const disconnectConversation = useCallback(async () => {
-    setIsConnected(false)
-    setItems([])
-
     const client = clientRef.current
     client.disconnect()
 
@@ -109,6 +158,9 @@ export default function VoiceChat() {
 
     const wavStreamPlayer = wavStreamPlayerRef.current
     await wavStreamPlayer.interrupt()
+
+    setIsConnected(false)
+    setItems([])
   }, [])
 
   const startRecording = async () => {
@@ -151,6 +203,11 @@ export default function VoiceChat() {
     <>
       <Nav />
       <div className="flex h-dvh max-w-full snap-y snap-mandatory flex-col items-center justify-center overflow-y-scroll pb-8 pt-20">
+        <ConnectionIndicator
+          isConnected={isConnected}
+          url={relayServerUrl}
+          isAvailable={isServerAvailable}
+        />
         <div className="m-4 h-full w-1/2 min-w-96 overflow-y-auto border p-4">
           {items.map((item) => (
             <div
@@ -158,7 +215,7 @@ export default function VoiceChat() {
               className={`mb-2 ${item.role === 'assistant' ? 'text-blue-600' : 'text-green-600'}`}
             >
               <strong>{item.role === 'assistant' ? 'Jerry: ' : 'Alex: '}</strong>
-              {item.formatted.transcript || item.formatted.text}
+              {item.formatted?.transcript || item.formatted?.text || ''}
             </div>
           ))}
         </div>
