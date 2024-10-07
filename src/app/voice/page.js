@@ -45,25 +45,36 @@ export default function VoiceChat() {
   const [isRecording, setIsRecording] = useState(false)
   const [canPushToTalk, setCanPushToTalk] = useState(false)
   const [isPending, setIsPending] = useState(false)
+  const [error, setError] = useState(null)
+  const [logs, setLogs] = useState([])
 
   const wavRecorderRef = useRef(new WavRecorder({ sampleRate: 24000 }))
   const wavStreamPlayerRef = useRef(new WavStreamPlayer({ sampleRate: 24000 }))
   const clientRef = useRef(new RealtimeClient({ url: LOCAL_RELAY_SERVER_URL }))
 
   const connectConversation = useCallback(async () => {
+    console.log('Starting connection...')
     setIsPending(true)
     const client = clientRef.current
     const wavRecorder = wavRecorderRef.current
     const wavStreamPlayer = wavStreamPlayerRef.current
 
     try {
+      console.log('Attempting to connect client...')
       await client.connect()
+      console.log('Client connected successfully')
       setIsConnected(true)
       setItems(client.conversation.getItems())
 
+      console.log('Initializing wavRecorder...')
       await wavRecorder.begin()
-      await wavStreamPlayer.connect()
+      console.log('WavRecorder initialized')
 
+      console.log('Connecting wavStreamPlayer...')
+      await wavStreamPlayer.connect()
+      console.log('WavStreamPlayer connected')
+
+      console.log('Sending initial message...')
       client.sendUserMessageContent([
         {
           type: 'input_text',
@@ -72,15 +83,19 @@ export default function VoiceChat() {
       ])
 
       if (client.getTurnDetectionType() === 'server_vad') {
+        console.log('Setting up audio recording...')
         await wavRecorder.record((data) => client.appendInputAudio(data.mono))
       }
 
-      // Start in VAD mode by default
+      console.log('Changing turn end type...')
       await changeTurnEndType('server_vad')
+      console.log('Connection process completed')
     } catch (error) {
-      console.error('Error connecting:', error)
+      console.error('Error in connectConversation:', error)
+      setError(error.message)
     } finally {
       setIsPending(false)
+      console.log('Connection attempt finished')
     }
   }, [])
 
@@ -168,6 +183,11 @@ export default function VoiceChat() {
     }
   }, [])
 
+  const log = (message) => {
+    setLogs((prevLogs) => [...prevLogs, `${new Date().toISOString()}: ${message}`])
+    console.log(message)
+  }
+
   return (
     <>
       <Nav />
@@ -189,6 +209,17 @@ export default function VoiceChat() {
           disabled={false}
           isPending={isPending}
         />
+        {error ||
+          (logs.length > 0 && (
+            <div className="p-4 text-xs">
+              <ul>{error && <div className="mt-2 text-red-500">Error: {error}</div>}</ul>
+              <ul>
+                {logs.slice(-5).map((log, index) => (
+                  <li key={index}>{log}</li>
+                ))}
+              </ul>
+            </div>
+          ))}
       </div>
     </>
   )
