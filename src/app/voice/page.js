@@ -6,17 +6,23 @@ import { WavRecorder, WavStreamPlayer } from '@/app/lib/wavtools'
 import { instructions } from '@/app/voice/conversation_config'
 import Nav from '../components/Nav'
 import { Phone, PhoneOff } from 'lucide-react'
+import SpinnerIcon from '../components/Icons/SpinnerIcon'
 
-const ConnectButton = ({ onClick, isConnected, disabled }) => {
+const ConnectButton = ({ onClick, isConnected, disabled, isPending }) => {
   return (
     <button
       onClick={onClick}
-      disabled={disabled}
+      disabled={disabled || isPending}
       className={`rounded px-4 py-2 pr-5 ${
         isConnected ? 'bg-neutral-500 hover:bg-neutral-600' : 'hover:bg-teal-600 bg-teal-500'
-      } flex items-center font-bold text-white ${disabled ? 'cursor-not-allowed opacity-50' : ''}`}
+      } flex items-center font-bold text-white ${disabled || isPending ? 'cursor-not-allowed opacity-50' : ''}`}
     >
-      {!isConnected ? (
+      {isPending ? (
+        <>
+          <SpinnerIcon className="-m-1 mr-2 h-4 w-4" />
+          <span>Starting...</span>
+        </>
+      ) : !isConnected ? (
         <>
           <Phone className="mr-3 h-4 w-4" />
           <span>Start call</span>
@@ -38,36 +44,44 @@ export default function VoiceChat() {
   const [items, setItems] = useState([])
   const [isRecording, setIsRecording] = useState(false)
   const [canPushToTalk, setCanPushToTalk] = useState(false)
+  const [isPending, setIsPending] = useState(false)
 
   const wavRecorderRef = useRef(new WavRecorder({ sampleRate: 24000 }))
   const wavStreamPlayerRef = useRef(new WavStreamPlayer({ sampleRate: 24000 }))
   const clientRef = useRef(new RealtimeClient({ url: LOCAL_RELAY_SERVER_URL }))
 
   const connectConversation = useCallback(async () => {
+    setIsPending(true)
     const client = clientRef.current
     const wavRecorder = wavRecorderRef.current
     const wavStreamPlayer = wavStreamPlayerRef.current
 
-    setIsConnected(true)
-    setItems(client.conversation.getItems())
+    try {
+      await client.connect()
+      setIsConnected(true)
+      setItems(client.conversation.getItems())
 
-    await wavRecorder.begin()
-    await wavStreamPlayer.connect()
+      await wavRecorder.begin()
+      await wavStreamPlayer.connect()
 
-    await client.connect()
-    client.sendUserMessageContent([
-      {
-        type: 'input_text',
-        text: 'Hello!',
-      },
-    ])
+      client.sendUserMessageContent([
+        {
+          type: 'input_text',
+          text: 'Hello!',
+        },
+      ])
 
-    if (client.getTurnDetectionType() === 'server_vad') {
-      await wavRecorder.record((data) => client.appendInputAudio(data.mono))
+      if (client.getTurnDetectionType() === 'server_vad') {
+        await wavRecorder.record((data) => client.appendInputAudio(data.mono))
+      }
+
+      // Start in VAD mode by default
+      await changeTurnEndType('server_vad')
+    } catch (error) {
+      console.error('Error connecting:', error)
+    } finally {
+      setIsPending(false)
     }
-
-    // Start in VAD mode by default
-    await changeTurnEndType('server_vad')
   }, [])
 
   const disconnectConversation = useCallback(async () => {
@@ -169,11 +183,12 @@ export default function VoiceChat() {
             </div>
           ))}
         </div>
-        {!isConnected ? (
-          <ConnectButton onClick={connectConversation} isConnected={false} disabled={false} />
-        ) : (
-          <ConnectButton onClick={disconnectConversation} isConnected={true} disabled={false} />
-        )}
+        <ConnectButton
+          onClick={isConnected ? disconnectConversation : connectConversation}
+          isConnected={isConnected}
+          disabled={false}
+          isPending={isPending}
+        />
       </div>
     </>
   )
