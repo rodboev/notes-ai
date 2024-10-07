@@ -8,38 +8,19 @@ import Nav from '../components/Nav'
 import { Phone, PhoneOff } from 'lucide-react'
 import SpinnerIcon from '../components/Icons/SpinnerIcon'
 
-const ConnectButton = ({ onClick, isConnected, disabled, isPending }) => {
-  return (
-    <button
-      onClick={onClick}
-      disabled={disabled || isPending}
-      className={`rounded px-4 py-2 pr-5 ${
-        isConnected ? 'bg-neutral-500 hover:bg-neutral-600' : 'hover:bg-teal-600 bg-teal-500'
-      } flex items-center font-bold text-white ${disabled || isPending ? 'cursor-not-allowed opacity-50' : ''}`}
-    >
-      {isPending ? (
-        <>
-          <SpinnerIcon className="-m-1 mr-2 h-4 w-4" />
-          <span>Starting...</span>
-        </>
-      ) : !isConnected ? (
-        <>
-          <Phone className="mr-3 h-4 w-4" />
-          <span>Start call</span>
-        </>
-      ) : (
-        <>
-          <PhoneOff className="mr-2 h-4 w-4" />
-          <span>End call</span>
-        </>
-      )}
-    </button>
-  )
-}
-
-const LOCAL_RELAY_SERVER_URL = 'ws://localhost:49152'
-
+// Move the relayServerUrl logic inside the component
 export default function VoiceChat() {
+  const [relayServerUrl, setRelayServerUrl] = useState('')
+
+  useEffect(() => {
+    const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:'
+    const host = window.location.hostname
+    const port = process.env.NEXT_PUBLIC_RELAY_SERVER_PORT || '49152'
+    const url = `${protocol}//${host}:${port}`
+    setRelayServerUrl(url)
+    console.log('Relay Server URL:', url)
+  }, [])
+
   const [isConnected, setIsConnected] = useState(false)
   const [items, setItems] = useState([])
   const [isRecording, setIsRecording] = useState(false)
@@ -50,10 +31,52 @@ export default function VoiceChat() {
 
   const wavRecorderRef = useRef(new WavRecorder({ sampleRate: 24000 }))
   const wavStreamPlayerRef = useRef(new WavStreamPlayer({ sampleRate: 24000 }))
-  const clientRef = useRef(new RealtimeClient({ url: LOCAL_RELAY_SERVER_URL }))
+  const clientRef = useRef(null)
+
+  useEffect(() => {
+    if (!relayServerUrl) return // Don't initialize if URL is not set yet
+
+    clientRef.current = new RealtimeClient({ url: relayServerUrl })
+
+    const client = clientRef.current
+    const wavStreamPlayer = wavStreamPlayerRef.current
+
+    client.updateSession({ instructions })
+    client.updateSession({ voice: 'echo' })
+    client.updateSession({ input_audio_transcription: { model: 'whisper-1' } })
+
+    client.on('error', (event) => console.error(event))
+    client.on('conversation.interrupted', async () => {
+      const trackSampleOffset = await wavStreamPlayer.interrupt()
+      if (trackSampleOffset?.trackId) {
+        const { trackId, offset } = trackSampleOffset
+        await client.cancelResponse(trackId, offset)
+      }
+    })
+    client.on('conversation.updated', async ({ item, delta }) => {
+      const items = client.conversation.getItems()
+      if (delta?.audio) {
+        wavStreamPlayer.add16BitPCM(delta.audio, item.id)
+      }
+      setItems(items)
+    })
+
+    setItems(client.conversation.getItems())
+
+    return () => {
+      client.reset()
+    }
+  }, [relayServerUrl])
 
   const connectConversation = useCallback(async () => {
+    if (!clientRef.current || !relayServerUrl) {
+      console.error('RealtimeClient not initialized or relayServerUrl not set')
+      setError('RealtimeClient not initialized or relayServerUrl not set')
+      return
+    }
+
     console.log('Starting connection...')
+    console.log('RELAY_SERVER_URL:', relayServerUrl)
     setIsPending(true)
     const client = clientRef.current
     const wavRecorder = wavRecorderRef.current
@@ -97,7 +120,7 @@ export default function VoiceChat() {
       setIsPending(false)
       console.log('Connection attempt finished')
     }
-  }, [])
+  }, [relayServerUrl])
 
   const disconnectConversation = useCallback(async () => {
     setIsConnected(false)
@@ -152,37 +175,6 @@ export default function VoiceChat() {
     setCanPushToTalk(value === 'none')
   }
 
-  useEffect(() => {
-    const client = clientRef.current
-    const wavStreamPlayer = wavStreamPlayerRef.current
-
-    client.updateSession({ instructions })
-    client.updateSession({ voice: 'echo' })
-    client.updateSession({ input_audio_transcription: { model: 'whisper-1' } })
-
-    client.on('error', (event) => console.error(event))
-    client.on('conversation.interrupted', async () => {
-      const trackSampleOffset = await wavStreamPlayer.interrupt()
-      if (trackSampleOffset?.trackId) {
-        const { trackId, offset } = trackSampleOffset
-        await client.cancelResponse(trackId, offset)
-      }
-    })
-    client.on('conversation.updated', async ({ item, delta }) => {
-      const items = client.conversation.getItems()
-      if (delta?.audio) {
-        wavStreamPlayer.add16BitPCM(delta.audio, item.id)
-      }
-      setItems(items)
-    })
-
-    setItems(client.conversation.getItems())
-
-    return () => {
-      client.reset()
-    }
-  }, [])
-
   const log = (message) => {
     setLogs((prevLogs) => [...prevLogs, `${new Date().toISOString()}: ${message}`])
     console.log(message)
@@ -222,5 +214,35 @@ export default function VoiceChat() {
           ))}
       </div>
     </>
+  )
+}
+
+// Keep the ConnectButton component as is
+const ConnectButton = ({ onClick, isConnected, disabled, isPending }) => {
+  return (
+    <button
+      onClick={onClick}
+      disabled={disabled || isPending}
+      className={`rounded px-4 py-2 pr-5 ${
+        isConnected ? 'bg-neutral-500 hover:bg-neutral-600' : 'hover:bg-teal-600 bg-teal-500'
+      } flex items-center font-bold text-white ${disabled || isPending ? 'cursor-not-allowed opacity-50' : ''}`}
+    >
+      {isPending ? (
+        <>
+          <SpinnerIcon className="-m-1 mr-2 h-4 w-4" />
+          <span>Starting...</span>
+        </>
+      ) : !isConnected ? (
+        <>
+          <Phone className="mr-3 h-4 w-4" />
+          <span>Start call</span>
+        </>
+      ) : (
+        <>
+          <PhoneOff className="mr-2 h-4 w-4" />
+          <span>End call</span>
+        </>
+      )}
+    </button>
   )
 }
