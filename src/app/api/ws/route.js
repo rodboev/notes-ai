@@ -1,94 +1,32 @@
-import { RealtimeClient } from '@openai/realtime-api-beta'
+import { getWebSocketServer } from 'next-ws/server'
 
-const OPENAI_API_KEY = process.env.OPENAI_API_KEY_VOICE
-
-if (!OPENAI_API_KEY) {
-  console.error(`Environment variable "OPENAI_API_KEY_VOICE" is missing.`)
+export function GET() {
+  const wsServer = getWebSocketServer()
+  return Response.json({ count: wsServer.clients.size })
 }
 
-let connectedClients = 0
+export function SOCKET(client, _request, server) {
+  const { send, broadcast } = createHelpers(client, server)
 
-export function SOCKET(ws, request, server) {
-  console.log('New WebSocket connection established')
-  connectedClients++
+  // When a new client connects broadcast a connect message
+  broadcast({ author: 'Server', content: 'A new client has connected.' })
+  send({ author: 'Server', content: 'Welcome!' })
 
-  // Instantiate new client
-  console.log(`Connecting with key "${OPENAI_API_KEY ? OPENAI_API_KEY.slice(0, 3) : 'MISSING'}..."`)
-  const client = new RealtimeClient({ apiKey: OPENAI_API_KEY })
+  // Relay any message back to other clients
+  client.on('message', broadcast)
 
-  // Relay: OpenAI Realtime API Event -> Browser Event
-  client.realtime.on('server.*', (event) => {
-    console.log(`Relaying "${event.type}" to Client: ${JSON.stringify(event)}`)
-    ws.send(JSON.stringify(event))
+  // When this client disconnects broadcast a disconnect message
+  client.on('close', () => {
+    broadcast({ author: 'Server', content: 'A client has disconnected.' })
   })
-  client.realtime.on('close', () => {
-    console.log('OpenAI connection closed')
-    ws.close()
-  })
-  client.realtime.on('error', (error) => {
-    console.error('OpenAI Realtime API error:', error)
-    ws.send(JSON.stringify({ type: 'error', message: error.message }))
-  })
-
-  // Relay: Browser Event -> OpenAI Realtime API Event
-  const messageQueue = []
-  const messageHandler = (data) => {
-    try {
-      const event = JSON.parse(data)
-      console.log(`Relaying "${event.type}" to OpenAI`)
-      client.realtime.send(event.type, event)
-    } catch (e) {
-      console.error('Error parsing event from client:', e)
-      ws.send(JSON.stringify({ type: 'error', message: 'Error parsing event' }))
-    }
-  }
-  ws.on('message', (data) => {
-    console.log(`Received message from client: ${data}`)
-    if (!client.isConnected()) {
-      console.log('Client not connected, queueing message')
-      messageQueue.push(data)
-    } else {
-      messageHandler(data)
-    }
-  })
-  ws.on('close', () => {
-    console.log('WebSocket connection closed')
-    client.disconnect()
-    connectedClients--
-  })
-  ws.on('error', (error) => {
-    console.error(`WebSocket error:`, error)
-    ws.send(JSON.stringify({ type: 'error', message: 'WebSocket error occurred' }))
-  })
-
-  // Connect to OpenAI Realtime API
-  client
-    .connect()
-    .then(() => {
-      console.log(`Connected to OpenAI successfully!`)
-      while (messageQueue.length) {
-        messageHandler(messageQueue.shift())
-      }
-      // Send a welcome message
-      ws.send(JSON.stringify({ type: 'welcome', message: 'Connected to WebSocket server' }))
-    })
-    .catch((e) => {
-      console.error(`Error connecting to OpenAI:`, e)
-      ws.send(
-        JSON.stringify({ type: 'error', message: `Error connecting to OpenAI: ${e.message}` }),
-      )
-      ws.close()
-    })
 }
 
-export async function GET(req) {
-  const response = {
-    status: 'available',
-    clientsCount: connectedClients,
+function createHelpers(client, server) {
+  const send = (payload) => client.send(JSON.stringify(payload))
+  const broadcast = (payload) => {
+    if (payload instanceof Buffer) payload = payload.toString()
+    if (typeof payload !== 'string') payload = JSON.stringify(payload)
+    for (const other of server.clients) if (other !== client) other.send(String(payload))
   }
-  console.log('WebSocket status:', response)
-  return new Response(JSON.stringify(response), {
-    status: 200,
-    headers: { 'Content-Type': 'application/json' },
-  })
+  return { send, broadcast }
 }

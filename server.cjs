@@ -1,8 +1,8 @@
-const { createServer } = require('https')
 const fs = require('fs')
-const { setHttpServer, setWebSocketServer } = require('next-ws/server')
-const { parse } = require('url')
+const { Server } = require('node:https')
+const { parse } = require('node:url')
 const next = require('next')
+const { setHttpServer, setWebSocketServer } = require('next-ws/server')
 const { WebSocketServer } = require('ws')
 require('dotenv').config()
 
@@ -15,9 +15,9 @@ const httpsOptions = {
   cert: fs.readFileSync('./localhost+2.pem'),
 }
 
-const httpsServer = createServer(httpsOptions)
-setHttpServer(httpsServer)
+const httpsServer = new Server(httpsOptions)
 const webSocketServer = new WebSocketServer({ noServer: true })
+setHttpServer(httpsServer)
 setWebSocketServer(webSocketServer)
 
 const app = next({ dev, hostname, port, customServer: true })
@@ -41,15 +41,10 @@ let connectedClients = 0
     process.exit(1)
   }
 
-  httpsServer.on('upgrade', (request, socket, head) => {
-    webSocketServer.handleUpgrade(request, socket, head, (ws) => {
-      webSocketServer.emit('connection', ws, request)
-    })
-  })
-
   webSocketServer.on('connection', (ws) => {
     console.log('New WebSocket connection established')
     connectedClients++
+    console.log(`Total connected clients: ${connectedClients}`)
 
     const client = new RealtimeClient({ apiKey: OPENAI_API_KEY })
 

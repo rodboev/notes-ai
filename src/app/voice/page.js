@@ -31,34 +31,41 @@ export default function VoiceChat() {
   const [isConnected, setIsConnected] = useState(false)
   const [isServerAvailable, setIsServerAvailable] = useState(false)
   const [items, setItems] = useState([])
-  const [isRecording, setIsRecording] = useState(false)
-  const [canPushToTalk, setCanPushToTalk] = useState(false)
   const [isPending, setIsPending] = useState(false)
+  const [wsReady, setWsReady] = useState(false)
+
+  const [wsStatus, setWsStatus] = useState('Initializing...')
+  const wsRef = useRef(null)
 
   const wavRecorderRef = useRef(new WavRecorder({ sampleRate: 24000 }))
   const wavStreamPlayerRef = useRef(new WavStreamPlayer({ sampleRate: 24000 }))
   const clientRef = useRef(null)
 
-  useEffect(() => {
-    const host = window.location.host
-    const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:'
-    const url = `${protocol}//${host}/api/ws`
-    setRelayServerUrl(url)
+  const [clientConnected, setClientConnected] = useState(false)
 
-    // Check if the server is available
+  useEffect(() => {
+    const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:'
+    const host = window.location.host
+    const wsUrl = `${protocol}//${host}/api/ws`
+    setRelayServerUrl(wsUrl)
+
     const checkServerAvailability = async () => {
       try {
+        console.log('Checking server availability...')
         const response = await fetch('/api/ws')
         const data = await response.json()
-        setIsServerAvailable(data.status === 'available')
+        console.log('Server availability response:', data)
+        setIsServerAvailable(true)
+        setWsStatus(`Available (${data.count} clients connected)`)
       } catch (error) {
         console.error('Error checking server availability:', error)
         setIsServerAvailable(false)
+        setWsStatus('Error: Unable to connect')
       }
     }
 
     checkServerAvailability()
-    const intervalId = setInterval(checkServerAvailability, 10000) // Check every 10 seconds
+    const intervalId = setInterval(checkServerAvailability, 60000)
 
     return () => clearInterval(intervalId)
   }, [])
@@ -66,71 +73,82 @@ export default function VoiceChat() {
   useEffect(() => {
     if (!ws) return
 
-    clientRef.current = new RealtimeClient({ ws })
+    console.log('WebSocket connection opened')
+    setIsConnected(true)
+    setWsStatus('Connected')
+    setWsReady(true)
 
-    const client = clientRef.current
-    const wavStreamPlayer = wavStreamPlayerRef.current
-
-    client.updateSession({ instructions })
-    client.updateSession({ voice: 'echo' })
-    client.updateSession({ input_audio_transcription: { model: 'whisper-1' } })
-
-    client.on('conversation.interrupted', async () => {
-      const trackSampleOffset = await wavStreamPlayer.interrupt()
-      if (trackSampleOffset?.trackId) {
-        const { trackId, offset } = trackSampleOffset
-        await client.cancelResponse(trackId, offset)
-      }
-    })
-
-    client.on('conversation.updated', async ({ item, delta }) => {
-      setItems((prevItems) => {
-        const existingItemIndex = prevItems.findIndex((i) => i.id === item.id)
-        if (existingItemIndex !== -1) {
-          // Update existing item
-          const updatedItems = [...prevItems]
-          updatedItems[existingItemIndex] = { ...updatedItems[existingItemIndex], ...item }
-          return updatedItems
-        } else {
-          // Add new item
-          return [...prevItems, item]
-        }
-      })
-
-      if (delta?.audio) {
-        wavStreamPlayer.add16BitPCM(delta.audio, item.id)
-      }
-    })
-
-    // Initial items setup
-    client.on('ready', () => {
-      setItems(client.conversation.getItems())
-    })
-
-    // Set up WebSocket connection check
-    const checkConnection = () => {
-      setIsConnected(client.isConnected())
+    ws.onclose = () => {
+      console.log('WebSocket connection closed')
+      setIsConnected(false)
+      setWsStatus('Disconnected')
+      setWsReady(false)
     }
 
-    const intervalId = setInterval(checkConnection, 5000) // Check every 5 seconds
+    ws.onerror = (error) => {
+      console.error('WebSocket error:', error)
+      setWsStatus(`Error: ${error.message}`)
+    }
+
+    ws.onmessage = (event) => {
+      const data = JSON.parse(event.data)
+      console.log('Received message from server:', data)
+      // Handle incoming messages here
+    }
 
     return () => {
-      clearInterval(intervalId)
-      client.reset()
+      if (ws.readyState === WebSocket.OPEN) {
+        ws.close()
+      }
     }
   }, [ws])
 
   const connectConversation = useCallback(async () => {
-    if (!clientRef.current || !ws) return
+    if (!wsReady) {
+      console.error('WebSocket is not ready')
+      return
+    }
 
     setIsPending(true)
-    const client = clientRef.current
     const wavRecorder = wavRecorderRef.current
     const wavStreamPlayer = wavStreamPlayerRef.current
 
     try {
+      console.log('Connecting conversation...')
+      clientRef.current = new RealtimeClient({ ws })
+      const client = clientRef.current
+
+      client.updateSession({ instructions })
+      client.updateSession({ voice: 'echo' })
+      client.updateSession({ input_audio_transcription: { model: 'whisper-1' } })
+
+      client.on('conversation.interrupted', async () => {
+        const trackSampleOffset = await wavStreamPlayer.interrupt()
+        if (trackSampleOffset?.trackId) {
+          const { trackId, offset } = trackSampleOffset
+          await client.cancelResponse(trackId, offset)
+        }
+      })
+
+      client.on('conversation.updated', async ({ item, delta }) => {
+        setItems((prevItems) => {
+          const existingItemIndex = prevItems.findIndex((i) => i.id === item.id)
+          if (existingItemIndex !== -1) {
+            const updatedItems = [...prevItems]
+            updatedItems[existingItemIndex] = { ...updatedItems[existingItemIndex], ...item }
+            return updatedItems
+          } else {
+            return [...prevItems, item]
+          }
+        })
+
+        if (delta?.audio) {
+          wavStreamPlayer.add16BitPCM(delta.audio, item.id)
+        }
+      })
+
       await client.connect()
-      setIsConnected(client.isConnected())
+      setClientConnected(true)
       setItems(client.conversation.getItems())
 
       await wavRecorder.begin()
@@ -148,27 +166,40 @@ export default function VoiceChat() {
       }
 
       await changeTurnEndType('server_vad')
+      console.log('Conversation connected successfully')
+    } catch (error) {
+      console.error('Error connecting conversation:', error)
+      setWsStatus(`Error: ${error.message}`)
     } finally {
       setIsPending(false)
     }
-  }, [ws])
+  }, [ws, wsReady])
 
   const disconnectConversation = useCallback(async () => {
     if (!clientRef.current) return
 
-    const client = clientRef.current
-    client.disconnect()
+    setIsPending(true)
+    try {
+      const client = clientRef.current
+      await client.disconnect()
 
-    const wavRecorder = wavRecorderRef.current
-    await wavRecorder.end()
+      const wavRecorder = wavRecorderRef.current
+      await wavRecorder.end()
 
-    wavRecorderRef.current = new WavRecorder({ sampleRate: 24000 })
+      wavRecorderRef.current = new WavRecorder({ sampleRate: 24000 })
 
-    const wavStreamPlayer = wavStreamPlayerRef.current
-    await wavStreamPlayer.interrupt()
+      const wavStreamPlayer = wavStreamPlayerRef.current
+      await wavStreamPlayer.interrupt()
 
-    setIsConnected(false)
-    setItems([])
+      setClientConnected(false)
+      setItems([])
+      console.log('Conversation disconnected successfully')
+    } catch (error) {
+      console.error('Error disconnecting conversation:', error)
+      setWsStatus(`Error: ${error.message}`)
+    } finally {
+      setIsPending(false)
+    }
   }, [])
 
   const startRecording = async () => {
@@ -212,10 +243,11 @@ export default function VoiceChat() {
       <Nav />
       <div className="flex h-dvh max-w-full snap-y snap-mandatory flex-col items-center justify-center overflow-y-scroll pb-8 pt-20">
         <ConnectionIndicator
-          isConnected={isConnected}
+          isConnected={clientConnected}
           url={relayServerUrl}
           isAvailable={isServerAvailable}
         />
+        <div>WebSocket Status: {wsStatus}</div>
         <div className="m-4 h-full w-1/2 min-w-96 overflow-y-auto border p-4">
           {items.map((item) => (
             <div
@@ -228,9 +260,9 @@ export default function VoiceChat() {
           ))}
         </div>
         <ConnectButton
-          onClick={isConnected ? disconnectConversation : connectConversation}
-          isConnected={isConnected}
-          disabled={!ws || !isServerAvailable}
+          onClick={clientConnected ? disconnectConversation : connectConversation}
+          isConnected={clientConnected}
+          disabled={!wsReady || !isServerAvailable || isPending}
           isPending={isPending}
         />
       </div>
