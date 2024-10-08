@@ -14,6 +14,9 @@ const ConnectionIndicator = ({ isConnected, url, isAvailable }) => {
       <div className={`flex items-center ${isAvailable ? 'text-green-500' : 'text-red-500'}`}>
         {isAvailable ? <Check className="h-4 w-4" /> : <X className="h-4 w-4" />}
       </div>
+      <div className={`flex items-center ${isConnected ? 'text-green-500' : 'text-red-500'}`}>
+        {isConnected ? <Check className="h-4 w-4" /> : <X className="h-4 w-4" />}
+      </div>
       <span className="text-gray-500">{url}</span>
     </div>
   )
@@ -33,10 +36,9 @@ export default function VoiceChat() {
   const clientRef = useRef(null)
 
   useEffect(() => {
-    const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:'
     const host = window.location.hostname
     const port = process.env.NEXT_PUBLIC_RELAY_SERVER_PORT || '49152'
-    const url = `${protocol}//${host}:${port}`
+    const url = `ws://${host}:${port}`
     setRelayServerUrl(url)
 
     // Check if the server is available
