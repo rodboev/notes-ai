@@ -81,6 +81,7 @@ export default function VoiceChat() {
       setIsConnected(false)
       setWsStatus('Disconnected')
       setWsReady(false)
+      setClientConnected(false)
     }
 
     ws.onerror = (error) => {
@@ -91,20 +92,33 @@ export default function VoiceChat() {
     ws.onmessage = (event) => {
       const data = JSON.parse(event.data)
       console.log('Received message from server:', data)
-      if (data.type === 'connected') {
-        setClientConnected(true)
-      } else if (data.type === 'conversation.updated') {
-        handleConversationUpdate(data)
+      switch (data.type) {
+        case 'connected':
+          setClientConnected(true)
+          break
+        case 'conversation.updated':
+          handleConversationUpdate(data)
+          break
+        case 'conversation.interrupted':
+          // Handle interruption if needed
+          break
+        case 'error':
+          console.error('Error from server:', data.message)
+          setWsStatus(`Error: ${data.message}`)
+          break
+        default:
+          console.warn(`Unhandled message type: ${data.type}`)
       }
-      // Handle other message types as needed
     }
 
     return () => {
       ws.onmessage = null
+      ws.onclose = null
+      ws.onerror = null
     }
   }, [ws])
 
-  const handleConversationUpdate = ({ item, delta }) => {
+  const handleConversationUpdate = useCallback(({ item, delta }) => {
     setItems((prevItems) => {
       const existingItemIndex = prevItems.findIndex((i) => i.id === item.id)
       if (existingItemIndex !== -1) {
@@ -119,7 +133,7 @@ export default function VoiceChat() {
     if (delta?.audio) {
       wavStreamPlayerRef.current.add16BitPCM(delta.audio, item.id)
     }
-  }
+  }, [])
 
   const connectConversation = useCallback(async () => {
     if (!wsReady) {
@@ -161,6 +175,7 @@ export default function VoiceChat() {
     } catch (error) {
       console.error('Error connecting conversation:', error)
       setWsStatus(`Error: ${error.message}`)
+      setClientConnected(false)
     } finally {
       setIsPending(false)
     }

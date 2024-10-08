@@ -53,19 +53,21 @@ const logOutgoingMessage = (message) => {
 
     const client = new RealtimeClient({ apiKey: OPENAI_API_KEY })
 
-    client.realtime.on('server.*', (event) => {
-      console.log(`Relaying "${event.type}" to Client, keys: ${Object.keys(event)}`)
-      const message = JSON.stringify(event)
+    client.on('conversation.updated', (event) => {
+      console.log(`Relaying "conversation.updated" to Client, keys: ${Object.keys(event)}`)
+      const message = JSON.stringify({ type: 'conversation.updated', ...event })
       logOutgoingMessage(message)
       ws.send(message)
     })
 
-    client.realtime.on('close', () => {
-      console.log('OpenAI connection closed')
-      ws.close()
+    client.on('conversation.interrupted', (event) => {
+      console.log(`Relaying "conversation.interrupted" to Client`)
+      const message = JSON.stringify({ type: 'conversation.interrupted', ...event })
+      logOutgoingMessage(message)
+      ws.send(message)
     })
 
-    client.realtime.on('error', (error) => {
+    client.on('error', (error) => {
       console.error('OpenAI Realtime API error:', error)
       const message = JSON.stringify({ type: 'error', message: error.message })
       logOutgoingMessage(message)
@@ -81,8 +83,20 @@ const logOutgoingMessage = (message) => {
           console.log('Connected to OpenAI successfully!')
           ws.send(JSON.stringify({ type: 'connected' }))
         } else if (client.isConnected()) {
-          console.log(`Relaying "${event.type}" to OpenAI:`, event)
-          client.realtime.send(event.type, event)
+          console.log(`Handling "${event.type}" from client:`, event)
+          switch (event.type) {
+            case 'updateSession':
+              await client.updateSession(event.data)
+              break
+            case 'sendUserMessageContent':
+              await client.sendUserMessageContent(event.data)
+              break
+            case 'appendInputAudio':
+              await client.appendInputAudio(event.data)
+              break
+            default:
+              console.warn(`Unhandled event type: ${event.type}`)
+          }
         } else {
           console.error('Client not connected, cannot send message')
           ws.send(JSON.stringify({ type: 'error', message: 'Not connected to OpenAI' }))
@@ -110,17 +124,6 @@ const logOutgoingMessage = (message) => {
   await app.prepare()
 
   httpServer
-    .on('upgrade', (request, socket, head) => {
-      const { pathname } = parse(request.url)
-
-      if (pathname === '/api/ws') {
-        webSocketServer.handleUpgrade(request, socket, head, (ws) => {
-          webSocketServer.emit('connection', ws, request)
-        })
-      } else {
-        socket.destroy()
-      }
-    })
     .on('request', async (req, res) => {
       const parsedUrl = parse(req.url, true)
       if (parsedUrl.pathname === '/api/ws') {
