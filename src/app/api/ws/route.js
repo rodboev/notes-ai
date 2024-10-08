@@ -1,32 +1,20 @@
-import { getWebSocketServer } from 'next-ws/server'
-
 export function GET() {
-  const wsServer = getWebSocketServer()
-  return Response.json({ count: wsServer.clients.size })
+  const headers = new Headers()
+  headers.set('Connection', 'Upgrade')
+  headers.set('Upgrade', 'websocket')
+  return new Response('Upgrade Required', { status: 426, headers })
 }
 
-export function SOCKET(client, _request, server) {
-  const { send, broadcast } = createHelpers(client, server)
+export function SOCKET(client, request, server) {
+  console.log('WebSocket connection received in SOCKET handler')
 
-  // When a new client connects broadcast a connect message
-  broadcast({ author: 'Server', content: 'A new client has connected.' })
-  send({ author: 'Server', content: 'Welcome!' })
-
-  // Relay any message back to other clients
-  client.on('message', broadcast)
-
-  // When this client disconnects broadcast a disconnect message
-  client.on('close', () => {
-    broadcast({ author: 'Server', content: 'A client has disconnected.' })
+  // You can add any additional logic here if needed
+  client.on('message', (message) => {
+    console.log('Message received in SOCKET handler:', message.toString())
+    // You can add any additional processing here if needed
   })
-}
 
-function createHelpers(client, server) {
-  const send = (payload) => client.send(JSON.stringify(payload))
-  const broadcast = (payload) => {
-    if (payload instanceof Buffer) payload = payload.toString()
-    if (typeof payload !== 'string') payload = JSON.stringify(payload)
-    for (const other of server.clients) if (other !== client) other.send(String(payload))
-  }
-  return { send, broadcast }
+  client.on('close', () => {
+    console.log('WebSocket connection closed in SOCKET handler')
+  })
 }

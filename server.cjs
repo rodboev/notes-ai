@@ -15,9 +15,9 @@ const httpsOptions = {
   cert: fs.readFileSync('./localhost+2.pem'),
 }
 
-const httpsServer = new Server(httpsOptions)
+const httpServer = new Server(httpsOptions)
+setHttpServer(httpServer)
 const webSocketServer = new WebSocketServer({ noServer: true })
-setHttpServer(httpsServer)
 setWebSocketServer(webSocketServer)
 
 const app = next({ dev, hostname, port, customServer: true })
@@ -30,9 +30,14 @@ if (!OPENAI_API_KEY) {
 }
 
 let connectedClients = 0
+let RealtimeClient
+
+// Add this function to log outgoing messages
+const logOutgoingMessage = (message) => {
+  console.log('Sending message to client:', message)
+}
 
 ;(async () => {
-  let RealtimeClient
   try {
     const realtimeModule = await import('@openai/realtime-api-beta')
     RealtimeClient = realtimeModule.RealtimeClient
@@ -41,7 +46,7 @@ let connectedClients = 0
     process.exit(1)
   }
 
-  webSocketServer.on('connection', (ws) => {
+  webSocketServer.on('connection', (ws, request) => {
     console.log('New WebSocket connection established')
     connectedClients++
     console.log(`Total connected clients: ${connectedClients}`)
@@ -50,7 +55,9 @@ let connectedClients = 0
 
     client.realtime.on('server.*', (event) => {
       console.log(`Relaying "${event.type}" to Client, keys: ${Object.keys(event)}`)
-      ws.send(JSON.stringify(event))
+      const message = JSON.stringify(event)
+      logOutgoingMessage(message)
+      ws.send(message)
     })
 
     client.realtime.on('close', () => {
@@ -60,28 +67,29 @@ let connectedClients = 0
 
     client.realtime.on('error', (error) => {
       console.error('OpenAI Realtime API error:', error)
-      ws.send(JSON.stringify({ type: 'error', message: error.message }))
+      const message = JSON.stringify({ type: 'error', message: error.message })
+      logOutgoingMessage(message)
+      ws.send(message)
     })
 
-    const messageQueue = []
-    const messageHandler = (data) => {
+    ws.on('message', async (data) => {
+      console.log(`Received message from client: ${data}`)
       try {
         const event = JSON.parse(data)
-        console.log(`Relaying "${event.type}" to OpenAI:`, event)
-        client.realtime.send(event.type, event)
+        if (event.type === 'connect') {
+          await client.connect()
+          console.log('Connected to OpenAI successfully!')
+          ws.send(JSON.stringify({ type: 'connected' }))
+        } else if (client.isConnected()) {
+          console.log(`Relaying "${event.type}" to OpenAI:`, event)
+          client.realtime.send(event.type, event)
+        } else {
+          console.error('Client not connected, cannot send message')
+          ws.send(JSON.stringify({ type: 'error', message: 'Not connected to OpenAI' }))
+        }
       } catch (e) {
-        console.error('Error parsing event from client:', e)
-        ws.send(JSON.stringify({ type: 'error', message: 'Error parsing event' }))
-      }
-    }
-
-    ws.on('message', (data) => {
-      console.log(`Received message from client: ${data}`)
-      if (!client.isConnected()) {
-        console.log('Client not connected, queueing message')
-        messageQueue.push(data)
-      } else {
-        messageHandler(data)
+        console.error('Error handling client message:', e)
+        ws.send(JSON.stringify({ type: 'error', message: 'Error handling message' }))
       }
     })
 
@@ -93,35 +101,33 @@ let connectedClients = 0
 
     ws.on('error', (error) => {
       console.error(`WebSocket error:`, error)
-      ws.send(JSON.stringify({ type: 'error', message: 'WebSocket error occurred' }))
+      const message = JSON.stringify({ type: 'error', message: 'WebSocket error occurred' })
+      logOutgoingMessage(message)
+      ws.send(message)
     })
-
-    client
-      .connect()
-      .then(() => {
-        console.log(`Connected to OpenAI successfully!`)
-        while (messageQueue.length) {
-          messageHandler(messageQueue.shift())
-        }
-        ws.send(JSON.stringify({ type: 'welcome', message: 'Connected to WebSocket server' }))
-      })
-      .catch((e) => {
-        console.error(`Error connecting to OpenAI:`, e)
-        ws.send(
-          JSON.stringify({ type: 'error', message: `Error connecting to OpenAI: ${e.message}` }),
-        )
-        ws.close()
-      })
   })
 
   await app.prepare()
 
-  httpsServer
+  httpServer
+    .on('upgrade', (request, socket, head) => {
+      const { pathname } = parse(request.url)
+
+      if (pathname === '/api/ws') {
+        webSocketServer.handleUpgrade(request, socket, head, (ws) => {
+          webSocketServer.emit('connection', ws, request)
+        })
+      } else {
+        socket.destroy()
+      }
+    })
     .on('request', async (req, res) => {
       const parsedUrl = parse(req.url, true)
       if (parsedUrl.pathname === '/api/ws') {
         res.writeHead(200, { 'Content-Type': 'application/json' })
-        res.end(JSON.stringify({ status: 'available', count: connectedClients }))
+        const responseData = JSON.stringify({ status: 'available', count: connectedClients })
+        console.log('Sending response for /api/ws:', responseData)
+        res.end(responseData)
       } else {
         await handle(req, res, parsedUrl)
       }

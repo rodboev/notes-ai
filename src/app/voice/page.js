@@ -1,7 +1,6 @@
 'use client'
 
 import { useState, useEffect, useRef, useCallback } from 'react'
-import { RealtimeClient } from '@openai/realtime-api-beta'
 import { WavRecorder, WavStreamPlayer } from '@/app/lib/wavtools'
 import { instructions } from '@/app/voice/conversation_config'
 import Nav from '../components/Nav'
@@ -39,7 +38,6 @@ export default function VoiceChat() {
 
   const wavRecorderRef = useRef(new WavRecorder({ sampleRate: 24000 }))
   const wavStreamPlayerRef = useRef(new WavStreamPlayer({ sampleRate: 24000 }))
-  const clientRef = useRef(null)
 
   const [clientConnected, setClientConnected] = useState(false)
 
@@ -93,15 +91,35 @@ export default function VoiceChat() {
     ws.onmessage = (event) => {
       const data = JSON.parse(event.data)
       console.log('Received message from server:', data)
-      // Handle incoming messages here
+      if (data.type === 'connected') {
+        setClientConnected(true)
+      } else if (data.type === 'conversation.updated') {
+        handleConversationUpdate(data)
+      }
+      // Handle other message types as needed
     }
 
     return () => {
-      if (ws.readyState === WebSocket.OPEN) {
-        ws.close()
-      }
+      ws.onmessage = null
     }
   }, [ws])
+
+  const handleConversationUpdate = ({ item, delta }) => {
+    setItems((prevItems) => {
+      const existingItemIndex = prevItems.findIndex((i) => i.id === item.id)
+      if (existingItemIndex !== -1) {
+        const updatedItems = [...prevItems]
+        updatedItems[existingItemIndex] = { ...updatedItems[existingItemIndex], ...item }
+        return updatedItems
+      } else {
+        return [...prevItems, item]
+      }
+    })
+
+    if (delta?.audio) {
+      wavStreamPlayerRef.current.add16BitPCM(delta.audio, item.id)
+    }
+  }
 
   const connectConversation = useCallback(async () => {
     if (!wsReady) {
@@ -115,55 +133,28 @@ export default function VoiceChat() {
 
     try {
       console.log('Connecting conversation...')
-      clientRef.current = new RealtimeClient({ ws })
-      const client = clientRef.current
-
-      client.updateSession({ instructions })
-      client.updateSession({ voice: 'echo' })
-      client.updateSession({ input_audio_transcription: { model: 'whisper-1' } })
-
-      client.on('conversation.interrupted', async () => {
-        const trackSampleOffset = await wavStreamPlayer.interrupt()
-        if (trackSampleOffset?.trackId) {
-          const { trackId, offset } = trackSampleOffset
-          await client.cancelResponse(trackId, offset)
-        }
-      })
-
-      client.on('conversation.updated', async ({ item, delta }) => {
-        setItems((prevItems) => {
-          const existingItemIndex = prevItems.findIndex((i) => i.id === item.id)
-          if (existingItemIndex !== -1) {
-            const updatedItems = [...prevItems]
-            updatedItems[existingItemIndex] = { ...updatedItems[existingItemIndex], ...item }
-            return updatedItems
-          } else {
-            return [...prevItems, item]
-          }
-        })
-
-        if (delta?.audio) {
-          wavStreamPlayer.add16BitPCM(delta.audio, item.id)
-        }
-      })
-
-      await client.connect()
-      setClientConnected(true)
-      setItems(client.conversation.getItems())
+      ws.send(JSON.stringify({ type: 'connect' }))
 
       await wavRecorder.begin()
       await wavStreamPlayer.connect()
 
-      client.sendUserMessageContent([
-        {
-          type: 'input_text',
-          text: 'Hello!',
-        },
-      ])
+      ws.send(
+        JSON.stringify({
+          type: 'updateSession',
+          data: { instructions, voice: 'echo', input_audio_transcription: { model: 'whisper-1' } },
+        }),
+      )
 
-      if (client.getTurnDetectionType() === 'server_vad') {
-        await wavRecorder.record((data) => client.appendInputAudio(data.mono))
-      }
+      ws.send(
+        JSON.stringify({
+          type: 'sendUserMessageContent',
+          data: [{ type: 'input_text', text: 'Hello!' }],
+        }),
+      )
+
+      await wavRecorder.record((data) => {
+        ws.send(JSON.stringify({ type: 'appendInputAudio', data: data.mono }))
+      })
 
       await changeTurnEndType('server_vad')
       console.log('Conversation connected successfully')
@@ -176,12 +167,9 @@ export default function VoiceChat() {
   }, [ws, wsReady])
 
   const disconnectConversation = useCallback(async () => {
-    if (!clientRef.current) return
-
     setIsPending(true)
     try {
-      const client = clientRef.current
-      await client.disconnect()
+      ws.send(JSON.stringify({ type: 'disconnect' }))
 
       const wavRecorder = wavRecorderRef.current
       await wavRecorder.end()
@@ -200,42 +188,24 @@ export default function VoiceChat() {
     } finally {
       setIsPending(false)
     }
-  }, [])
-
-  const startRecording = async () => {
-    setIsRecording(true)
-    const client = clientRef.current
-    const wavRecorder = wavRecorderRef.current
-    const wavStreamPlayer = wavStreamPlayerRef.current
-    const trackSampleOffset = await wavStreamPlayer.interrupt()
-    if (trackSampleOffset?.trackId) {
-      const { trackId, offset } = trackSampleOffset
-      await client.cancelResponse(trackId, offset)
-    }
-    await wavRecorder.record((data) => client.appendInputAudio(data.mono))
-  }
-
-  const stopRecording = async () => {
-    setIsRecording(false)
-    const client = clientRef.current
-    const wavRecorder = wavRecorderRef.current
-    await wavRecorder.pause()
-    client.createResponse()
-  }
+  }, [ws])
 
   const changeTurnEndType = async (value) => {
-    const client = clientRef.current
     const wavRecorder = wavRecorderRef.current
     if (value === 'none' && wavRecorder.getStatus() === 'recording') {
       await wavRecorder.pause()
     }
-    client.updateSession({
-      turn_detection: value === 'none' ? null : { type: 'server_vad' },
-    })
-    if (value === 'server_vad' && client.isConnected()) {
-      await wavRecorder.record((data) => client.appendInputAudio(data.mono))
+    ws.send(
+      JSON.stringify({
+        type: 'updateSession',
+        data: { turn_detection: value === 'none' ? null : { type: 'server_vad' } },
+      }),
+    )
+    if (value === 'server_vad' && clientConnected) {
+      await wavRecorder.record((data) => {
+        ws.send(JSON.stringify({ type: 'appendInputAudio', data: data.mono }))
+      })
     }
-    setCanPushToTalk(value === 'none')
   }
 
   return (
