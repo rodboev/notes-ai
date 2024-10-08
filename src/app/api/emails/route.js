@@ -184,7 +184,7 @@ export async function GET(req) {
         if (fingerprint) {
           // Handle single note refresh (always stream)
           const response = await fetch(
-            `http://localhost:${port}/api/notes?fingerprint=${fingerprint}`,
+            `${req.headers.get('x-forwarded-proto') || 'http'}://localhost:${port}/api/notes?fingerprint=${fingerprint}`,
           )
           const note = await response.json()
 
@@ -232,7 +232,7 @@ export async function GET(req) {
 
           if (fingerprintsToFetch.length > 0) {
             const response = await fetch(
-              `http://localhost:${port}/api/notes?fingerprints=${fingerprintsToFetch.join(',')}`,
+              `${req.headers.get('x-forwarded-proto') || 'http'}://localhost:${port}/api/notes?fingerprints=${fingerprintsToFetch.join(',')}`,
             )
             const notesToProcess = await response.json()
             console.log(`${timestamp()} Fetched ${notesToProcess.length} notes to process`)
@@ -267,6 +267,7 @@ export async function GET(req) {
         sendData({}, 'complete')
       } catch (error) {
         console.error(`${timestamp()} Error processing emails:`, error)
+        console.error(`${timestamp()} Error stack:`, error.stack)
         sendData({ error: error.message || 'Internal server error' }, 'error')
       } finally {
         if (!dataSent) {

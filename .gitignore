@@ -39,3 +39,5 @@ next-env.d.ts
 
 # TinyMCE local files
 src/app/tinymce
+
+certificates
