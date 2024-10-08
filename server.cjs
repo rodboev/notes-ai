@@ -30,97 +30,88 @@ if (!OPENAI_API_KEY) {
 }
 
 let connectedClients = 0
-let RealtimeClient
 
-// Add this function to log outgoing messages
-const logOutgoingMessage = (message) => {
-  console.log('Sending message to client:', message)
-}
+const log = (...args) => console.log('[RealtimeRelay]', ...args)
 
-;(async () => {
+const handleWebSocketConnection = async (ws) => {
+  connectedClients++
+  log(`New WebSocket connection established. Total clients: ${connectedClients}`)
+
+  let RealtimeClient
   try {
     const realtimeModule = await import('@openai/realtime-api-beta')
     RealtimeClient = realtimeModule.RealtimeClient
   } catch (error) {
-    console.error('Failed to import RealtimeClient:', error)
-    process.exit(1)
+    log('Failed to import RealtimeClient:', error)
+    ws.close()
+    return
   }
 
-  webSocketServer.on('connection', (ws, request) => {
-    console.log('New WebSocket connection established')
-    connectedClients++
-    console.log(`Total connected clients: ${connectedClients}`)
+  const client = new RealtimeClient({ apiKey: OPENAI_API_KEY })
+  const messageQueue = []
 
-    const client = new RealtimeClient({ apiKey: OPENAI_API_KEY })
-
-    client.on('conversation.updated', (event) => {
-      console.log(`Relaying "conversation.updated" to Client, keys: ${Object.keys(event)}`)
-      const message = JSON.stringify({ type: 'conversation.updated', ...event })
-      logOutgoingMessage(message)
-      ws.send(message)
-    })
-
-    client.on('conversation.interrupted', (event) => {
-      console.log(`Relaying "conversation.interrupted" to Client`)
-      const message = JSON.stringify({ type: 'conversation.interrupted', ...event })
-      logOutgoingMessage(message)
-      ws.send(message)
-    })
-
-    client.on('error', (error) => {
-      console.error('OpenAI Realtime API error:', error)
-      const message = JSON.stringify({ type: 'error', message: error.message })
-      logOutgoingMessage(message)
-      ws.send(message)
-    })
-
-    ws.on('message', async (data) => {
-      console.log(`Received message from client: ${data}`)
-      try {
-        const event = JSON.parse(data)
-        if (event.type === 'connect') {
-          await client.connect()
-          console.log('Connected to OpenAI successfully!')
-          ws.send(JSON.stringify({ type: 'connected' }))
-        } else if (client.isConnected()) {
-          console.log(`Handling "${event.type}" from client:`, event)
-          switch (event.type) {
-            case 'updateSession':
-              await client.updateSession(event.data)
-              break
-            case 'sendUserMessageContent':
-              await client.sendUserMessageContent(event.data)
-              break
-            case 'appendInputAudio':
-              await client.appendInputAudio(event.data)
-              break
-            default:
-              console.warn(`Unhandled event type: ${event.type}`)
-          }
-        } else {
-          console.error('Client not connected, cannot send message')
-          ws.send(JSON.stringify({ type: 'error', message: 'Not connected to OpenAI' }))
-        }
-      } catch (e) {
-        console.error('Error handling client message:', e)
-        ws.send(JSON.stringify({ type: 'error', message: 'Error handling message' }))
-      }
-    })
-
-    ws.on('close', () => {
-      console.log('WebSocket connection closed')
-      client.disconnect()
-      connectedClients--
-    })
-
-    ws.on('error', (error) => {
-      console.error(`WebSocket error:`, error)
-      const message = JSON.stringify({ type: 'error', message: 'WebSocket error occurred' })
-      logOutgoingMessage(message)
-      ws.send(message)
-    })
+  client.realtime.on('server.*', (event) => {
+    log(`Relaying "${event.type}" to Client`)
+    ws.send(JSON.stringify(event))
   })
 
+  client.realtime.on('close', () => {
+    log('OpenAI connection closed')
+    ws.close()
+  })
+
+  client.realtime.on('error', (error) => {
+    log('OpenAI Realtime API error:', error)
+    ws.send(JSON.stringify({ type: 'error', message: error.message }))
+  })
+
+  const messageHandler = async (data) => {
+    try {
+      const event = JSON.parse(data)
+      log(`Relaying "${event.type}" to OpenAI`)
+      if (event.type === 'connect') {
+        try {
+          await client.connect()
+          log('Connected to OpenAI successfully!')
+          ws.send(JSON.stringify({ type: 'connected' }))
+        } catch (e) {
+          log(`Error connecting to OpenAI: ${e.message}`)
+          ws.send(
+            JSON.stringify({ type: 'error', message: `Error connecting to OpenAI: ${e.message}` }),
+          )
+        }
+      } else {
+        client.realtime.send(event.type, event)
+      }
+    } catch (e) {
+      log(`Error parsing event from client: ${data}`)
+      ws.send(JSON.stringify({ type: 'error', message: 'Error parsing event' }))
+    }
+  }
+
+  ws.on('message', async (data) => {
+    log(`Received message from client: ${data}`)
+    if (!client.isConnected()) {
+      messageQueue.push(data)
+    } else {
+      await messageHandler(data)
+    }
+  })
+
+  ws.on('close', () => {
+    log('WebSocket connection closed')
+    client.disconnect()
+    connectedClients--
+  })
+
+  ws.on('error', (error) => {
+    log(`WebSocket error:`, error)
+    ws.send(JSON.stringify({ type: 'error', message: 'WebSocket error occurred' }))
+  })
+}
+
+webSocketServer.on('connection', handleWebSocketConnection)
+;(async () => {
   await app.prepare()
 
   httpServer
@@ -129,14 +120,14 @@ const logOutgoingMessage = (message) => {
       if (parsedUrl.pathname === '/api/ws') {
         res.writeHead(200, { 'Content-Type': 'application/json' })
         const responseData = JSON.stringify({ status: 'available', count: connectedClients })
-        console.log('Sending response for /api/ws:', responseData)
+        log('Sending response for /api/ws:', responseData)
         res.end(responseData)
       } else {
         await handle(req, res, parsedUrl)
       }
     })
     .listen(port, () => {
-      console.log(` ▲ Ready on https://${hostname}:${port}`)
+      log(` ▲ Ready on https://${hostname}:${port}`)
     })
 })().catch((err) => {
   console.error('Failed to start server:', err)
