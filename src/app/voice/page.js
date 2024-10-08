@@ -7,22 +7,26 @@ import { instructions } from '@/app/voice/conversation_config'
 import Nav from '../components/Nav'
 import { Phone, PhoneOff, Check, X } from 'lucide-react'
 import SpinnerIcon from '../components/Icons/SpinnerIcon'
+import { useWebSocket } from 'next-ws/client'
 
 const ConnectionIndicator = ({ isConnected, url, isAvailable }) => {
   return (
     <div className="flex items-center space-x-2">
+      <span className="text-gray-500">{url}</span>
       <div className={`flex items-center ${isAvailable ? 'text-green-500' : 'text-red-500'}`}>
         {isAvailable ? <Check className="h-4 w-4" /> : <X className="h-4 w-4" />}
       </div>
+      <span>Available</span>
       <div className={`flex items-center ${isConnected ? 'text-green-500' : 'text-red-500'}`}>
         {isConnected ? <Check className="h-4 w-4" /> : <X className="h-4 w-4" />}
       </div>
-      <span className="text-gray-500">{url}</span>
+      <span>Connected</span>
     </div>
   )
 }
 
 export default function VoiceChat() {
+  const ws = useWebSocket()
   const [relayServerUrl, setRelayServerUrl] = useState('')
   const [isConnected, setIsConnected] = useState(false)
   const [isServerAvailable, setIsServerAvailable] = useState(false)
@@ -36,19 +40,19 @@ export default function VoiceChat() {
   const clientRef = useRef(null)
 
   useEffect(() => {
-    const host = window.location.hostname
-    const port = process.env.NEXT_PUBLIC_RELAY_SERVER_PORT || '49152'
-    const url = `ws://${host}:${port}`
+    const host = window.location.host
+    const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:'
+    const url = `${protocol}//${host}/api/ws`
     setRelayServerUrl(url)
 
     // Check if the server is available
-    const checkServerAvailability = () => {
-      const ws = new WebSocket(url)
-      ws.onopen = () => {
-        setIsServerAvailable(true)
-        ws.close()
-      }
-      ws.onerror = () => {
+    const checkServerAvailability = async () => {
+      try {
+        const response = await fetch('/api/ws')
+        const data = await response.json()
+        setIsServerAvailable(data.status === 'available')
+      } catch (error) {
+        console.error('Error checking server availability:', error)
         setIsServerAvailable(false)
       }
     }
@@ -60,11 +64,11 @@ export default function VoiceChat() {
   }, [])
 
   useEffect(() => {
-    if (!relayServerUrl) return
+    if (!ws) return
 
-    clientRef.current = new RealtimeClient({ url: relayServerUrl })
+    const client = new RealtimeClient({ ws })
+    clientRef.current = client
 
-    const client = clientRef.current
     const wavStreamPlayer = wavStreamPlayerRef.current
 
     client.updateSession({ instructions })
@@ -114,10 +118,10 @@ export default function VoiceChat() {
       clearInterval(intervalId)
       client.reset()
     }
-  }, [relayServerUrl])
+  }, [ws])
 
   const connectConversation = useCallback(async () => {
-    if (!clientRef.current || !relayServerUrl) return
+    if (!clientRef.current || !ws) return
 
     setIsPending(true)
     const client = clientRef.current
@@ -147,7 +151,7 @@ export default function VoiceChat() {
     } finally {
       setIsPending(false)
     }
-  }, [relayServerUrl])
+  }, [ws])
 
   const disconnectConversation = useCallback(async () => {
     const client = clientRef.current
@@ -224,7 +228,7 @@ export default function VoiceChat() {
         <ConnectButton
           onClick={isConnected ? disconnectConversation : connectConversation}
           isConnected={isConnected}
-          disabled={false}
+          disabled={!ws}
           isPending={isPending}
         />
       </div>

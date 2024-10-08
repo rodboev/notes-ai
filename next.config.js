@@ -1,7 +1,7 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
   experimental: {
-    reactCompiler: true,
+    serverComponentsExternalPackages: ['mssql'],
   },
   webpack: (config, { isServer }) => {
     if (!isServer) {
@@ -13,15 +13,12 @@ const nextConfig = {
         crypto: false,
       }
     }
-    if (isServer) {
-      config.externals.push('ws')
-    }
     return config
   },
-  serverExternalPackages: ['mssql'],
   env: {
     NEXT_PUBLIC_NODE_ENV: process.env.NODE_ENV,
   },
+  reactStrictMode: false,
 }
 
 export default nextConfig
