@@ -66,9 +66,9 @@ export default function VoiceChat() {
   useEffect(() => {
     if (!ws) return
 
-    const client = new RealtimeClient({ ws })
-    clientRef.current = client
+    clientRef.current = new RealtimeClient({ ws })
 
+    const client = clientRef.current
     const wavStreamPlayer = wavStreamPlayerRef.current
 
     client.updateSession({ instructions })
@@ -154,6 +154,8 @@ export default function VoiceChat() {
   }, [ws])
 
   const disconnectConversation = useCallback(async () => {
+    if (!clientRef.current) return
+
     const client = clientRef.current
     client.disconnect()
 
@@ -228,7 +230,7 @@ export default function VoiceChat() {
         <ConnectButton
           onClick={isConnected ? disconnectConversation : connectConversation}
           isConnected={isConnected}
-          disabled={!ws}
+          disabled={!ws || !isServerAvailable}
           isPending={isPending}
         />
       </div>

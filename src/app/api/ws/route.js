@@ -8,26 +8,26 @@ if (!OPENAI_API_KEY) {
 
 let connectedClients = 0
 
-export function SOCKET(client, request, server) {
+export function SOCKET(ws, request, server) {
   console.log('New WebSocket connection established')
   connectedClients++
 
   // Instantiate new client
   console.log(`Connecting with key "${OPENAI_API_KEY ? OPENAI_API_KEY.slice(0, 3) : 'MISSING'}..."`)
-  const realtimeClient = new RealtimeClient({ apiKey: OPENAI_API_KEY })
+  const client = new RealtimeClient({ apiKey: OPENAI_API_KEY })
 
   // Relay: OpenAI Realtime API Event -> Browser Event
-  realtimeClient.realtime.on('server.*', (event) => {
+  client.realtime.on('server.*', (event) => {
     console.log(`Relaying "${event.type}" to Client: ${JSON.stringify(event)}`)
-    client.send(JSON.stringify(event))
+    ws.send(JSON.stringify(event))
   })
-  realtimeClient.realtime.on('close', () => {
+  client.realtime.on('close', () => {
     console.log('OpenAI connection closed')
-    client.close()
+    ws.close()
   })
-  realtimeClient.realtime.on('error', (error) => {
+  client.realtime.on('error', (error) => {
     console.error('OpenAI Realtime API error:', error)
-    client.send(JSON.stringify({ type: 'error', message: error.message }))
+    ws.send(JSON.stringify({ type: 'error', message: error.message }))
   })
 
   // Relay: Browser Event -> OpenAI Realtime API Event
@@ -36,33 +36,33 @@ export function SOCKET(client, request, server) {
     try {
       const event = JSON.parse(data)
       console.log(`Relaying "${event.type}" to OpenAI`)
-      realtimeClient.realtime.send(event.type, event)
+      client.realtime.send(event.type, event)
     } catch (e) {
       console.error('Error parsing event from client:', e)
-      client.send(JSON.stringify({ type: 'error', message: 'Error parsing event' }))
+      ws.send(JSON.stringify({ type: 'error', message: 'Error parsing event' }))
     }
   }
-  client.on('message', (data) => {
+  ws.on('message', (data) => {
     console.log(`Received message from client: ${data}`)
-    if (!realtimeClient.isConnected()) {
+    if (!client.isConnected()) {
       console.log('Client not connected, queueing message')
       messageQueue.push(data)
     } else {
       messageHandler(data)
     }
   })
-  client.on('close', () => {
+  ws.on('close', () => {
     console.log('WebSocket connection closed')
-    realtimeClient.disconnect()
+    client.disconnect()
     connectedClients--
   })
-  client.on('error', (error) => {
+  ws.on('error', (error) => {
     console.error(`WebSocket error:`, error)
-    client.send(JSON.stringify({ type: 'error', message: 'WebSocket error occurred' }))
+    ws.send(JSON.stringify({ type: 'error', message: 'WebSocket error occurred' }))
   })
 
   // Connect to OpenAI Realtime API
-  realtimeClient
+  client
     .connect()
     .then(() => {
       console.log(`Connected to OpenAI successfully!`)
@@ -70,27 +70,25 @@ export function SOCKET(client, request, server) {
         messageHandler(messageQueue.shift())
       }
       // Send a welcome message
-      client.send(JSON.stringify({ type: 'welcome', message: 'Connected to WebSocket server' }))
+      ws.send(JSON.stringify({ type: 'welcome', message: 'Connected to WebSocket server' }))
     })
     .catch((e) => {
       console.error(`Error connecting to OpenAI:`, e)
-      client.send(
+      ws.send(
         JSON.stringify({ type: 'error', message: `Error connecting to OpenAI: ${e.message}` }),
       )
-      client.close()
+      ws.close()
     })
 }
 
 export async function GET(req) {
-  console.log('GET function called in ws/route.js')
-  return new Response(
-    JSON.stringify({
-      status: 'available',
-      clientsCount: connectedClients,
-    }),
-    {
-      status: 200,
-      headers: { 'Content-Type': 'application/json' },
-    },
-  )
+  const response = {
+    status: 'available',
+    clientsCount: connectedClients,
+  }
+  console.log('WebSocket status:', response)
+  return new Response(JSON.stringify(response), {
+    status: 200,
+    headers: { 'Content-Type': 'application/json' },
+  })
 }
