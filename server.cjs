@@ -52,7 +52,7 @@ const handleWebSocketConnection = async (ws) => {
 
   // Relay: OpenAI Realtime API Event -> Browser Event
   client.realtime.on('server.*', (event) => {
-    log(`Relaying "${event.type}" to Client: ${JSON.stringify(event)}`)
+    log(`Relaying "${event.type}" to Client: ${Object.keys(event).pop()}`)
     ws.send(JSON.stringify(event))
   })
 
@@ -123,4 +123,29 @@ webSocketServer.on('connection', handleWebSocketConnection)
 })().catch((err) => {
   console.error('Failed to start server:', err)
   process.exit(1)
+})
+
+process.on('uncaughtException', (error) => {
+  if (error.message.includes('Item') && error.message.includes('not found')) {
+    log(
+      `Uncaught exception: Attempted to process audio for non-existent item. This is usually harmless.`,
+    )
+  } else {
+    console.error('Uncaught exception:', error)
+  }
+})
+
+process.on('unhandledRejection', (reason, promise) => {
+  if (
+    reason &&
+    reason.message &&
+    reason.message.includes('Item') &&
+    reason.message.includes('not found')
+  ) {
+    log(
+      `Unhandled rejection: Attempted to process audio for non-existent item. This is usually harmless.`,
+    )
+  } else {
+    console.error('Unhandled rejection at:', promise, 'reason:', reason)
+  }
 })
