@@ -18,7 +18,7 @@ export default function RootLayout({ children }) {
       </head>
       <body className={inter.className}>
         <QueryClientProvider client={queryClient}>
-          <WebSocketProvider url="/api/ws">{children}</WebSocketProvider>
+          <WebSocketProvider url="wss://localhost:3000/api/ws">{children}</WebSocketProvider>
         </QueryClientProvider>
       </body>
     </html>
