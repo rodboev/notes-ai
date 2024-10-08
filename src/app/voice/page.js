@@ -24,15 +24,12 @@ const ConnectionIndicator = ({ isConnected, url, isAvailable }) => {
   )
 }
 
-const getWsUrl = () => {
-  if (typeof window === 'undefined') return 'ws://localhost:80/api/ws'
+const getWsUrl = (port) => {
+  if (typeof window === 'undefined') return `ws://localhost:${port}/api/ws`
 
   const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:'
   const host = window.location.hostname
-  const port = window.location.port || '80'
-  const wsPort = port === '80' || port === '443' ? '' : `:${port}`
-
-  return `${protocol}//${host}${wsPort}/api/ws`
+  return `${protocol}//${host}:${port}/api/ws`
 }
 
 export default function VoiceChat() {
@@ -42,15 +39,13 @@ export default function VoiceChat() {
   const [items, setItems] = useState([])
   const [isPending, setIsPending] = useState(false)
   const [wsStatus, setWsStatus] = useState('Initializing...')
+  const [serverPort, setServerPort] = useState(null)
 
   const clientRef = useRef(null)
   const wavRecorderRef = useRef(new WavRecorder({ sampleRate: 24000 }))
   const wavStreamPlayerRef = useRef(new WavStreamPlayer({ sampleRate: 24000 }))
 
   useEffect(() => {
-    const wsUrl = getWsUrl()
-    setRelayServerUrl(wsUrl)
-
     const checkServerAvailability = async () => {
       try {
         console.log('Checking server availability...')
@@ -59,6 +54,8 @@ export default function VoiceChat() {
         console.log('Server availability response:', data)
         setIsServerAvailable(true)
         setWsStatus(`Available (${data.count} clients connected)`)
+        setServerPort(data.port) // Set the server port
+        setRelayServerUrl(getWsUrl(data.port)) // Update the WebSocket URL with the correct port
       } catch (error) {
         console.error('Error checking server availability:', error)
         setIsServerAvailable(false)

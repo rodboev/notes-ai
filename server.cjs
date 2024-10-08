@@ -124,7 +124,11 @@ webSocketServer.on('connection', handleWebSocketConnection)
       const parsedUrl = parse(req.url, true)
       if (parsedUrl.pathname === '/api/ws') {
         res.writeHead(200, { 'Content-Type': 'application/json' })
-        const responseData = JSON.stringify({ status: 'available', count: connectedClients })
+        const responseData = JSON.stringify({
+          status: 'available',
+          count: connectedClients,
+          port: port,
+        })
         log('Sending response for /api/ws:', responseData)
         res.end(responseData)
       } else {
