@@ -47,58 +47,35 @@ const handleWebSocketConnection = async (ws) => {
     return
   }
 
+  log(`Connecting with key "${OPENAI_API_KEY.slice(0, 3)}..."`)
   const client = new RealtimeClient({ apiKey: OPENAI_API_KEY })
-  const messageQueue = []
 
+  // Relay: OpenAI Realtime API Event -> Browser Event
   client.realtime.on('server.*', (event) => {
-    log(`Relaying "${event.type}" to Client: ${JSON.stringify(event)}`)
+    log(`Relaying "${event.type}" to Client`)
     ws.send(JSON.stringify(event))
   })
 
-  client.realtime.on('close', () => {
-    log('OpenAI connection closed')
-    ws.close()
-  })
+  client.realtime.on('close', () => ws.close())
 
-  client.realtime.on('error', (error) => {
-    log('OpenAI Realtime API error:', error)
-    ws.send(JSON.stringify({ type: 'error', message: error.message }))
-  })
-
-  const messageHandler = async (data) => {
+  // Relay: Browser Event -> OpenAI Realtime API Event
+  const messageQueue = []
+  const messageHandler = (data) => {
     try {
       const event = JSON.parse(data)
       log(`Relaying "${event.type}" to OpenAI`)
       client.realtime.send(event.type, event)
     } catch (e) {
+      console.error(e.message)
       log(`Error parsing event from client: ${data}`)
-      ws.send(JSON.stringify({ type: 'error', message: 'Error parsing event' }))
     }
   }
 
-  ws.on('message', async (data) => {
-    log(`Received message from client: ${data}`)
-    const event = JSON.parse(data)
-    if (event.type === 'connect') {
-      try {
-        log('Connecting to OpenAI...')
-        await client.connect()
-        log('Connected to OpenAI successfully!')
-        ws.send(JSON.stringify({ type: 'connected' }))
-        // Process any queued messages
-        while (messageQueue.length > 0) {
-          await messageHandler(messageQueue.shift())
-        }
-      } catch (e) {
-        log(`Error connecting to OpenAI: ${e.message}`)
-        ws.send(
-          JSON.stringify({ type: 'error', message: `Error connecting to OpenAI: ${e.message}` }),
-        )
-      }
-    } else if (client.isConnected()) {
-      await messageHandler(data)
-    } else {
+  ws.on('message', (data) => {
+    if (!client.isConnected()) {
       messageQueue.push(data)
+    } else {
+      messageHandler(data)
     }
   })
 
@@ -108,10 +85,20 @@ const handleWebSocketConnection = async (ws) => {
     connectedClients--
   })
 
-  ws.on('error', (error) => {
-    log(`WebSocket error:`, error)
-    ws.send(JSON.stringify({ type: 'error', message: 'WebSocket error occurred' }))
-  })
+  // Connect to OpenAI Realtime API
+  try {
+    log('Connecting to OpenAI...')
+    await client.connect()
+    log('Connected to OpenAI successfully!')
+    // Process any queued messages
+    while (messageQueue.length) {
+      messageHandler(messageQueue.shift())
+    }
+  } catch (e) {
+    log(`Error connecting to OpenAI: ${e.message}`)
+    ws.close()
+    return
+  }
 }
 
 webSocketServer.on('connection', handleWebSocketConnection)
