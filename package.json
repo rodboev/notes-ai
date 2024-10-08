@@ -4,9 +4,9 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "dev": "next dev --experimental-https",
+    "dev": "node server.cjs",
     "build": "next build",
-    "start": "next start",
+    "start": "NODE_ENV=production node server.cjs",
     "lint": "next lint",
     "postinstall": "node scripts/copyTinyMCE.js && npx next-ws-cli@latest patch"
   },
