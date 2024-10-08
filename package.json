@@ -6,7 +6,7 @@
   "scripts": {
     "dev": "node server.cjs",
     "build": "next build",
-    "start": "NODE_ENV=production node server.cjs",
+    "start": "cross-env NODE_ENV=production node server.cjs",
     "lint": "next lint",
     "postinstall": "node scripts/copyTinyMCE.js && npx next-ws-cli@latest patch"
   },
@@ -19,6 +19,7 @@
     "axios": "^1.7.4",
     "babel-plugin-react-compiler": "^0.0.0-experimental-48eb8f4-20240822",
     "best-effort-json-parser": "^1.1.2",
+    "cross-env": "^7.0.3",
     "dayjs": "^1.11.12",
     "dotenv": "^16.4.5",
     "find-config": "^1.0.0",

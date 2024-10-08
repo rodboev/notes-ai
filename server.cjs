@@ -7,26 +7,33 @@ const { setHttpServer, setWebSocketServer } = require('next-ws/server')
 const { WebSocketServer } = require('ws')
 require('dotenv').config()
 
-const dev = process.env.NODE_ENV !== 'production'
 const hostname = 'localhost'
 const port = process.env.PORT || 3000
 
 let httpServer
+let isHttps = false
 
-if (dev) {
+const keyPath = './localhost+2-key.pem'
+const certPath = './localhost+2.pem'
+
+if (fs.existsSync(keyPath) && fs.existsSync(certPath)) {
   const httpsOptions = {
-    key: fs.readFileSync('./localhost+2-key.pem'),
-    cert: fs.readFileSync('./localhost+2.pem'),
+    key: fs.readFileSync(keyPath),
+    cert: fs.readFileSync(certPath),
   }
   httpServer = createHttpsServer(httpsOptions)
+  isHttps = true
+  console.log('HTTPS server created')
 } else {
   httpServer = createHttpServer()
+  console.log('HTTP server created')
 }
 
 setHttpServer(httpServer)
 const webSocketServer = new WebSocketServer({ noServer: true })
 setWebSocketServer(webSocketServer)
 
+const dev = process.env.NODE_ENV !== 'production'
 const app = next({ dev, hostname, port, customServer: true })
 const handle = app.getRequestHandler()
 
@@ -113,17 +120,6 @@ webSocketServer.on('connection', handleWebSocketConnection)
   await app.prepare()
 
   httpServer
-    .on('upgrade', (request, socket, head) => {
-      const { pathname } = parse(request.url)
-
-      if (pathname === '/api/ws') {
-        webSocketServer.handleUpgrade(request, socket, head, (ws) => {
-          webSocketServer.emit('connection', ws, request)
-        })
-      } else {
-        socket.destroy()
-      }
-    })
     .on('request', async (req, res) => {
       const parsedUrl = parse(req.url, true)
       if (parsedUrl.pathname === '/api/ws') {
@@ -136,7 +132,8 @@ webSocketServer.on('connection', handleWebSocketConnection)
       }
     })
     .listen(port, () => {
-      log(` ▲ Ready on ${dev ? 'https' : 'http'}://${hostname}:${port}`)
+      const protocol = isHttps ? 'https' : 'http'
+      log(` ▲ Ready on ${protocol}://${hostname}:${port}`)
     })
 })().catch((err) => {
   console.error('Failed to start server:', err)
