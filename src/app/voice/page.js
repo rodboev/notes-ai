@@ -90,24 +90,41 @@ export default function VoiceChat() {
     }
 
     ws.onmessage = (event) => {
-      const data = JSON.parse(event.data)
-      console.log('Received message from server:', data)
-      switch (data.type) {
-        case 'connected':
-          setClientConnected(true)
-          break
-        case 'conversation.updated':
-          handleConversationUpdate(data)
-          break
-        case 'conversation.interrupted':
-          // Handle interruption if needed
-          break
-        case 'error':
-          console.error('Error from server:', data.message)
-          setWsStatus(`Error: ${data.message}`)
-          break
-        default:
-          console.warn(`Unhandled message type: ${data.type}`)
+      console.log('Raw message from server:', event.data)
+      try {
+        const data = JSON.parse(event.data)
+        console.log('Parsed message from server:', data)
+
+        if (!data || typeof data !== 'object' || !data.type) {
+          console.warn('Received invalid message format from server:', data)
+          return
+        }
+
+        switch (data.type) {
+          case 'connected':
+            setClientConnected(true)
+            console.log('Connected to OpenAI')
+            break
+          case 'conversation.updated':
+            handleConversationUpdate(data)
+            break
+          case 'conversation.interrupted':
+            console.log('Conversation interrupted')
+            // Handle interruption if needed
+            break
+          case 'session.created':
+            console.log('Session created')
+            // You might want to update some state or perform some action here
+            break
+          case 'error':
+            console.error('Error from server:', data.message)
+            setWsStatus(`Error: ${data.message}`)
+            break
+          default:
+            console.warn(`Unhandled message type: ${data.type}`)
+        }
+      } catch (error) {
+        console.error('Error parsing message from server:', error)
       }
     }
 

@@ -51,7 +51,7 @@ const handleWebSocketConnection = async (ws) => {
   const messageQueue = []
 
   client.realtime.on('server.*', (event) => {
-    log(`Relaying "${event.type}" to Client`)
+    log(`Relaying "${event.type}" to Client: ${JSON.stringify(event)}`)
     ws.send(JSON.stringify(event))
   })
 
@@ -69,20 +69,7 @@ const handleWebSocketConnection = async (ws) => {
     try {
       const event = JSON.parse(data)
       log(`Relaying "${event.type}" to OpenAI`)
-      if (event.type === 'connect') {
-        try {
-          await client.connect()
-          log('Connected to OpenAI successfully!')
-          ws.send(JSON.stringify({ type: 'connected' }))
-        } catch (e) {
-          log(`Error connecting to OpenAI: ${e.message}`)
-          ws.send(
-            JSON.stringify({ type: 'error', message: `Error connecting to OpenAI: ${e.message}` }),
-          )
-        }
-      } else {
-        client.realtime.send(event.type, event)
-      }
+      client.realtime.send(event.type, event)
     } catch (e) {
       log(`Error parsing event from client: ${data}`)
       ws.send(JSON.stringify({ type: 'error', message: 'Error parsing event' }))
@@ -91,10 +78,27 @@ const handleWebSocketConnection = async (ws) => {
 
   ws.on('message', async (data) => {
     log(`Received message from client: ${data}`)
-    if (!client.isConnected()) {
-      messageQueue.push(data)
-    } else {
+    const event = JSON.parse(data)
+    if (event.type === 'connect') {
+      try {
+        log('Connecting to OpenAI...')
+        await client.connect()
+        log('Connected to OpenAI successfully!')
+        ws.send(JSON.stringify({ type: 'connected' }))
+        // Process any queued messages
+        while (messageQueue.length > 0) {
+          await messageHandler(messageQueue.shift())
+        }
+      } catch (e) {
+        log(`Error connecting to OpenAI: ${e.message}`)
+        ws.send(
+          JSON.stringify({ type: 'error', message: `Error connecting to OpenAI: ${e.message}` }),
+        )
+      }
+    } else if (client.isConnected()) {
       await messageHandler(data)
+    } else {
+      messageQueue.push(data)
     }
   })
 
