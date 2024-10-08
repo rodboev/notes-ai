@@ -3,7 +3,6 @@ const { createServer: createHttpServer } = require('node:http')
 const { createServer: createHttpsServer } = require('node:https')
 const { parse } = require('node:url')
 const next = require('next')
-const { setHttpServer, setWebSocketServer } = require('next-ws/server')
 const { WebSocketServer } = require('ws')
 require('dotenv').config()
 
@@ -23,15 +22,11 @@ if (fs.existsSync(keyPath) && fs.existsSync(certPath)) {
   }
   httpServer = createHttpsServer(httpsOptions)
   isHttps = true
-  console.log('HTTPS server created')
 } else {
   httpServer = createHttpServer()
-  console.log('HTTP server created')
 }
 
-setHttpServer(httpServer)
 const webSocketServer = new WebSocketServer({ noServer: true })
-setWebSocketServer(webSocketServer)
 
 const dev = process.env.NODE_ENV !== 'production'
 const app = next({ dev, hostname, port, customServer: true })
@@ -123,6 +118,7 @@ webSocketServer.on('connection', handleWebSocketConnection)
     .on('request', async (req, res) => {
       const parsedUrl = parse(req.url, true)
       if (parsedUrl.pathname === '/api/ws') {
+        // Handle the /api/ws request directly
         res.writeHead(200, { 'Content-Type': 'application/json' })
         const responseData = JSON.stringify({
           status: 'available',
@@ -132,7 +128,19 @@ webSocketServer.on('connection', handleWebSocketConnection)
         log('Sending response for /api/ws:', responseData)
         res.end(responseData)
       } else {
+        // For all other routes, let Next.js handle the request
         await handle(req, res, parsedUrl)
+      }
+    })
+    .on('upgrade', (req, socket, head) => {
+      const { pathname } = parse(req.url)
+
+      if (pathname === '/api/ws') {
+        webSocketServer.handleUpgrade(req, socket, head, (ws) => {
+          webSocketServer.emit('connection', ws, req)
+        })
+      } else {
+        socket.destroy()
       }
     })
     .listen(port, () => {
