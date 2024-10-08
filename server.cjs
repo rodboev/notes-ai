@@ -52,7 +52,7 @@ const handleWebSocketConnection = async (ws) => {
 
   // Relay: OpenAI Realtime API Event -> Browser Event
   client.realtime.on('server.*', (event) => {
-    log(`Relaying "${event.type}" to Client`)
+    log(`Relaying "${event.type}" to Client: ${JSON.stringify(event)}`)
     ws.send(JSON.stringify(event))
   })
 
@@ -60,11 +60,11 @@ const handleWebSocketConnection = async (ws) => {
 
   // Relay: Browser Event -> OpenAI Realtime API Event
   const messageQueue = []
-  const messageHandler = (data) => {
+  const messageHandler = async (data) => {
     try {
       const event = JSON.parse(data)
       log(`Relaying "${event.type}" to OpenAI`)
-      client.realtime.send(event.type, event)
+      await client.realtime.send(event.type, event)
     } catch (e) {
       console.error(e.message)
       log(`Error parsing event from client: ${data}`)
@@ -92,7 +92,7 @@ const handleWebSocketConnection = async (ws) => {
     log('Connected to OpenAI successfully!')
     // Process any queued messages
     while (messageQueue.length) {
-      messageHandler(messageQueue.shift())
+      await messageHandler(messageQueue.shift())
     }
   } catch (e) {
     log(`Error connecting to OpenAI: ${e.message}`)

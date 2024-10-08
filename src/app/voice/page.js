@@ -7,6 +7,7 @@ import Nav from '../components/Nav'
 import { Phone, PhoneOff, Check, X } from 'lucide-react'
 import SpinnerIcon from '../components/Icons/SpinnerIcon'
 import { useWebSocket } from 'next-ws/client'
+import { RealtimeClient } from '@openai/realtime-api-beta'
 
 const ConnectionIndicator = ({ isConnected, url, isAvailable }) => {
   return (
@@ -24,6 +25,43 @@ const ConnectionIndicator = ({ isConnected, url, isAvailable }) => {
   )
 }
 
+class RelayRealtimeClient extends RealtimeClient {
+  constructor(options) {
+    super(options)
+    this.ws = new WebSocket(options.url)
+    this.ws.onmessage = this.handleMessage.bind(this)
+    this.eventHandlers = {}
+  }
+
+  handleMessage(event) {
+    const data = JSON.parse(event.data)
+    if (this.eventHandlers[data.type]) {
+      this.eventHandlers[data.type].forEach((handler) => handler(data))
+    }
+  }
+
+  async send(type, event) {
+    this.ws.send(JSON.stringify({ type, ...event }))
+  }
+
+  isConnected() {
+    return this.ws.readyState === WebSocket.OPEN
+  }
+
+  on(eventType, handler) {
+    if (!this.eventHandlers[eventType]) {
+      this.eventHandlers[eventType] = []
+    }
+    this.eventHandlers[eventType].push(handler)
+  }
+
+  off(eventType, handler) {
+    if (this.eventHandlers[eventType]) {
+      this.eventHandlers[eventType] = this.eventHandlers[eventType].filter((h) => h !== handler)
+    }
+  }
+}
+
 export default function VoiceChat() {
   const ws = useWebSocket()
   const [relayServerUrl, setRelayServerUrl] = useState('')
@@ -31,15 +69,11 @@ export default function VoiceChat() {
   const [isServerAvailable, setIsServerAvailable] = useState(false)
   const [items, setItems] = useState([])
   const [isPending, setIsPending] = useState(false)
-  const [wsReady, setWsReady] = useState(false)
-
   const [wsStatus, setWsStatus] = useState('Initializing...')
-  const wsRef = useRef(null)
 
+  const clientRef = useRef(null)
   const wavRecorderRef = useRef(new WavRecorder({ sampleRate: 24000 }))
   const wavStreamPlayerRef = useRef(new WavStreamPlayer({ sampleRate: 24000 }))
-
-  const [clientConnected, setClientConnected] = useState(false)
 
   useEffect(() => {
     const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:'
@@ -69,139 +103,96 @@ export default function VoiceChat() {
   }, [])
 
   useEffect(() => {
-    if (!ws) return
+    if (!relayServerUrl) return
 
-    console.log('WebSocket connection opened')
-    setIsConnected(true)
-    setWsStatus('Connected')
-    setWsReady(true)
+    clientRef.current = new RelayRealtimeClient({ url: relayServerUrl })
+    const client = clientRef.current
+    const wavStreamPlayer = wavStreamPlayerRef.current
 
-    ws.onclose = () => {
-      console.log('WebSocket connection closed')
-      setIsConnected(false)
-      setWsStatus('Disconnected')
-      setWsReady(false)
-      setClientConnected(false)
-    }
+    client.on('session.update', (event) => {
+      console.log('Session updated:', event)
+    })
 
-    ws.onerror = (error) => {
-      console.error('WebSocket error:', error)
-      setWsStatus(`Error: ${error.message}`)
-    }
-
-    ws.onmessage = (event) => {
-      console.log('Raw message from server:', event.data)
-      try {
-        const data = JSON.parse(event.data)
-        console.log('Parsed message from server:', data)
-
-        if (!data || typeof data !== 'object' || !data.type) {
-          console.warn('Received invalid message format from server:', data)
-          return
+    client.on('conversation.updated', async ({ item, delta }) => {
+      setItems((prevItems) => {
+        const existingItemIndex = prevItems.findIndex((i) => i.id === item.id)
+        if (existingItemIndex !== -1) {
+          const updatedItems = [...prevItems]
+          updatedItems[existingItemIndex] = { ...updatedItems[existingItemIndex], ...item }
+          return updatedItems
+        } else {
+          return [...prevItems, item]
         }
+      })
 
-        switch (data.type) {
-          case 'connected':
-            setClientConnected(true)
-            console.log('Connected to OpenAI')
-            break
-          case 'conversation.updated':
-            handleConversationUpdate(data)
-            break
-          case 'conversation.interrupted':
-            console.log('Conversation interrupted')
-            // Handle interruption if needed
-            break
-          case 'session.created':
-            console.log('Session created')
-            // You might want to update some state or perform some action here
-            break
-          case 'error':
-            console.error('Error from server:', data.message)
-            setWsStatus(`Error: ${data.message}`)
-            break
-          default:
-            console.warn(`Unhandled message type: ${data.type}`)
-        }
-      } catch (error) {
-        console.error('Error parsing message from server:', error)
-      }
-    }
-
-    return () => {
-      ws.onmessage = null
-      ws.onclose = null
-      ws.onerror = null
-    }
-  }, [ws])
-
-  const handleConversationUpdate = useCallback(({ item, delta }) => {
-    setItems((prevItems) => {
-      const existingItemIndex = prevItems.findIndex((i) => i.id === item.id)
-      if (existingItemIndex !== -1) {
-        const updatedItems = [...prevItems]
-        updatedItems[existingItemIndex] = { ...updatedItems[existingItemIndex], ...item }
-        return updatedItems
-      } else {
-        return [...prevItems, item]
+      if (delta?.audio) {
+        wavStreamPlayer.add16BitPCM(delta.audio, item.id)
       }
     })
 
-    if (delta?.audio) {
-      wavStreamPlayerRef.current.add16BitPCM(delta.audio, item.id)
+    client.on('error', (error) => {
+      console.error('RealtimeClient error:', error)
+      setWsStatus(`Error: ${error.message}`)
+    })
+
+    const checkConnection = () => {
+      setIsConnected(client.isConnected())
     }
-  }, [])
+
+    const intervalId = setInterval(checkConnection, 5000)
+
+    return () => {
+      clearInterval(intervalId)
+      client.ws.close()
+    }
+  }, [relayServerUrl])
 
   const connectConversation = useCallback(async () => {
-    if (!wsReady) {
-      console.error('WebSocket is not ready')
+    if (!clientRef.current || !clientRef.current.isConnected()) {
+      console.error('RealtimeClient is not connected')
       return
     }
 
     setIsPending(true)
+    const client = clientRef.current
     const wavRecorder = wavRecorderRef.current
     const wavStreamPlayer = wavStreamPlayerRef.current
 
     try {
       console.log('Connecting conversation...')
-      ws.send(JSON.stringify({ type: 'connect' }))
+      await client.send('session.update', { instructions })
+      await client.send('session.update', { voice: 'echo' })
+      await client.send('session.update', { input_audio_transcription: { model: 'whisper-1' } })
 
       await wavRecorder.begin()
       await wavStreamPlayer.connect()
 
-      ws.send(
-        JSON.stringify({
-          type: 'updateSession',
-          data: { instructions, voice: 'echo', input_audio_transcription: { model: 'whisper-1' } },
-        }),
-      )
+      client.send('conversation.item.create', { type: 'input_text', text: 'Hello!' })
 
-      ws.send(
-        JSON.stringify({
-          type: 'sendUserMessageContent',
-          data: [{ type: 'input_text', text: 'Hello!' }],
-        }),
-      )
-
-      await wavRecorder.record((data) => {
-        ws.send(JSON.stringify({ type: 'appendInputAudio', data: data.mono }))
+      await wavRecorder.record(async (data) => {
+        if (data.mono && data.mono.length > 0) {
+          await client.send('input_audio_buffer.append', { audio: data.mono })
+        }
       })
 
-      await changeTurnEndType('server_vad')
+      await client.send('session.update', { turn_detection: { type: 'server_vad' } })
+
       console.log('Conversation connected successfully')
     } catch (error) {
       console.error('Error connecting conversation:', error)
       setWsStatus(`Error: ${error.message}`)
-      setClientConnected(false)
     } finally {
       setIsPending(false)
     }
-  }, [ws, wsReady])
+  }, [])
 
   const disconnectConversation = useCallback(async () => {
+    if (!clientRef.current) return
+
     setIsPending(true)
     try {
-      ws.send(JSON.stringify({ type: 'disconnect' }))
+      const client = clientRef.current
+      await client.disconnect()
 
       const wavRecorder = wavRecorderRef.current
       await wavRecorder.end()
@@ -211,7 +202,7 @@ export default function VoiceChat() {
       const wavStreamPlayer = wavStreamPlayerRef.current
       await wavStreamPlayer.interrupt()
 
-      setClientConnected(false)
+      setIsConnected(false)
       setItems([])
       console.log('Conversation disconnected successfully')
     } catch (error) {
@@ -220,22 +211,22 @@ export default function VoiceChat() {
     } finally {
       setIsPending(false)
     }
-  }, [ws])
+  }, [])
 
   const changeTurnEndType = async (value) => {
+    const client = clientRef.current
     const wavRecorder = wavRecorderRef.current
     if (value === 'none' && wavRecorder.getStatus() === 'recording') {
       await wavRecorder.pause()
     }
-    ws.send(
-      JSON.stringify({
-        type: 'updateSession',
-        data: { turn_detection: value === 'none' ? null : { type: 'server_vad' } },
-      }),
-    )
-    if (value === 'server_vad' && clientConnected) {
-      await wavRecorder.record((data) => {
-        ws.send(JSON.stringify({ type: 'appendInputAudio', data: data.mono }))
+    await client.send('session.update', {
+      turn_detection: value === 'none' ? null : { type: 'server_vad' },
+    })
+    if (value === 'server_vad' && client.isConnected()) {
+      await wavRecorder.record(async (data) => {
+        if (data.mono && data.mono.length > 0) {
+          await client.send('input_audio_buffer.append', { audio: data.mono })
+        }
       })
     }
   }
@@ -245,7 +236,7 @@ export default function VoiceChat() {
       <Nav />
       <div className="flex h-dvh max-w-full snap-y snap-mandatory flex-col items-center justify-center overflow-y-scroll pb-8 pt-20">
         <ConnectionIndicator
-          isConnected={clientConnected}
+          isConnected={clientRef.current?.isConnected() || false}
           url={relayServerUrl}
           isAvailable={isServerAvailable}
         />
@@ -262,9 +253,9 @@ export default function VoiceChat() {
           ))}
         </div>
         <ConnectButton
-          onClick={clientConnected ? disconnectConversation : connectConversation}
-          isConnected={clientConnected}
-          disabled={!wsReady || !isServerAvailable || isPending}
+          onClick={clientRef.current?.isConnected() ? disconnectConversation : connectConversation}
+          isConnected={clientRef.current?.isConnected() || false}
+          disabled={!isServerAvailable || isPending}
           isPending={isPending}
         />
       </div>
