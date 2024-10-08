@@ -24,6 +24,96 @@ const ConnectionIndicator = ({ isConnected, url, isAvailable }) => {
   )
 }
 
+class CustomRealtimeClient {
+  constructor(options) {
+    this.ws = new WebSocket(options.url)
+    this.isConnected = false
+    this.eventHandlers = {}
+    this.messageQueue = []
+
+    this.ws.onopen = () => {
+      console.log('WebSocket connected')
+      this.isConnected = true
+      this.processQueue()
+      if (this.eventHandlers['ready']) {
+        this.eventHandlers['ready'].forEach((handler) => handler())
+      }
+    }
+
+    this.ws.onmessage = (event) => {
+      const data = JSON.parse(event.data)
+      if (this.eventHandlers[data.type]) {
+        this.eventHandlers[data.type].forEach((handler) => handler(data))
+      }
+    }
+
+    this.ws.onclose = () => {
+      console.log('WebSocket disconnected')
+      this.isConnected = false
+    }
+  }
+
+  on(eventType, handler) {
+    if (!this.eventHandlers[eventType]) {
+      this.eventHandlers[eventType] = []
+    }
+    this.eventHandlers[eventType].push(handler)
+  }
+
+  async connect() {
+    return new Promise((resolve, reject) => {
+      if (this.isConnected) {
+        resolve()
+      } else {
+        this.on('ready', () => {
+          this.send({ type: 'connect' })
+          this.on('connected', () => {
+            resolve()
+          })
+        })
+        this.on('error', (error) => {
+          reject(error)
+        })
+      }
+    })
+  }
+
+  send(data) {
+    if (this.isConnected) {
+      this.ws.send(JSON.stringify(data))
+    } else {
+      this.messageQueue.push(data)
+    }
+  }
+
+  processQueue() {
+    while (this.messageQueue.length > 0) {
+      const message = this.messageQueue.shift()
+      this.ws.send(JSON.stringify(message))
+    }
+  }
+
+  async updateSession(data) {
+    this.send({ type: 'session.update', data })
+  }
+
+  async sendUserMessageContent(data) {
+    this.send({ type: 'conversation.item.create', data })
+  }
+
+  async appendInputAudio(data) {
+    this.send({ type: 'input_audio_buffer.append', data })
+  }
+
+  async cancelResponse(trackId, offset) {
+    this.send({ type: 'response.cancel', trackId, offset })
+  }
+
+  reset() {
+    this.ws.close()
+  }
+}
+
 export default function VoiceChat() {
   const [relayServerUrl, setRelayServerUrl] = useState('')
   const [isConnected, setIsConnected] = useState(false)
@@ -63,66 +153,49 @@ export default function VoiceChat() {
     return () => clearInterval(intervalId)
   }, [])
 
-  useEffect(() => {
-    if (!relayServerUrl) return
-
-    clientRef.current = new RealtimeClient({ url: relayServerUrl })
-    const client = clientRef.current
-    const wavStreamPlayer = wavStreamPlayerRef.current
-
-    client.on('conversation.interrupted', async () => {
-      const trackSampleOffset = await wavStreamPlayer.interrupt()
-      if (trackSampleOffset?.trackId) {
-        const { trackId, offset } = trackSampleOffset
-        await client.cancelResponse(trackId, offset)
-      }
-    })
-
-    client.on('conversation.updated', async ({ item, delta }) => {
-      setItems((prevItems) => {
-        const existingItemIndex = prevItems.findIndex((i) => i.id === item.id)
-        if (existingItemIndex !== -1) {
-          const updatedItems = [...prevItems]
-          updatedItems[existingItemIndex] = { ...updatedItems[existingItemIndex], ...item }
-          return updatedItems
-        } else {
-          return [...prevItems, item]
-        }
-      })
-
-      if (delta?.audio) {
-        wavStreamPlayer.add16BitPCM(delta.audio, item.id)
-      }
-    })
-
-    client.on('error', (error) => {
-      console.error('RealtimeClient error:', error)
-      setWsStatus(`Error: ${error.message}`)
-    })
-
-    client.on('ready', () => {
-      setIsConnected(true)
-      setWsStatus('Connected')
-      setItems(client.conversation.getItems())
-    })
-
-    return () => {
-      client.reset()
-    }
-  }, [relayServerUrl])
-
   const connectConversation = useCallback(async () => {
-    if (!clientRef.current) {
-      console.error('RealtimeClient is not initialized')
+    if (!relayServerUrl) {
+      console.error('WebSocket URL is not set')
       return
     }
 
     setIsPending(true)
-    const client = clientRef.current
-    const wavRecorder = wavRecorderRef.current
-    const wavStreamPlayer = wavStreamPlayerRef.current
-
     try {
+      clientRef.current = new CustomRealtimeClient({ url: relayServerUrl })
+      const client = clientRef.current
+      const wavRecorder = wavRecorderRef.current
+      const wavStreamPlayer = wavStreamPlayerRef.current
+
+      client.on('conversation.interrupted', async () => {
+        const trackSampleOffset = await wavStreamPlayer.interrupt()
+        if (trackSampleOffset?.trackId) {
+          const { trackId, offset } = trackSampleOffset
+          await client.cancelResponse(trackId, offset)
+        }
+      })
+
+      client.on('conversation.updated', async ({ item, delta }) => {
+        setItems((prevItems) => {
+          const existingItemIndex = prevItems.findIndex((i) => i.id === item.id)
+          if (existingItemIndex !== -1) {
+            const updatedItems = [...prevItems]
+            updatedItems[existingItemIndex] = { ...updatedItems[existingItemIndex], ...item }
+            return updatedItems
+          } else {
+            return [...prevItems, item]
+          }
+        })
+
+        if (delta?.audio) {
+          wavStreamPlayer.add16BitPCM(delta.audio, item.id)
+        }
+      })
+
+      client.on('error', (error) => {
+        console.error('RealtimeClient error:', error)
+        setWsStatus(`Error: ${error.message}`)
+      })
+
       console.log('Connecting conversation...')
       await client.connect()
 
@@ -135,11 +208,12 @@ export default function VoiceChat() {
 
       client.sendUserMessageContent([{ type: 'input_text', text: 'Hello!' }])
 
-      if (client.getTurnDetectionType() === 'server_vad') {
-        await wavRecorder.record((data) => client.appendInputAudio(data.mono))
-      }
+      await wavRecorder.record((data) => client.appendInputAudio(data.mono))
 
-      await changeTurnEndType('server_vad')
+      await client.updateSession({ turn_detection: { type: 'server_vad' } })
+
+      setIsConnected(true)
+      setWsStatus('Connected')
       console.log('Conversation connected successfully')
     } catch (error) {
       console.error('Error connecting conversation:', error)
@@ -147,7 +221,7 @@ export default function VoiceChat() {
     } finally {
       setIsPending(false)
     }
-  }, [])
+  }, [relayServerUrl])
 
   const disconnectConversation = useCallback(async () => {
     if (!clientRef.current) return
@@ -195,7 +269,7 @@ export default function VoiceChat() {
       <Nav />
       <div className="flex h-dvh max-w-full snap-y snap-mandatory flex-col items-center justify-center overflow-y-scroll pb-8 pt-20">
         <ConnectionIndicator
-          isConnected={clientRef.current?.isConnected() || false}
+          isConnected={isConnected}
           url={relayServerUrl}
           isAvailable={isServerAvailable}
         />
@@ -212,8 +286,8 @@ export default function VoiceChat() {
           ))}
         </div>
         <ConnectButton
-          onClick={clientRef.current?.isConnected() ? disconnectConversation : connectConversation}
-          isConnected={clientRef.current?.isConnected() || false}
+          onClick={isConnected ? disconnectConversation : connectConversation}
+          isConnected={isConnected}
           disabled={!isServerAvailable || isPending}
           isPending={isPending}
         />
