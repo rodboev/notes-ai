@@ -9,9 +9,18 @@ import { WebSocketProvider } from 'next-ws/client'
 const inter = Inter({ subsets: ['latin'] })
 
 export default function RootLayout({ children }) {
-  const wsUrl = `${
-    typeof window !== 'undefined' ? (window.location.protocol === 'https:' ? 'wss:' : 'ws:') : 'ws:'
-  }//${typeof window !== 'undefined' ? window.location.host : ''}/api/ws`
+  const getWsUrl = () => {
+    if (typeof window === 'undefined') return 'ws://localhost:80/api/ws'
+
+    const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:'
+    const host = window.location.hostname
+    const port = window.location.port || '80'
+    const wsPort = port === '80' || port === '443' ? '' : `:${port}`
+
+    return `${protocol}//${host}${wsPort}/api/ws`
+  }
+
+  const wsUrl = getWsUrl()
 
   return (
     <html lang="en">

@@ -24,6 +24,17 @@ const ConnectionIndicator = ({ isConnected, url, isAvailable }) => {
   )
 }
 
+const getWsUrl = () => {
+  if (typeof window === 'undefined') return 'ws://localhost:80/api/ws'
+
+  const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:'
+  const host = window.location.hostname
+  const port = window.location.port || '80'
+  const wsPort = port === '80' || port === '443' ? '' : `:${port}`
+
+  return `${protocol}//${host}${wsPort}/api/ws`
+}
+
 export default function VoiceChat() {
   const [relayServerUrl, setRelayServerUrl] = useState('')
   const [isConnected, setIsConnected] = useState(false)
@@ -37,9 +48,7 @@ export default function VoiceChat() {
   const wavStreamPlayerRef = useRef(new WavStreamPlayer({ sampleRate: 24000 }))
 
   useEffect(() => {
-    const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:'
-    const host = window.location.host
-    const wsUrl = `${protocol}//${host}/api/ws`
+    const wsUrl = getWsUrl()
     setRelayServerUrl(wsUrl)
 
     const checkServerAvailability = async () => {
