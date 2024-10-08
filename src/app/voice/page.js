@@ -48,8 +48,8 @@ export default function VoiceChat() {
         const response = await fetch('/api/ws')
         const data = await response.json()
         console.log('Server availability response:', data)
-        setIsServerAvailable(data.status === 'available')
-        setWsStatus(data.status === 'available' ? 'Available' : 'Unavailable')
+        setIsServerAvailable(true)
+        setWsStatus(`Available (${data.count} clients connected)`)
       } catch (error) {
         console.error('Error checking server availability:', error)
         setIsServerAvailable(false)

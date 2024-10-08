@@ -1,5 +1,6 @@
 const fs = require('fs')
-const { Server } = require('node:https')
+const { createServer: createHttpServer } = require('node:http')
+const { createServer: createHttpsServer } = require('node:https')
 const { parse } = require('node:url')
 const next = require('next')
 const { setHttpServer, setWebSocketServer } = require('next-ws/server')
@@ -8,14 +9,20 @@ require('dotenv').config()
 
 const dev = process.env.NODE_ENV !== 'production'
 const hostname = 'localhost'
-const port = 3000
+const port = process.env.PORT || 3000
 
-const httpsOptions = {
-  key: fs.readFileSync('./localhost+2-key.pem'),
-  cert: fs.readFileSync('./localhost+2.pem'),
+let httpServer
+
+if (dev) {
+  const httpsOptions = {
+    key: fs.readFileSync('./localhost+2-key.pem'),
+    cert: fs.readFileSync('./localhost+2.pem'),
+  }
+  httpServer = createHttpsServer(httpsOptions)
+} else {
+  httpServer = createHttpServer()
 }
 
-const httpServer = new Server(httpsOptions)
 setHttpServer(httpServer)
 const webSocketServer = new WebSocketServer({ noServer: true })
 setWebSocketServer(webSocketServer)
@@ -106,6 +113,17 @@ webSocketServer.on('connection', handleWebSocketConnection)
   await app.prepare()
 
   httpServer
+    .on('upgrade', (request, socket, head) => {
+      const { pathname } = parse(request.url)
+
+      if (pathname === '/api/ws') {
+        webSocketServer.handleUpgrade(request, socket, head, (ws) => {
+          webSocketServer.emit('connection', ws, request)
+        })
+      } else {
+        socket.destroy()
+      }
+    })
     .on('request', async (req, res) => {
       const parsedUrl = parse(req.url, true)
       if (parsedUrl.pathname === '/api/ws') {
@@ -118,7 +136,7 @@ webSocketServer.on('connection', handleWebSocketConnection)
       }
     })
     .listen(port, () => {
-      log(` ▲ Ready on https://${hostname}:${port}`)
+      log(` ▲ Ready on ${dev ? 'https' : 'http'}://${hostname}:${port}`)
     })
 })().catch((err) => {
   console.error('Failed to start server:', err)
