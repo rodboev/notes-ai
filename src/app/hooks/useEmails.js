@@ -53,7 +53,22 @@ const processServerMessage = ({
       status,
       allEmails,
       streamingJson,
-      error: status === 'error' ? new Error(chunk?.error || 'Unknown error') : null,
+      error: chunk.error ? JSON.stringify(chunk.error, null, 2) : 'Unknown error',
+    }
+  } else if (status === 'error') {
+    let errorMessage = 'Unknown error'
+    let errorDetails = {}
+    if (typeof chunk?.error === 'string') {
+      errorMessage = chunk.error
+    } else if (chunk?.error?.message) {
+      errorMessage = chunk.error.message
+      errorDetails = chunk.error
+    }
+    return {
+      status,
+      allEmails,
+      streamingJson,
+      error: new Error(errorMessage, { cause: errorDetails }),
     }
   }
 

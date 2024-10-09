@@ -104,7 +104,9 @@ export default function Home() {
         </div>
       ) : notesError || emailsError ? (
         <div className="flex h-full items-center text-neutral-700">
-          {notesError?.message || emailsError?.message || 'An unexpected error occurred'}
+          <div className="max-w-screen-sm">
+            Errors: <p>{notesError}</p> <p>{emailsError}</p>
+          </div>
         </div>
       ) : (
         pairs.length === 0 && (

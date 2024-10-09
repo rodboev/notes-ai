@@ -222,13 +222,7 @@ export async function GET(req) {
             }
           }
 
-          // Determine which fingerprints need to be fetched
           const fingerprintsToFetch = validRequestedFingerprints.filter((fp) => !emailCache[fp])
-
-          // Debug logging
-          // console.log('requestedFingerprints', requestedFingerprints)
-          // console.log('validRequestedFingerprints', validRequestedFingerprints)
-          // console.log('fingerprintsToFetch', fingerprintsToFetch)
 
           if (fingerprintsToFetch.length > 0) {
             const response = await fetch(
@@ -268,7 +262,16 @@ export async function GET(req) {
       } catch (error) {
         console.error(`${timestamp()} Error processing emails:`, error)
         console.error(`${timestamp()} Error stack:`, error.stack)
-        sendData({ error: error.message || 'Internal server error' }, 'error')
+
+        // Enhanced error reporting
+        const errorDetails = {
+          message: error.message || 'Internal server error',
+          stack: error.stack,
+          name: error.name,
+          code: error.code,
+        }
+
+        sendData({ error: errorDetails }, 'error')
       } finally {
         if (!dataSent) {
           // If no data was sent, send an empty 'complete' message
