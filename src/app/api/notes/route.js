@@ -36,7 +36,8 @@ const config = {
   options: {
     trustedConnection: false,
     enableArithAbort: true,
-    encrypt: false,
+    encrypt: true, // Changed to true to enable encryption
+    trustServerCertificate: true, // Added to bypass certificate validation
     driver: 'FreeTDS',
   },
   connectionString: `Driver={FreeTDS};Server=${process.env.SQL_SERVER || '127.0.0.1'},${process.env.SQL_PORT || 1433};Database=${process.env.SQL_DATABASE};Uid=${process.env.SQL_USERNAME};Pwd=${process.env.SQL_PASSWORD};TDS_Version=7.4;`,

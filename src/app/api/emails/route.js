@@ -3,15 +3,16 @@
 import OpenAI from 'openai'
 import { parse } from 'best-effort-json-parser'
 import { firestore } from '../../../firebase.js'
-import { readFromDisk, writeToDisk, deleteFromDisk } from '../../utils/diskStorage'
+import { readFromDisk, writeToDisk } from '../../utils/diskStorage'
 import { timestamp } from '../../utils/timestamp'
 import { getPrompts } from '../prompts/route.js'
 import { firestoreBatchWrite, firestoreGetAllDocs } from '../../utils/firestoreHelper'
+import { headers } from 'next/headers'
+import { GET as getNotes } from '../notes/route'
 
 const isProduction = process.env.NEXT_PUBLIC_NODE_ENV === 'production'
 const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY })
-const port = process.env.PORT
-const NOTES_PER_GROUP = !isProduction ? 3 : 10
+const NOTES_PER_GROUP = isProduction ? 10 : 3
 
 const chunkArray = (array, chunkSize) => {
   const chunks = []
@@ -74,19 +75,39 @@ function expand(template, variables) {
   }
   return template.replace(/{{([^}]+)}}/g, (match, key) => {
     const value = key.split('.').reduce((obj, k) => obj?.[k], variables)
-    if (typeof value === 'object' && value.object) {
-      return expand(value.object, variables)
-    }
     return typeof value === 'string' ? expand(value, variables) : (value ?? match)
   })
 }
 
+async function fetchWithErrorHandling(searchParams) {
+  console.log(`${timestamp()} Attempting to fetch notes with params:`, searchParams)
+  try {
+    const response = await getNotes({ url: `http://localhost/api/notes?${searchParams}` })
+    const notes = await response.json()
+    console.log(`${timestamp()} Fetch completed, retrieved ${notes.length} notes`)
+    return notes
+  } catch (error) {
+    console.error(`${timestamp()} Error:`, {
+      message: error.message,
+      cause: error.cause?.message,
+      code: error.cause?.code,
+      stack: error.stack,
+    })
+    throw error
+  }
+}
+
 export async function GET(req) {
-  const url = new URL(req.url)
-  const startDate = url.searchParams.get('startDate')
-  const endDate = url.searchParams.get('endDate')
-  const fingerprint = url.searchParams.get('fingerprint')
-  const fingerprints = url.searchParams.get('fingerprints')
+  const headersList = headers()
+  const host = headersList.get('host') || 'localhost:3000'
+  const protocol = headersList.get('x-forwarded-proto') || 'http'
+
+  // Extract search params from the request URL
+  const { searchParams } = new URL(req.url)
+  const startDate = searchParams.get('startDate')
+  const endDate = searchParams.get('endDate')
+  const fingerprint = searchParams.get('fingerprint')
+  const fingerprints = searchParams.get('fingerprints')
   const requestedFingerprints = fingerprints?.split(',') || []
 
   console.log(
@@ -94,10 +115,8 @@ export async function GET(req) {
   )
 
   let storedEmails = await loadEmails()
-  let emailCache = storedEmails.reduce((acc, email) => {
-    if (email.fingerprint) {
-      acc[email.fingerprint] = email
-    }
+  const emailCache = storedEmails.reduce((acc, email) => {
+    if (email.fingerprint) acc[email.fingerprint] = email
     return acc
   }, {})
 
@@ -106,7 +125,7 @@ export async function GET(req) {
     async start(controller) {
       let responseComplete = false
       let dataSent = false
-      let sentFingerprints = new Set()
+      const sentFingerprints = new Set()
 
       function sendData(data, status) {
         let payload
@@ -143,7 +162,7 @@ export async function GET(req) {
         let stream
         try {
           stream = await openai.chat.completions.create({
-            model: 'gpt-4o-2024-08-06', // isProduction ? 'gpt-4o-2024-08-06' : 'gpt-4o-mini-2024-07-18',
+            model: 'gpt-4o-2024-08-06',
             stream: true,
             response_format: { type: 'json_object' },
             messages,
@@ -155,7 +174,6 @@ export async function GET(req) {
         }
 
         let emailsJson = ''
-
         for await (const data of stream) {
           const chunk = data.choices[0].delta.content
           const status = data.choices[0].finish_reason
@@ -183,17 +201,15 @@ export async function GET(req) {
       try {
         if (fingerprint) {
           // Handle single note refresh (always stream)
-          const response = await fetch(
-            `${req.headers.get('x-forwarded-proto') || 'http'}://localhost:${port}/api/notes?fingerprint=${fingerprint}`,
-          )
-          const note = await response.json()
+          console.log(`${timestamp()} Fetching note for fingerprint: ${fingerprint}`)
+          const note = await fetchWithErrorHandling(`fingerprint=${fingerprint}`)
 
-          if (note.length === 0) {
+          if (!note || note.length === 0) {
             throw new Error(`Note not found for fingerprint: ${fingerprint}`)
           }
 
           // Force refresh the email
-          const [generatedEmail] = await streamResponse([note])
+          const [generatedEmail] = await streamResponse([note[0]])
           if (generatedEmail) {
             // Update stored emails and cache
             storedEmails = storedEmails.filter((e) => e.fingerprint !== fingerprint)
@@ -225,29 +241,45 @@ export async function GET(req) {
           const fingerprintsToFetch = validRequestedFingerprints.filter((fp) => !emailCache[fp])
 
           if (fingerprintsToFetch.length > 0) {
-            const response = await fetch(
-              `${req.headers.get('x-forwarded-proto') || 'http'}://localhost:${port}/api/notes?fingerprints=${fingerprintsToFetch.join(',')}`,
-            )
-            const notesToProcess = await response.json()
-            console.log(`${timestamp()} Fetched ${notesToProcess.length} notes to process`)
-
-            // Process notes in groups of 10 or less at a time
-            const noteGroups = chunkArray(notesToProcess, NOTES_PER_GROUP)
-            console.log(
-              `${timestamp()} Created ${noteGroups.length} note groups (${NOTES_PER_GROUP} notes each)`,
-            )
-
-            for (const [index, noteGroup] of noteGroups.entries()) {
-              console.log(`${timestamp()} Processing group ${index + 1} of ${noteGroups.length}`)
-              const newEmailGroup = await streamResponse(noteGroup)
-              storedEmails = [...storedEmails, ...newEmailGroup]
-              newEmailGroup.forEach((email) => {
-                emailCache[email.fingerprint] = email
-              })
+            try {
               console.log(
-                `${timestamp()} Generated ${newEmailGroup.length} new emails in group ${index + 1}`,
+                `${timestamp()} Fetching notes for fingerprints: ${fingerprintsToFetch.join(',')}`,
               )
-              await saveEmails(storedEmails)
+              const notesToProcess = await fetchWithErrorHandling(
+                `fingerprints=${fingerprintsToFetch.join(',')}`,
+              )
+              console.log(`${timestamp()} Fetched ${notesToProcess.length} notes to process`)
+
+              // Process notes in groups of 10 or less at a time
+              const noteGroups = chunkArray(notesToProcess, NOTES_PER_GROUP)
+              console.log(
+                `${timestamp()} Created ${noteGroups.length} note groups (${NOTES_PER_GROUP} notes each)`,
+              )
+
+              for (const [index, noteGroup] of noteGroups.entries()) {
+                console.log(`${timestamp()} Processing group ${index + 1} of ${noteGroups.length}`)
+                const newEmailGroup = await streamResponse(noteGroup)
+                storedEmails = [...storedEmails, ...newEmailGroup]
+                newEmailGroup.forEach((email) => {
+                  emailCache[email.fingerprint] = email
+                })
+                console.log(
+                  `${timestamp()} Generated ${newEmailGroup.length} new emails in group ${index + 1}`,
+                )
+                await saveEmails(storedEmails)
+              }
+            } catch (error) {
+              console.error(`${timestamp()} Error fetching or processing notes:`, error)
+              const errorDetails = {
+                message: error.message,
+                cause: error.cause?.message,
+                code: error.cause?.code,
+                stack: error.stack,
+                name: error.name,
+              }
+              sendData({ error: errorDetails }, 'error')
+              controller.close()
+              return // Exit the function early
             }
           } else {
             console.log(`${timestamp()} No new emails to generate`)
@@ -261,16 +293,13 @@ export async function GET(req) {
         sendData({}, 'complete')
       } catch (error) {
         console.error(`${timestamp()} Error processing emails:`, error)
-        console.error(`${timestamp()} Error stack:`, error.stack)
-
-        // Enhanced error reporting
         const errorDetails = {
-          message: error.message || 'Internal server error',
+          message: error.message,
+          cause: error.cause?.message,
+          code: error.cause?.code,
           stack: error.stack,
           name: error.name,
-          code: error.code,
         }
-
         sendData({ error: errorDetails }, 'error')
       } finally {
         if (!dataSent) {

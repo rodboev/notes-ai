@@ -1,8 +1,5 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
-  experimental: {
-    serverComponentsExternalPackages: ['mssql'],
-  },
   webpack: (config, { isServer }) => {
     if (!isServer) {
       config.resolve.fallback = {
@@ -21,4 +18,4 @@ const nextConfig = {
   reactStrictMode: false,
 }
 
-export default nextConfig
+module.exports = nextConfig
