@@ -8,19 +8,16 @@ import { Phone, PhoneOff, Check, X } from 'lucide-react'
 import SpinnerIcon from '../components/Icons/SpinnerIcon'
 import { RealtimeClient } from '@openai/realtime-api-beta'
 
-const ConnectionIndicator = ({ isConnected, url, isAvailable }) => {
+const ConnectionIndicator = ({ url, wsStatus }) => {
+  const isAvailable = !wsStatus.includes('Unable') && !wsStatus.includes('Error')
+
   return (
-    <div className="flex items-center space-x-2">
-      <span className="text-gray-500">{url}</span>
+    <>
       <div className={`flex items-center ${isAvailable ? 'text-green-500' : 'text-red-500'}`}>
         {isAvailable ? <Check className="h-4 w-4" /> : <X className="h-4 w-4" />}
       </div>
-      <span>Available</span>
-      <div className={`flex items-center ${isConnected ? 'text-green-500' : 'text-red-500'}`}>
-        {isConnected ? <Check className="h-4 w-4" /> : <X className="h-4 w-4" />}
-      </div>
-      <span>Connected</span>
-    </div>
+      <div>{[url, wsStatus].join(': ')}</div>
+    </>
   )
 }
 
@@ -53,11 +50,11 @@ export default function VoiceChat() {
         console.log('Server availability response:', data)
         setIsServerAvailable(true)
         setWsStatus(`Available (${data.count} clients connected)`)
-        setRelayServerUrl(getWsUrl()) // Use the current page's protocol and host
+        setRelayServerUrl(getWsUrl())
       } catch (error) {
         console.error('Error checking server availability:', error)
         setIsServerAvailable(false)
-        setWsStatus('Error: Unable to connect')
+        setWsStatus('Unable to connect to server')
       }
     }
 
@@ -101,13 +98,18 @@ export default function VoiceChat() {
 
     client.on('error', (error) => {
       console.error('RealtimeClient error:', error)
-      setWsStatus(`Error: ${error.message}`)
+      setWsStatus(error.message)
     })
 
     client.on('ready', () => {
       setIsConnected(true)
       setWsStatus('Connected')
       setItems(client.conversation.getItems())
+    })
+
+    client.on('close', () => {
+      setIsConnected(false)
+      setWsStatus('Disconnected')
     })
 
     return () => {
@@ -118,10 +120,12 @@ export default function VoiceChat() {
   const connectConversation = useCallback(async () => {
     if (!clientRef.current) {
       console.error('RealtimeClient is not initialized')
+      setWsStatus('Error: RealtimeClient is not initialized')
       return
     }
 
     setIsPending(true)
+    setWsStatus('Connecting...')
     const client = clientRef.current
     const wavRecorder = wavRecorderRef.current
     const wavStreamPlayer = wavStreamPlayerRef.current
@@ -145,6 +149,7 @@ export default function VoiceChat() {
 
       await changeTurnEndType('server_vad')
       console.log('Conversation connected successfully')
+      setWsStatus('Connected')
     } catch (error) {
       console.error('Error connecting conversation:', error)
       setWsStatus(`Error: ${error.message}`)
@@ -157,6 +162,7 @@ export default function VoiceChat() {
     if (!clientRef.current) return
 
     setIsPending(true)
+    setWsStatus('Disconnecting...')
     try {
       const client = clientRef.current
       await client.disconnect()
@@ -172,6 +178,7 @@ export default function VoiceChat() {
       setIsConnected(false)
       setItems([])
       console.log('Conversation disconnected successfully')
+      setWsStatus('Disconnected')
     } catch (error) {
       console.error('Error disconnecting conversation:', error)
       setWsStatus(`Error: ${error.message}`)
@@ -198,12 +205,7 @@ export default function VoiceChat() {
     <>
       <Nav />
       <div className="flex h-dvh max-w-full snap-y snap-mandatory flex-col items-center justify-center overflow-y-scroll pb-8 pt-20">
-        <ConnectionIndicator
-          isConnected={clientRef.current?.isConnected() || false}
-          url={relayServerUrl}
-          isAvailable={isServerAvailable}
-        />
-        <div>WebSocket Status: {wsStatus}</div>
+        <ConnectionIndicator url={relayServerUrl} wsStatus={wsStatus} />
         <div className="m-4 h-full w-1/2 min-w-96 overflow-y-auto border p-4">
           {items.map((item) => (
             <div
