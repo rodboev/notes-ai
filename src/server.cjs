@@ -23,7 +23,11 @@ if (fs.existsSync(keyPath) && fs.existsSync(certPath)) {
   httpServer = createHttpsServer(httpsOptions)
   isHttps = true
 } else {
-  httpServer = createHttpServer()
+  // Redirect HTTP to HTTPS
+  httpServer = createHttpServer((req, res) => {
+    res.writeHead(301, { Location: `https://${hostname}:${port}${req.url}` })
+    res.end()
+  })
 }
 
 const webSocketServer = new WebSocketServer({ noServer: true })
