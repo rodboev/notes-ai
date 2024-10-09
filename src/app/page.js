@@ -2,7 +2,7 @@
 
 'use client'
 
-import { useState, useRef, useEffect, useMemo } from 'react'
+import { useState, useRef, useEffect, useMemo, useCallback } from 'react'
 import Nav from './components/Nav'
 import Note from './components/Note'
 import Email from './components/Email'
@@ -13,6 +13,10 @@ import { useEmails } from './hooks/useEmails'
 import { useEmailStatuses } from './hooks/useEmailStatus'
 import { useLocalStorage } from './hooks/useLocalStorage.js'
 import { useQueryClient } from '@tanstack/react-query'
+import { Phone, PhoneOff } from 'lucide-react'
+import { RealtimeClient } from '@openai/realtime-api-beta'
+import { WavRecorder, WavStreamPlayer } from '@/app/lib/wavtools'
+import { useVoice } from './hooks/useVoice'
 
 const leftJoin = (notes, emails) => {
   if (!notes || !emails) return []
@@ -57,7 +61,6 @@ export default function Home() {
     const latestEmails = queryClient.getQueryData(['emails']) || emailsData
     if (notes && latestEmails && Array.isArray(notes) && Array.isArray(latestEmails)) {
       const newPairs = leftJoin(notes, latestEmails)
-      // console.log('Updated pairs:', newPairs)
       return newPairs
     }
     return []
@@ -72,8 +75,16 @@ export default function Home() {
     pairRefs.current[index]?.scrollIntoView({ behavior: 'smooth' })
   }
 
+  const { isCallConnected, isPending, activeCall, connectConversation, disconnectConversation } =
+    useVoice()
+
   useEffect(() => {
     syncDate()
+    return () => {
+      if (clientRef.current) {
+        clientRef.current.reset()
+      }
+    }
   }, [])
 
   return (
@@ -126,11 +137,17 @@ export default function Home() {
           <Email
             initialEmail={email}
             noteFingerprint={note.fingerprint}
+            note={note}
             index={index}
             total={pairs.length}
             scrollToNextPair={scrollToNextPair}
             emailStatus={emailStatuses?.[note.fingerprint]}
             updateStatus={updateStatus}
+            isCallConnected={isCallConnected}
+            isPending={isPending}
+            activeCall={activeCall}
+            connectConversation={connectConversation}
+            disconnectConversation={disconnectConversation}
           />
         </div>
       ))}

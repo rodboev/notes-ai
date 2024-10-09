@@ -64,7 +64,7 @@ const SendEmailButton = ({
     return (
       <button
         disabled
-        className="btn mr-2 flex cursor-not-allowed border-2 border-green-600 bg-white !py-0"
+        className="btn flex cursor-not-allowed border-2 border-green-600 bg-white !py-0"
       >
         <CheckIcon className="-m-2 mr-1.5 h-8 w-8 text-green-600" />
         <span>Email sent</span>
@@ -72,21 +72,21 @@ const SendEmailButton = ({
     )
   } else if (isSending || emailStatus?.status === 'sending' || sendEmailMutation.isLoading) {
     return (
-      <button disabled className="btn-teal mr-2 flex cursor-not-allowed">
+      <button disabled className="btn-teal flex cursor-not-allowed">
         <SpinnerIcon className="-m-1 mr-2" />
         <span>Sending email</span>
       </button>
     )
   } else if (sendEmailMutation.isError || emailStatus?.status === 'error') {
     return (
-      <button onClick={sendEmail} className="btn mr-2 flex border-2 border-red-600">
+      <button onClick={sendEmail} className="btn flex border-2 border-red-600">
         <ExclamationTriangleIcon className="-m-2 mr-1 h-8 w-8 !py-0 text-red-600" />
         <span>Try again</span>
       </button>
     )
   } else {
     return (
-      <button onClick={sendEmail} className="btn-teal mr-2 flex">
+      <button onClick={sendEmail} className="btn-teal flex">
         <span>Send email</span>
       </button>
     )

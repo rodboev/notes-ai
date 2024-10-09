@@ -8,16 +8,24 @@ import SendEmailButton from './SendEmailButton'
 import FeedbackButton from './FeedbackButton'
 import RefreshButton from './RefreshButton'
 import { useSingleEmail } from '../hooks/useEmails'
+import VoiceButton from './VoiceButton'
 
 const Email = ({
   initialEmail,
   noteFingerprint,
+  note,
   index,
   total,
   scrollToNextPair,
   children,
   emailStatus,
   updateStatus,
+  isConnected,
+  isPending,
+  connectConversation,
+  disconnectConversation,
+  isCallConnected,
+  activeCall,
 }) => {
   const editorRef = useRef(null)
   const { data, isLoading, error, refreshEmail } = useSingleEmail(noteFingerprint)
@@ -60,15 +68,25 @@ const Email = ({
                     {!(emailStatus?.status === 'sending' || emailStatus?.status === 'success') && (
                       <RefreshButton onClick={refreshEmail} />
                     )}
-                    <div className="buttons mt-4 flex items-center justify-between">
-                      <SendEmailButton
-                        fingerprint={noteFingerprint}
-                        subject={email.subject}
-                        getEmailContent={() => editorRef.current?.getContent()}
-                        onEmailSent={handleEmailSent}
-                        updateStatus={updateStatus}
-                        emailStatus={emailStatus}
-                      />
+                    <div className="buttons mt-3 flex items-center justify-between">
+                      <div className="flex items-center space-x-3">
+                        <SendEmailButton
+                          fingerprint={noteFingerprint}
+                          subject={email.subject}
+                          getEmailContent={() => editorRef.current?.getContent()}
+                          onEmailSent={handleEmailSent}
+                          updateStatus={updateStatus}
+                          emailStatus={emailStatus}
+                        />
+                        <VoiceButton
+                          note={note}
+                          isCallConnected={isCallConnected}
+                          isPending={isPending}
+                          activeCall={activeCall}
+                          connectConversation={connectConversation}
+                          disconnectConversation={disconnectConversation}
+                        />
+                      </div>
                       {(!emailStatus ||
                         (emailStatus.status !== 'sending' && emailStatus.status !== 'success')) && (
                         <FeedbackButton
