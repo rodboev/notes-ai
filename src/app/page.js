@@ -75,7 +75,7 @@ export default function Home() {
     pairRefs.current[index]?.scrollIntoView({ behavior: 'smooth' })
   }
 
-  const { isCallConnected, isPending, activeCall, connectConversation, disconnectConversation } =
+  const { activeCallFingerprint, isPending, connectConversation, disconnectConversation } =
     useVoice()
 
   useEffect(() => {
@@ -143,9 +143,8 @@ export default function Home() {
             scrollToNextPair={scrollToNextPair}
             emailStatus={emailStatuses?.[note.fingerprint]}
             updateStatus={updateStatus}
-            isCallConnected={isCallConnected}
+            activeCallFingerprint={activeCallFingerprint}
             isPending={isPending}
-            activeCall={activeCall}
             connectConversation={connectConversation}
             disconnectConversation={disconnectConversation}
           />

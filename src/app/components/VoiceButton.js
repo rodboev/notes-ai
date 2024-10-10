@@ -4,13 +4,12 @@ import SpinnerIcon from './Icons/SpinnerIcon'
 
 const VoiceButton = ({
   note,
-  isCallConnected,
+  activeCallFingerprint,
   isPending,
-  activeCall,
   connectConversation,
   disconnectConversation,
 }) => {
-  const isThisCallActive = isCallConnected && activeCall === note.fingerprint
+  const isThisCallActive = activeCallFingerprint === note.fingerprint
 
   const handleClick = () => {
     if (isThisCallActive) {
@@ -23,7 +22,7 @@ const VoiceButton = ({
   return (
     <button
       onClick={handleClick}
-      disabled={isPending || (isCallConnected && !isThisCallActive)}
+      disabled={isPending}
       className={`rounded px-4 py-2 ${
         isThisCallActive ? 'bg-neutral-500 hover:bg-neutral-600' : 'hover:bg-teal-600 bg-teal-500'
       } flex items-center font-bold text-white ${isPending ? 'cursor-not-allowed opacity-50' : ''}`}

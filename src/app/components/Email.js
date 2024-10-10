@@ -20,12 +20,10 @@ const Email = ({
   children,
   emailStatus,
   updateStatus,
-  isConnected,
+  activeCallFingerprint,
   isPending,
   connectConversation,
   disconnectConversation,
-  isCallConnected,
-  activeCall,
 }) => {
   const editorRef = useRef(null)
   const { data, isLoading, error, refreshEmail } = useSingleEmail(noteFingerprint)
@@ -80,9 +78,8 @@ const Email = ({
                         />
                         <VoiceButton
                           note={note}
-                          isCallConnected={isCallConnected}
+                          activeCallFingerprint={activeCallFingerprint}
                           isPending={isPending}
-                          activeCall={activeCall}
                           connectConversation={connectConversation}
                           disconnectConversation={disconnectConversation}
                         />
