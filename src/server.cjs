@@ -9,30 +9,32 @@ require('dotenv').config()
 const hostname = 'localhost'
 const port = process.env.PORT || 3000
 
+const dev = process.env.NODE_ENV !== 'production'
+
 let httpServer
 let isHttps = false
 
-const keyPath = './localhost+2-key.pem'
-const certPath = './localhost+2.pem'
+if (dev) {
+  const keyPath = './localhost+2-key.pem'
+  const certPath = './localhost+2.pem'
 
-if (fs.existsSync(keyPath) && fs.existsSync(certPath)) {
-  const httpsOptions = {
-    key: fs.readFileSync(keyPath),
-    cert: fs.readFileSync(certPath),
+  if (fs.existsSync(keyPath) && fs.existsSync(certPath)) {
+    const httpsOptions = {
+      key: fs.readFileSync(keyPath),
+      cert: fs.readFileSync(certPath),
+    }
+    httpServer = createHttpsServer(httpsOptions)
+    isHttps = true
+  } else {
+    console.warn('HTTPS certificates not found. Falling back to HTTP.')
+    httpServer = createHttpServer()
   }
-  httpServer = createHttpsServer(httpsOptions)
-  isHttps = true
 } else {
-  // Redirect HTTP to HTTPS
-  httpServer = createHttpServer((req, res) => {
-    res.writeHead(301, { Location: `https://${hostname}:${port}${req.url}` })
-    res.end()
-  })
+  httpServer = createHttpServer()
 }
 
 const webSocketServer = new WebSocketServer({ noServer: true })
 
-const dev = process.env.NODE_ENV !== 'production'
 const app = next({ dev, hostname, port, customServer: true })
 const handle = app.getRequestHandler()
 
