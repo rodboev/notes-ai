@@ -135,7 +135,7 @@ export default function VoiceChat() {
       await client.connect()
 
       await client.updateSession({ instructions })
-      await client.updateSession({ voice: 'echo' })
+      await client.updateSession({ voice: 'shimmer' })
       await client.updateSession({ input_audio_transcription: { model: 'whisper-1' } })
 
       await wavRecorder.begin()
