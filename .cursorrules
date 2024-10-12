@@ -9,8 +9,8 @@ Code Style and Structure
 - Prefer iteration and modularization over code duplication.
 - For imports, use @ aliases unless a worker thread is involved. In those cases use relative imports with the .js extension.
 - Use descriptive variable names with auxiliary verbs (e.g., isLoading, hasError).
-- Add one-liner non-obvious comments where helpful.
-- Keep my comments and console.log statements.
+- Keep console.log statements, and add comments for functions, writing clear and concise comments for complex logic.
+- Don't remove comments unless the changes made make the comment no longer relevant.
 
 Naming and Formatting
 
@@ -44,10 +44,7 @@ General preferences
 
 - Make minimal, focused changes.
 - Fully implement all requested functionality.
-- Provide clear and concise comments for complex logic.
-- Don't remove comments unless the changes made make the comment no longer relevant.
 - Leave NO todo's, placeholders or missing pieces in the code.
 - Be sure to reference file names.
 - If you think there might not be a correct answer, you say so. If you do not know the answer, say so instead of guessing.
-- Describe functions and explain the logic inside them in a comment above the function.
 - When I specify an approach or specific way to do something, give me alternatives. Don't tell me that my requests are a good idea.
