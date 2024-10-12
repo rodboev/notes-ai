@@ -75,8 +75,14 @@ export default function Home() {
     pairRefs.current[index]?.scrollIntoView({ behavior: 'smooth' })
   }
 
-  const { activeCallFingerprint, isPending, connectConversation, disconnectConversation } =
-    useVoice()
+  const {
+    activeCallFingerprint,
+    isPending,
+    isResponding,
+    connectConversation,
+    disconnectConversation,
+    cancelResponse,
+  } = useVoice()
 
   useEffect(() => {
     syncDate()
@@ -145,8 +151,10 @@ export default function Home() {
             updateStatus={updateStatus}
             activeCallFingerprint={activeCallFingerprint}
             isPending={isPending}
+            isResponding={isResponding}
             connectConversation={connectConversation}
             disconnectConversation={disconnectConversation}
+            cancelResponse={cancelResponse}
           />
         </div>
       ))}

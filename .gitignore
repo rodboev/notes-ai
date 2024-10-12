@@ -38,6 +38,6 @@ next-env.d.ts
 .env
 
 # TinyMCE local files
-src/app/tinymce
+/src/app/tinymce
 
 certificates
