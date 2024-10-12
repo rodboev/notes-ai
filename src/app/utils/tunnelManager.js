@@ -37,3 +37,17 @@ export function restartTunnel() {
     worker.postMessage('restart')
   })
 }
+
+// Add this block to allow direct execution
+if (require.main === module) {
+  console.log('Setting up SSH tunnel...')
+  restartTunnel()
+    .then(() => {
+      console.log('SSH tunnel setup completed successfully.')
+      process.exit(0)
+    })
+    .catch((error) => {
+      console.error('Failed to set up SSH tunnel:', error)
+      process.exit(1)
+    })
+}

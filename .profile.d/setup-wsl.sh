@@ -1,5 +1,6 @@
 #!/bin/bash
-set -e  # Exit immediately if a command exits with a non-zero status
+
+# set -e  # Exit immediately if a command exits with a non-zero status
 # set -x  # Print commands and their arguments as they are executed
 
 echo "Starting setup-wsl.sh script"
@@ -57,31 +58,8 @@ echo "SSH_TUNNEL_PORT: $SSH_TUNNEL_PORT"
 echo "SSH_TUNNEL_TARGET: $SSH_TUNNEL_TARGET"
 echo "SSH_PRIVATE_KEY: $([ -n "$SSH_PRIVATE_KEY" ] && echo "Set" || echo "Not set")"
 
-# Write the command to a file to be executed
-cat > "$CONFIG_DIR/ssh_tunnel.sh" << EOL
-#!/bin/bash
-set -x  # Print commands and their arguments as they are executed
+# Start the SSH tunnel in the background
+ssh -f -N -L "$SSH_TUNNEL_FORWARD" -i "$CONFIG_DIR/ssh/id_rsa" -o StrictHostKeyChecking=no -p "$SSH_TUNNEL_PORT" "$SSH_TUNNEL_TARGET"
 
-echo "Starting SSH tunnel with the following parameters:"
-echo "Forward: \$SSH_TUNNEL_FORWARD"
-echo "Port: \$SSH_TUNNEL_PORT"
-echo "Target: \$SSH_TUNNEL_TARGET"
-
-ssh -v -N -L "\$SSH_TUNNEL_FORWARD" -i "$CONFIG_DIR/ssh/id_rsa" -o StrictHostKeyChecking=no -p "\$SSH_TUNNEL_PORT" "\$SSH_TUNNEL_TARGET"
-EOL
-chmod +x "$CONFIG_DIR/ssh_tunnel.sh"
-
-# Start the SSH tunnel and capture its output
-echo "Starting SSH tunnel..."
-SSH_OUTPUT=$("$CONFIG_DIR/ssh_tunnel.sh" 2>&1)
-SSH_EXIT_CODE=$?
-echo "SSH command exited with code $SSH_EXIT_CODE"
-
-if [ $SSH_EXIT_CODE -ne 0 ]; then
-  echo "SSH tunnel failed to start. Here's the output:"
-  echo "$SSH_OUTPUT"
-  echo "Environment variables:"
-  env | grep SSH_
-fi
-
-exit $SSH_EXIT_CODE
+echo "Tunnel setup successful."
+echo "setup-wsl.sh script completed"

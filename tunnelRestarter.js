@@ -8,12 +8,24 @@ function log(message) {
   parentPort.postMessage({ type: 'log', message: `[${timestamp}] ${message}` })
 }
 
+function escapeString(str) {
+  return str.replace(/'/g, "'\\''").replace(/\n/g, '\\n')
+}
+
 function restartTunnel() {
   return new Promise((resolve, reject) => {
     const isWindows = platform() === 'win32'
+
+    // Read environment variables
+    const sshTunnelForward = escapeString(process.env.SSH_TUNNEL_FORWARD || '')
+    const sshTunnelPort = escapeString(process.env.SSH_TUNNEL_PORT || '')
+    const sshTunnelTarget = escapeString(process.env.SSH_TUNNEL_TARGET || '')
+    const sshPrivateKey = escapeString(process.env.PRIVATE_SSH_KEY || '')
+
+    // Construct the command
     const command = isWindows
-      ? 'ubuntu run /mnt/c/Dropbox/Projects/liberty/notes-ai/.profile.d/setup-wsl.sh'
-      : 'bash -c "source /profile.d/setup.sh"'
+      ? `ubuntu run "export SSH_TUNNEL_FORWARD='${sshTunnelForward}' && export SSH_TUNNEL_PORT='${sshTunnelPort}' && export SSH_TUNNEL_TARGET='${sshTunnelTarget}' && export SSH_PRIVATE_KEY='${sshPrivateKey}' && /mnt/c/Dropbox/Projects/liberty/notes-ai/.profile.d/setup-wsl.sh"`
+      : `bash -c "source /profile.d/setup.sh"`
 
     log(`Executing command: ${command}`)
 

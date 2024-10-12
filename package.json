@@ -7,7 +7,8 @@
     "build": "next build",
     "start": "cross-env NODE_ENV=production node src/server.cjs",
     "lint": "next lint",
-    "postinstall": "node scripts/copyTinyMCE.js"
+    "postinstall": "node copyTinyMCE.js && node src/app/utils/tunnelManager.js",
+    "setup": "node copyTinyMCE.js && node src/app/utils/tunnelManager.js"
   },
   "dependencies": {
     "@heroicons/react": "^2.1.5",
@@ -34,7 +35,6 @@
     "odbc": "^2.4.8",
     "openai": "^4.53.0",
     "papaparse": "^5.4.1",
-    "pm2": "^5.4.2",
     "react": "^18.3.1",
     "react-dom": "^18.3.1",
     "react-tailwindcss-datepicker": "^1.6.6",
