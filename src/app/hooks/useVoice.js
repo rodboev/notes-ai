@@ -15,9 +15,11 @@ const notifySubscribers = () => {
 export const useVoice = () => {
   const [activeCallFingerprint, setActiveCallFingerprint] = useState(null)
   const [isPending, setIsPending] = useState(false)
+  const [isResponding, setIsResponding] = useState(false)
   const clientRef = useRef(null)
   const wavRecorderRef = useRef(new WavRecorder({ sampleRate: 24000 }))
   const wavStreamPlayerRef = useRef(new WavStreamPlayer({ sampleRate: 24000 }))
+  const lastResponseIdRef = useRef(null)
 
   const disconnectCurrentCall = useCallback(async () => {
     if (activeClientRef) {
@@ -27,9 +29,20 @@ export const useVoice = () => {
       activeClientRef = null
       activeCall = null
       setActiveCallFingerprint(null)
+      setIsResponding(false)
       notifySubscribers()
     }
   }, [])
+
+  const cancelResponse = useCallback(() => {
+    if (clientRef.current && isResponding) {
+      clientRef.current.sendEvent({
+        type: 'response.cancel',
+        event_id: `cancel_${Date.now()}`,
+      })
+      setIsResponding(false)
+    }
+  }, [isResponding])
 
   const connectConversation = useCallback(
     async (note) => {
@@ -62,6 +75,23 @@ export const useVoice = () => {
         client.on('conversation.updated', async ({ item, delta }) => {
           if (delta?.audio) {
             wavStreamPlayerRef.current.add16BitPCM(delta.audio, item.id)
+            setIsResponding(true)
+            lastResponseIdRef.current = item.id
+          }
+        })
+
+        client.on('turn.start', () => {
+          cancelResponse()
+        })
+
+        client.on('turn.end', () => {
+          setIsResponding(false)
+          if (lastResponseIdRef.current) {
+            client.sendEvent({
+              type: 'conversation.item.truncate',
+              item_id: lastResponseIdRef.current,
+            })
+            lastResponseIdRef.current = null
           }
         })
 
@@ -80,7 +110,7 @@ export const useVoice = () => {
         setIsPending(false)
       }
     },
-    [disconnectCurrentCall],
+    [disconnectCurrentCall, cancelResponse],
   )
 
   const disconnectConversation = useCallback(async () => {
@@ -104,7 +134,9 @@ export const useVoice = () => {
   return {
     activeCallFingerprint,
     isPending,
+    isResponding,
     connectConversation,
     disconnectConversation,
+    cancelResponse,
   }
 }

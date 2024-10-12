@@ -22,8 +22,10 @@ const Email = ({
   updateStatus,
   activeCallFingerprint,
   isPending,
+  isResponding,
   connectConversation,
   disconnectConversation,
+  cancelResponse,
 }) => {
   const editorRef = useRef(null)
   const { data, isLoading, error, refreshEmail } = useSingleEmail(noteFingerprint)
@@ -80,8 +82,10 @@ const Email = ({
                           note={note}
                           activeCallFingerprint={activeCallFingerprint}
                           isPending={isPending}
+                          isResponding={isResponding}
                           connectConversation={connectConversation}
                           disconnectConversation={disconnectConversation}
+                          cancelResponse={cancelResponse}
                         />
                       </div>
                       {(!emailStatus ||
