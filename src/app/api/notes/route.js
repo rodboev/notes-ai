@@ -29,7 +29,7 @@ function formatDate(dateString) {
 
 const config = {
   server: process.env.SQL_SERVER || '127.0.0.1',
-  port: parseInt(process.env.SQL_PORT) || 1433,
+  port: Number.parseInt(process.env.SQL_PORT) || 1433,
   database: process.env.SQL_DATABASE,
   user: process.env.SQL_USERNAME,
   password: process.env.SQL_PASSWORD,
@@ -171,17 +171,15 @@ async function saveNotes(notes) {
 
 async function getNotesByFingerprints(fingerprints) {
   console.log(`Searching for fingerprints: ${fingerprints}`)
-
-  if (!Array.isArray(fingerprints)) {
-    fingerprints = [fingerprints]
-  }
+  // Ensure fingerprints is always an array
+  const fingerprintArray = Array.isArray(fingerprints) ? fingerprints : [fingerprints]
 
   let allNotes = await loadNotes()
-  let foundNotes = allNotes.filter((note) => fingerprints.includes(note.fingerprint))
+  let foundNotes = allNotes.filter((note) => fingerprintArray.includes(note.fingerprint))
 
   // If not all notes were found in the cache, fetch the missing ones from Firestore
-  if (foundNotes.length < fingerprints.length) {
-    const missingFingerprints = fingerprints.filter(
+  if (foundNotes.length < fingerprintArray.length) {
+    const missingFingerprints = fingerprintArray.filter(
       (fp) => !foundNotes.some((note) => note.fingerprint === fp),
     )
     console.log(`Fetching ${missingFingerprints.length} missing notes from Firestore`)
@@ -196,7 +194,7 @@ async function getNotesByFingerprints(fingerprints) {
     }
   }
 
-  console.log(`${timestamp()} ${foundNotes.length} out of ${fingerprints.length} notes found`)
+  console.log(`${timestamp()} ${foundNotes.length} out of ${fingerprintArray.length} notes found`)
   return foundNotes
 }
 
@@ -204,17 +202,14 @@ export async function GET(request) {
   const { searchParams } = new URL(request.url)
   let startDate = searchParams.get('startDate')
   let endDate = searchParams.get('endDate')
-  let fingerprint = searchParams.get('fingerprint')
-  let fingerprints = searchParams.get('fingerprints')
+  const fingerprint = searchParams.get('fingerprint')
+  const fingerprints = searchParams.get('fingerprints')
 
   if (fingerprint || fingerprints) {
     const fingerprintsToFetch = fingerprints ? fingerprints.split(',') : [fingerprint]
     const notes = await getNotesByFingerprints(fingerprintsToFetch)
-    if (notes.length > 0) {
-      return NextResponse.json(notes)
-    } else {
-      return NextResponse.json({ error: 'Notes not found' }, { status: 404 })
-    }
+    if (notes.length === 0) return NextResponse.json([])
+    return NextResponse.json(notes)
   }
 
   // Set default dates if not provided

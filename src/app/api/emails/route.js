@@ -99,10 +99,6 @@ async function fetchWithErrorHandling(searchParams) {
 
 export async function GET(req) {
   const headersList = headers()
-  const host = headersList.get('host') || 'localhost:3000'
-  const protocol = headersList.get('x-forwarded-proto') || 'http'
-
-  // Extract search params from the request URL
   const { searchParams } = new URL(req.url)
   const startDate = searchParams.get('startDate')
   const endDate = searchParams.get('endDate')
@@ -128,16 +124,14 @@ export async function GET(req) {
       const sentFingerprints = new Set()
 
       function sendData(data, status) {
-        let payload
-        if (status === 'stored' || status === 'streaming') {
-          // Only stringify if the data isn't already a string
-          payload = {
-            chunk: typeof data === 'string' ? data : JSON.stringify(data),
-            status,
-          }
-        } else {
-          // For 'complete' and 'error' statuses
-          payload = { chunk: data, status }
+        const payload = {
+          chunk:
+            status === 'stored' || status === 'streaming'
+              ? typeof data === 'string'
+                ? data
+                : JSON.stringify(data)
+              : data,
+          status,
         }
         controller.enqueue(encoder.encode(`data: ${JSON.stringify(payload)}\n\n`))
         dataSent = true
@@ -145,15 +139,10 @@ export async function GET(req) {
 
       async function streamResponse(chunk) {
         const prompts = await getPrompts()
-
-        if (!prompts.system || !prompts.user) {
-          throw new Error('Required prompts not found')
-        }
+        if (!prompts.system || !prompts.user) throw new Error('Required prompts not found')
 
         const systemContent = expand(prompts.system.current || prompts.system.default, prompts)
         const userContent = prompts.user + JSON.stringify(chunk)
-
-        // console.log(`${timestamp()} userContent`, userContent)
         const messages = [
           { role: 'system', content: systemContent },
           { role: 'user', content: userContent },
@@ -189,10 +178,7 @@ export async function GET(req) {
             const uniqueNewEmails = emails.filter(
               (email) => !sentFingerprints.has(email.fingerprint),
             )
-            if (uniqueNewEmails.length > 0) {
-              // sendData({ emails: uniqueNewEmails }, 'streaming')
-              uniqueNewEmails.forEach((email) => sentFingerprints.add(email.fingerprint))
-            }
+            for (const email of uniqueNewEmails) sentFingerprints.add(email.fingerprint)
             return emails
           }
         }
@@ -203,22 +189,19 @@ export async function GET(req) {
           // Handle single note refresh (always stream)
           console.log(`${timestamp()} Fetching note for fingerprint: ${fingerprint}`)
           const note = await fetchWithErrorHandling(`fingerprint=${fingerprint}`)
-
-          if (!note || note.length === 0) {
+          if (!note || note.length === 0)
             throw new Error(`Note not found for fingerprint: ${fingerprint}`)
-          }
 
           // Force refresh the email
           const [generatedEmail] = await streamResponse([note[0]])
-          if (generatedEmail) {
-            // Update stored emails and cache
-            storedEmails = storedEmails.filter((e) => e.fingerprint !== fingerprint)
-            storedEmails.push(generatedEmail)
-            emailCache[fingerprint] = generatedEmail
-            await saveEmails(storedEmails)
-          } else {
+          if (!generatedEmail)
             throw new Error(`Failed to generate email for fingerprint: ${fingerprint}`)
-          }
+
+          // Update stored emails and cache
+          storedEmails = storedEmails.filter((e) => e.fingerprint !== fingerprint)
+          storedEmails.push(generatedEmail)
+          emailCache[fingerprint] = generatedEmail
+          await saveEmails(storedEmails)
         } else if (requestedFingerprints.length > 0) {
           // Filter out empty strings from requestedFingerprints
           const validRequestedFingerprints = requestedFingerprints.filter((fp) => fp.trim() !== '')
@@ -234,52 +217,38 @@ export async function GET(req) {
             )
             if (uniqueStoredEmails.length > 0) {
               sendData({ emails: uniqueStoredEmails }, 'stored')
-              uniqueStoredEmails.forEach((email) => sentFingerprints.add(email.fingerprint))
+              for (const email of uniqueStoredEmails) sentFingerprints.add(email.fingerprint)
             }
           }
 
           const fingerprintsToFetch = validRequestedFingerprints.filter((fp) => !emailCache[fp])
 
           if (fingerprintsToFetch.length > 0) {
-            try {
-              console.log(
-                `${timestamp()} Fetching notes for fingerprints: ${fingerprintsToFetch.join(',')}`,
-              )
-              const notesToProcess = await fetchWithErrorHandling(
-                `fingerprints=${fingerprintsToFetch.join(',')}`,
-              )
-              console.log(`${timestamp()} Fetched ${notesToProcess.length} notes to process`)
+            console.log(
+              `${timestamp()} Fetching notes for fingerprints: ${fingerprintsToFetch.join(',')}`,
+            )
+            const notesToProcess = await fetchWithErrorHandling(
+              `fingerprints=${fingerprintsToFetch.join(',')}`,
+            )
+            console.log(`${timestamp()} Fetched ${notesToProcess.length} notes to process`)
 
-              // Process notes in groups of 10 or less at a time
-              const noteGroups = chunkArray(notesToProcess, NOTES_PER_GROUP)
-              console.log(
-                `${timestamp()} Created ${noteGroups.length} note groups (${NOTES_PER_GROUP} notes each)`,
-              )
+            // Process notes in groups of 10 or less at a time
+            const noteGroups = chunkArray(notesToProcess, NOTES_PER_GROUP)
+            console.log(
+              `${timestamp()} Created ${noteGroups.length} note groups (${NOTES_PER_GROUP} notes each)`,
+            )
 
-              for (const [index, noteGroup] of noteGroups.entries()) {
-                console.log(`${timestamp()} Processing group ${index + 1} of ${noteGroups.length}`)
-                const newEmailGroup = await streamResponse(noteGroup)
-                storedEmails = [...storedEmails, ...newEmailGroup]
-                newEmailGroup.forEach((email) => {
-                  emailCache[email.fingerprint] = email
-                })
-                console.log(
-                  `${timestamp()} Generated ${newEmailGroup.length} new emails in group ${index + 1}`,
-                )
-                await saveEmails(storedEmails)
+            for (const [index, noteGroup] of noteGroups.entries()) {
+              console.log(`${timestamp()} Processing group ${index + 1} of ${noteGroups.length}`)
+              const newEmailGroup = await streamResponse(noteGroup)
+              storedEmails = [...storedEmails, ...newEmailGroup]
+              for (const email of newEmailGroup) {
+                emailCache[email.fingerprint] = email
               }
-            } catch (error) {
-              console.error(`${timestamp()} Error fetching or processing notes:`, error)
-              const errorDetails = {
-                message: error.message,
-                cause: error.cause?.message,
-                code: error.cause?.code,
-                stack: error.stack,
-                name: error.name,
-              }
-              sendData({ error: errorDetails }, 'error')
-              controller.close()
-              return // Exit the function early
+              console.log(
+                `${timestamp()} Generated ${newEmailGroup.length} new emails in group ${index + 1}`,
+              )
+              await saveEmails(storedEmails)
             }
           } else {
             console.log(`${timestamp()} No new emails to generate`)
@@ -302,10 +271,7 @@ export async function GET(req) {
         }
         sendData({ error: errorDetails }, 'error')
       } finally {
-        if (!dataSent) {
-          // If no data was sent, send an empty 'complete' message
-          sendData({}, 'complete')
-        }
+        if (!dataSent) sendData({}, 'complete')
         controller.close()
       }
     },

@@ -57,14 +57,11 @@ export default function Home() {
   const fingerprints = notes?.map((note) => note.fingerprint) || []
   const { data: emailStatuses, updateStatus } = useEmailStatuses(fingerprints)
 
-  const pairs = useMemo(() => {
-    const latestEmails = queryClient.getQueryData(['emails']) || emailsData
-    if (notes && latestEmails && Array.isArray(notes) && Array.isArray(latestEmails)) {
-      const newPairs = leftJoin(notes, latestEmails)
-      return newPairs
-    }
-    return []
-  }, [notes, emailsData, emailsUpdateCounter])
+  const latestEmails = queryClient.getQueryData(['emails']) || emailsData
+  const pairs =
+    notes && latestEmails && Array.isArray(notes) && Array.isArray(latestEmails)
+      ? leftJoin(notes, latestEmails)
+      : []
 
   const handleDateChange = (newDate) => {
     console.log('newDate:', newDate)
@@ -84,6 +81,7 @@ export default function Home() {
     cancelResponse,
   } = useVoice()
 
+  // biome-ignore lint/correctness/useExhaustiveDependencies(syncDate): <explanation>
   useEffect(() => {
     syncDate()
     return () => {
@@ -91,6 +89,7 @@ export default function Home() {
         clientRef.current.reset()
       }
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
   return (
@@ -136,7 +135,9 @@ export default function Home() {
       {pairs.map(({ note, email }, index) => (
         <div
           key={note.fingerprint}
-          ref={(el) => (pairRefs.current[index] = el)}
+          ref={(el) => {
+            pairRefs.current[index] = el
+          }}
           className="pair container -m-4 flex max-w-screen-2xl snap-center snap-always p-4 pb-0"
         >
           <Note note={note} index={index} total={pairs.length} />

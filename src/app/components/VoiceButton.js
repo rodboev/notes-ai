@@ -27,6 +27,7 @@ const VoiceButton = ({
 
   return (
     <button
+      type="button"
       onClick={handleClick}
       disabled={isPending}
       className={`rounded px-4 py-2 ${

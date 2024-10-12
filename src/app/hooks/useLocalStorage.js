@@ -34,7 +34,7 @@ export function useLocalStorage(key, initialValue) {
     }
   }
 
-  const syncWithLocalStorage = () => {
+  const syncDate = () => {
     if (isBrowser) {
       const localValue = window.localStorage.getItem(key)
       if (localValue) {
@@ -43,5 +43,5 @@ export function useLocalStorage(key, initialValue) {
     }
   }
 
-  return [storedValue, setValue, syncWithLocalStorage]
+  return [storedValue, setValue, syncDate]
 }

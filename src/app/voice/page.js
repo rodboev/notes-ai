@@ -82,13 +82,10 @@ export default function VoiceChat() {
     client.on('conversation.updated', async ({ item, delta }) => {
       setItems((prevItems) => {
         const existingItemIndex = prevItems.findIndex((i) => i.id === item.id)
-        if (existingItemIndex !== -1) {
-          const updatedItems = [...prevItems]
-          updatedItems[existingItemIndex] = { ...updatedItems[existingItemIndex], ...item }
-          return updatedItems
-        } else {
-          return [...prevItems, item]
-        }
+        if (existingItemIndex === -1) return [...prevItems, item]
+
+        // Create a new array with the updated item
+        return prevItems.map((i) => (i.id === item.id ? { ...i, ...item } : i))
       })
 
       if (delta?.audio) {
@@ -236,6 +233,7 @@ const ConnectButton = ({ onClick, isConnected, disabled, isPending }) => {
       className={`rounded px-4 py-2 pr-5 ${
         isConnected ? 'bg-neutral-500 hover:bg-neutral-600' : 'hover:bg-teal-600 bg-teal-500'
       } flex items-center font-bold text-white ${disabled || isPending ? 'cursor-not-allowed opacity-50' : ''}`}
+      type="button"
     >
       {isPending ? (
         <>

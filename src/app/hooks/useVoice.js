@@ -9,7 +9,7 @@ let activeCall = null
 const subscribers = new Set()
 
 const notifySubscribers = () => {
-  subscribers.forEach((callback) => callback())
+  for (const callback of subscribers) callback()
 }
 
 export const useVoice = () => {

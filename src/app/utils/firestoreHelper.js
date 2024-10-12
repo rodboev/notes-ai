@@ -16,7 +16,7 @@ setInterval(resetQuotaExceededLog, QUOTA_RESET_INTERVAL)
 
 export const safeDocRef = (firestore, collectionName, document) => {
   if (!document || typeof document !== 'object' || Array.isArray(document)) {
-    console.warn(`Invalid document:`, document)
+    console.warn('Invalid document:', document)
     return null
   }
 
@@ -31,7 +31,7 @@ export const safeDocRef = (firestore, collectionName, document) => {
   try {
     return doc(firestore, collectionName, document.fingerprint)
   } catch (error) {
-    console.error(`Error creating doc reference for document:`, document, error)
+    console.error('Error creating doc reference for document:', document, error)
     return null
   }
 }
@@ -108,58 +108,66 @@ export const firestoreGetAllDocs = async (collectionName) => {
   }
 }
 
-export const firestoreSetDoc = async (collectionName, data, options = {}) => {
+export async function firestoreSetDoc(collectionName, data, options = {}) {
   if (!enabled) return null
 
   try {
     if (Array.isArray(data)) {
-      // Handle array of documents
-      const batch = writeBatch(firestore)
-      let validOperations = 0
-      let skippedOperations = 0
-
-      data.forEach((item) => {
-        if (item.fingerprint) {
-          const docRef = doc(firestore, collectionName, item.fingerprint)
-          batch.set(docRef, item, options)
-          validOperations++
-        } else {
-          console.warn('Item missing fingerprint:', item)
-          skippedOperations++
-        }
-      })
-
-      if (validOperations === 0) {
-        console.warn('No valid operations to write to Firestore')
-        return { validOperations, skippedOperations }
-      }
-
-      await batch.commit()
-      console.log(`Successfully wrote ${validOperations} documents to Firestore`)
-
-      if (skippedOperations > 0) {
-        console.warn(`Skipped ${skippedOperations} invalid documents`)
-      }
-
-      return { validOperations, skippedOperations }
-    } else if (typeof data === 'object' && data !== null) {
-      // Handle single document
-      if (!data.fingerprint) {
-        throw new Error('Invalid data format: single document must have a fingerprint')
-      }
-      const docRef = doc(firestore, collectionName, data.fingerprint)
-      await setDoc(docRef, data, options)
-      console.log(`Successfully wrote document with fingerprint ${data.fingerprint} to Firestore`)
-      return { validOperations: 1, skippedOperations: 0 }
-    } else {
-      throw new Error(
-        'Invalid data format: must be an array of documents or a single document object with a fingerprint',
-      )
+      return handleArrayData(collectionName, data, options)
     }
+
+    if (typeof data === 'object' && data !== null) {
+      return handleSingleDocument(collectionName, data, options)
+    }
+
+    throw new Error(
+      'Invalid data format: must be an array of documents or a single document object with a fingerprint',
+    )
   } catch (error) {
     handleFirestoreError(error)
     return { validOperations: 0, skippedOperations: Array.isArray(data) ? data.length : 1, error }
   }
+}
+
+async function handleArrayData(collectionName, data, options) {
+  const batch = writeBatch(firestore)
+  let validOperations = 0
+  let skippedOperations = 0
+
+  for (const [, item] of Object.entries(data)) {
+    if (item.fingerprint) {
+      const docRef = doc(firestore, collectionName, item.fingerprint)
+      batch.set(docRef, item, options)
+      validOperations++
+    } else {
+      console.warn('Item missing fingerprint:', item)
+      skippedOperations++
+    }
+  }
+
+  if (validOperations === 0) {
+    console.warn('No valid operations to write to Firestore')
+    return { validOperations, skippedOperations }
+  }
+
+  await batch.commit()
+  console.log(`Successfully wrote ${validOperations} documents to Firestore`)
+
+  if (skippedOperations > 0) {
+    console.warn(`Skipped ${skippedOperations} invalid documents`)
+  }
+
+  return { validOperations, skippedOperations }
+}
+
+async function handleSingleDocument(collectionName, data, options) {
+  if (!data.fingerprint) {
+    throw new Error('Invalid data format: single document must have a fingerprint')
+  }
+  const docRef = doc(firestore, collectionName, data.fingerprint)
+  await setDoc(docRef, data, options)
+  console.log(`Successfully wrote document with fingerprint ${data.fingerprint} to Firestore`)
+  return { validOperations: 1, skippedOperations: 0 }
 }
 
 const handleFirestoreError = (error) => {

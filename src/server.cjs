@@ -1,4 +1,4 @@
-const fs = require('fs')
+const fs = require('node:fs')
 const { createServer: createHttpServer } = require('node:http')
 const { createServer: createHttpsServer } = require('node:https')
 const { parse } = require('node:url')
