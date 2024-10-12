@@ -7,8 +7,8 @@
     "build": "next build",
     "start": "cross-env NODE_ENV=production node src/server.cjs",
     "lint": "next lint",
-    "postinstall": "node copyTinyMCE.js && node src/app/utils/tunnelManager.js",
-    "setup": "node copyTinyMCE.js && node src/app/utils/tunnelManager.js"
+    "postinstall": "node scripts/copyTinyMCE.js && node src/app/utils/tunnelManager.js",
+    "setup": "node scripts/copyTinyMCE.js && node src/app/utils/tunnelManager.js"
   },
   "dependencies": {
     "@heroicons/react": "^2.1.5",
