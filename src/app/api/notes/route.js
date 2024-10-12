@@ -277,58 +277,59 @@ async function getNotes(startDate, endDate, retryCount = 0) {
 }
 
 export async function GET(request) {
+  console.log(`${timestamp()} GET request received for /api/notes`)
+  const { searchParams } = new URL(request.url)
+  let startDate = searchParams.get('startDate')
+  let endDate = searchParams.get('endDate')
+  const fingerprint = searchParams.get('fingerprint')
+  const fingerprints = searchParams.get('fingerprints')
+  const retry = searchParams.get('retry') === 'true'
+
+  console.log(
+    `${timestamp()} Params: startDate=${startDate}, endDate=${endDate}, fingerprint=${fingerprint}, fingerprints=${fingerprints}, retry=${retry}`,
+  )
+
+  if (fingerprint || fingerprints) {
+    const fingerprintsToFetch = fingerprints ? fingerprints.split(',') : [fingerprint]
+    const notes = await getNotesByFingerprints(fingerprintsToFetch)
+    if (notes.length === 0) return NextResponse.json([])
+    return NextResponse.json(notes)
+  }
+
+  // If startDate or endDate are not provided, use default values
+  if (!startDate || !endDate) {
+    const today = new Date()
+    const yesterday = new Date(today)
+    yesterday.setDate(yesterday.getDate() - 1)
+
+    startDate = startDate || yesterday.toISOString().split('T')[0]
+    endDate = endDate || today.toISOString().split('T')[0]
+    console.log(`Using default dates: startDate=${startDate}, endDate=${endDate}`)
+  }
+
+  console.log(`${timestamp()} Fetching notes for date range: ${startDate} to ${endDate}`)
+
+  // Ensure endDate is exclusive
+  const queryEndDate = new Date(endDate)
+  queryEndDate.setDate(queryEndDate.getDate() + 1)
+  const formattedQueryEndDate = queryEndDate.toISOString().split('T')[0]
+
+  // Try to get stored notes first
+  console.log(`${timestamp()} Attempting to load notes from cache`)
+  let allNotes = await loadNotes()
+  let notes = allNotes.filter(
+    (note) =>
+      note.date >= startDate && note.date < formattedQueryEndDate && note.code === '911 EMER',
+  )
+
+  if (notes.length > 0) {
+    console.log(`${timestamp()} Returning ${notes.length} notes from cache`)
+    return NextResponse.json(notes)
+  }
+
+  console.log(`${timestamp()} No cached notes found, fetching from database`)
+
   try {
-    console.log(`${timestamp()} GET request received for /api/notes`)
-    const { searchParams } = new URL(request.url)
-    let startDate = searchParams.get('startDate')
-    let endDate = searchParams.get('endDate')
-    const fingerprint = searchParams.get('fingerprint')
-    const fingerprints = searchParams.get('fingerprints')
-
-    console.log(
-      `${timestamp()} Params: startDate=${startDate}, endDate=${endDate}, fingerprint=${fingerprint}, fingerprints=${fingerprints}`,
-    )
-
-    if (fingerprint || fingerprints) {
-      const fingerprintsToFetch = fingerprints ? fingerprints.split(',') : [fingerprint]
-      const notes = await getNotesByFingerprints(fingerprintsToFetch)
-      if (notes.length === 0) return NextResponse.json([])
-      return NextResponse.json(notes)
-    }
-
-    // If startDate or endDate are not provided, use default values
-    if (!startDate || !endDate) {
-      const today = new Date()
-      const yesterday = new Date(today)
-      yesterday.setDate(yesterday.getDate() - 1)
-
-      startDate = startDate || yesterday.toISOString().split('T')[0]
-      endDate = endDate || today.toISOString().split('T')[0]
-      console.log(`Using default dates: startDate=${startDate}, endDate=${endDate}`)
-    }
-
-    console.log(`${timestamp()} Fetching notes for date range: ${startDate} to ${endDate}`)
-
-    // Ensure endDate is exclusive
-    const queryEndDate = new Date(endDate)
-    queryEndDate.setDate(queryEndDate.getDate() + 1)
-    const formattedQueryEndDate = queryEndDate.toISOString().split('T')[0]
-
-    // Try to get stored notes first
-    console.log(`${timestamp()} Attempting to load notes from cache`)
-    let allNotes = await loadNotes()
-    let notes = allNotes.filter(
-      (note) =>
-        note.date >= startDate && note.date < formattedQueryEndDate && note.code === '911 EMER',
-    )
-
-    if (notes.length > 0) {
-      console.log(`${timestamp()} Returning ${notes.length} notes from cache`)
-      return NextResponse.json(notes)
-    }
-
-    console.log(`${timestamp()} No cached notes found, fetching from database`)
-
     notes = await getNotes(startDate, formattedQueryEndDate)
 
     // Update the cache with new notes
@@ -338,11 +339,11 @@ export async function GET(request) {
     console.log(`${timestamp()} Returning ${notes.length} notes from database`)
     return NextResponse.json(notes)
   } catch (error) {
-    console.error(`${timestamp()} Unrecoverable error:`, error)
+    console.error(`${timestamp()} Error fetching notes:`, error)
     return NextResponse.json(
       {
-        error: 'Server Error',
-        message: error.message || 'An unexpected error occurred',
+        error: 'Database Error',
+        message: error.message,
       },
       { status: 500 },
     )
