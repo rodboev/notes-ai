@@ -9,7 +9,9 @@ const fetchNotes = async (startDate, endDate) => {
     return response.data
   } catch (error) {
     if (error.response && error.response.status === 500) {
-      throw new Error('Database connection error')
+      const errorMessage = error.response.data.message || 'Unknown database error'
+      console.error('Database error:', errorMessage)
+      throw new Error(errorMessage)
     }
     throw error
   }
@@ -19,6 +21,10 @@ export const useNotes = (startDate, endDate) => {
   return useQuery({
     queryKey: ['notes', startDate, endDate],
     queryFn: () => fetchNotes(startDate, endDate),
-    retry: false,
+    retry: (failureCount, error) => {
+      // Only retry if the error is from the database
+      return error.message.includes('Database Error')
+    },
+    retryDelay: 1000, // Retry after 1 second
   })
 }

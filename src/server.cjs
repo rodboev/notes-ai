@@ -46,7 +46,7 @@ if (!OPENAI_API_KEY) {
 
 let connectedClients = 0
 
-const log = (...args) => console.log('[RealtimeRelay]', ...args)
+const log = (...args) => console.log('[WebSocket]', ...args)
 
 const handleWebSocketConnection = async (ws) => {
   connectedClients++
@@ -123,7 +123,7 @@ webSocketServer.on('connection', handleWebSocketConnection)
   httpServer
     .on('request', async (req, res) => {
       const parsedUrl = parse(req.url, true)
-      if (parsedUrl.pathname === '/api/ws') {
+      if (req.pathname === '/api/ws' /* || req.pathname === '/_next/webpack-hmr' */) {
         // Handle the /api/ws request directly
         res.writeHead(200, { 'Content-Type': 'application/json' })
         const responseData = JSON.stringify({
@@ -141,7 +141,7 @@ webSocketServer.on('connection', handleWebSocketConnection)
     .on('upgrade', (req, socket, head) => {
       const { pathname } = parse(req.url)
 
-      if (pathname === '/api/ws') {
+      if (pathname === '/api/ws' || pathname === '/_next/webpack-hmr') {
         webSocketServer.handleUpgrade(req, socket, head, (ws) => {
           webSocketServer.emit('connection', ws, req)
         })

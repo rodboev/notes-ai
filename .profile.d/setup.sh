@@ -1,5 +1,17 @@
 #!/bin/bash
+set -e  # Exit immediately if a command exits with a non-zero status
+
 echo "Starting setup.sh script"
+
+# Check if required variables are set
+if [ -z "$SSH_TUNNEL_FORWARD" ] || [ -z "$SSH_TUNNEL_PORT" ] || [ -z "$SSH_TUNNEL_TARGET" ] || [ -z "$SSH_PRIVATE_KEY" ]; then
+    echo "Error: One or more required SSH variables are not set."
+    echo "SSH_TUNNEL_FORWARD: $SSH_TUNNEL_FORWARD"
+    echo "SSH_TUNNEL_PORT: $SSH_TUNNEL_PORT"
+    echo "SSH_TUNNEL_TARGET: $SSH_TUNNEL_TARGET"
+    echo "SSH_PRIVATE_KEY: $([ -n "$SSH_PRIVATE_KEY" ] && echo "Set" || echo "Not set")"
+    exit 1
+fi
 
 # ODBC and FreeTDS Setup
 export ODBCSYSINI=/app/.apt/etc
@@ -37,6 +49,12 @@ mkdir -p /app/.ssh
 chmod 700 /app/.ssh
 echo "$SSH_PRIVATE_KEY" > /app/.ssh/id_rsa
 chmod 600 /app/.ssh/id_rsa
+
+# Debug: Print the values of the SSH-related variables
+echo "SSH_TUNNEL_FORWARD: $SSH_TUNNEL_FORWARD"
+echo "SSH_TUNNEL_PORT: $SSH_TUNNEL_PORT"
+echo "SSH_TUNNEL_TARGET: $SSH_TUNNEL_TARGET"
+echo "SSH_PRIVATE_KEY: $([ -n "$SSH_PRIVATE_KEY" ] && echo "Set" || echo "Not set")"
 
 # Write the command to a file to be executed by pm2
 echo "#!/bin/bash

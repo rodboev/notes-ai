@@ -2,7 +2,7 @@
 
 'use client'
 
-import { useState, useRef, useEffect, useMemo, useCallback } from 'react'
+import { useRef, useEffect } from 'react'
 import Nav from './components/Nav'
 import Note from './components/Note'
 import Email from './components/Email'
@@ -13,9 +13,6 @@ import { useEmails } from './hooks/useEmails'
 import { useEmailStatuses } from './hooks/useEmailStatus'
 import { useLocalStorage } from './hooks/useLocalStorage.js'
 import { useQueryClient } from '@tanstack/react-query'
-import { Phone, PhoneOff } from 'lucide-react'
-import { RealtimeClient } from '@openai/realtime-api-beta'
-import { WavRecorder, WavStreamPlayer } from '@/app/lib/wavtools'
 import { useVoice } from './hooks/useVoice'
 
 const leftJoin = (notes, emails) => {
@@ -29,7 +26,6 @@ const leftJoin = (notes, emails) => {
 export default function Home() {
   const queryClient = useQueryClient()
   const pairRefs = useRef([])
-  const clientRef = useRef(null)
 
   const today = new Date()
   const yesterday = new Date(today)
@@ -48,12 +44,7 @@ export default function Home() {
     error: notesError,
   } = useNotes(date.startDate, date.endDate)
 
-  const {
-    data: emailsData,
-    isLoading: isLoadingEmails,
-    error: emailsError,
-    emailsUpdateCounter,
-  } = useEmails(notes)
+  const { data: emailsData, isLoading: isLoadingEmails, error: emailsError } = useEmails(notes)
 
   const fingerprints = notes?.map((note) => note.fingerprint) || []
   const { data: emailStatuses, updateStatus } = useEmailStatuses(fingerprints)
@@ -66,7 +57,15 @@ export default function Home() {
 
   const handleDateChange = (newDate) => {
     console.log('newDate:', newDate)
-    setDate(newDate)
+    if (newDate?.startDate && newDate?.endDate) {
+      setDate({
+        startDate: newDate.startDate,
+        endDate: newDate.endDate,
+      })
+      syncDate() // Sync the new date to localStorage
+    } else {
+      console.error('Invalid date range received:', newDate)
+    }
   }
 
   const scrollToNextPair = (index) => {
@@ -82,14 +81,11 @@ export default function Home() {
     cancelResponse,
   } = useVoice()
 
+  // biome-ignore lint/correctness/useExhaustiveDependencies: syncDate is a callback function
   useEffect(() => {
     syncDate()
-    return () => {
-      if (clientRef.current) {
-        clientRef.current.reset()
-      }
-    }
-  }, [syncDate])
+    /* eslint-disable-next-line react-hooks/exhaustive-deps */
+  }, [])
 
   return (
     <div className="flex h-screen max-w-full snap-y snap-mandatory flex-col items-center overflow-y-scroll">
@@ -108,7 +104,10 @@ export default function Home() {
           toggleClassName={
             'h-10 w-fit items-center overflow-hidden rounded px-4 pb-0.5 font-bold hover:bg-opacity-95 active:bg-opacity-100 bg-teal text-white align-middle ml-4'
           }
-          value={date}
+          value={{
+            startDate: date.startDate,
+            endDate: date.endDate,
+          }}
           onChange={handleDateChange}
         />
       </Nav>
@@ -118,10 +117,22 @@ export default function Home() {
           <SpinnerIcon />
         </div>
       ) : notesError || emailsError ? (
-        <div className="flex h-full items-center text-neutral-700">
-          <div className="max-w-screen-sm">
-            Errors: <p>{notesError?.message || 'Unknown error'}</p>{' '}
-            <p>{emailsError?.message || 'Unknown error'}</p>
+        <div className="flex h-full items-center justify-center text-neutral-700">
+          <div className="max-w-screen-md">
+            {notesError && (
+              <div className="space-y-6">
+                <div className="font-md font-semibold">Notes Error:</div>
+                <pre className="font-mono whitespace-pre-wrap text-[10pt]">
+                  {notesError.message}
+                </pre>
+              </div>
+            )}
+            {emailsError && (
+              <div>
+                <div className="font-semibold">Emails Error:</div>
+                <p>{emailsError.message || 'An unknown error occurred while fetching emails.'}</p>
+              </div>
+            )}
           </div>
         </div>
       ) : pairs.length === 0 ? (
