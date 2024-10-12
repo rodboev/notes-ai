@@ -29,6 +29,7 @@ const leftJoin = (notes, emails) => {
 export default function Home() {
   const queryClient = useQueryClient()
   const pairRefs = useRef([])
+  const clientRef = useRef(null)
 
   const today = new Date()
   const yesterday = new Date(today)
@@ -81,7 +82,6 @@ export default function Home() {
     cancelResponse,
   } = useVoice()
 
-  // biome-ignore lint/correctness/useExhaustiveDependencies(syncDate): <explanation>
   useEffect(() => {
     syncDate()
     return () => {
@@ -89,8 +89,7 @@ export default function Home() {
         clientRef.current.reset()
       }
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [])
+  }, [syncDate])
 
   return (
     <div className="flex h-screen max-w-full snap-y snap-mandatory flex-col items-center overflow-y-scroll">
@@ -121,16 +120,15 @@ export default function Home() {
       ) : notesError || emailsError ? (
         <div className="flex h-full items-center text-neutral-700">
           <div className="max-w-screen-sm">
-            Errors: <p>{notesError}</p> <p>{emailsError}</p>
+            Errors: <p>{notesError?.message || 'Unknown error'}</p>{' '}
+            <p>{emailsError?.message || 'Unknown error'}</p>
           </div>
         </div>
-      ) : (
-        pairs.length === 0 && (
-          <div className="flex h-full items-center text-neutral-700">
-            No notes found for the selected date range.
-          </div>
-        )
-      )}
+      ) : pairs.length === 0 ? (
+        <div className="flex h-full items-center text-neutral-700">
+          No notes found for the selected date range.
+        </div>
+      ) : null}
 
       {pairs.map(({ note, email }, index) => (
         <div
