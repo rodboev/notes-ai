@@ -2,8 +2,6 @@
 set -e  # Exit immediately if a command exits with a non-zero status
 # set -x  # Print commands and their arguments as they are executed
 
-echo "Starting setup.sh script"
-
 # Determine the script's directory and project root
 SCRIPT_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" &> /dev/null && pwd )"
 PROJECT_ROOT="$(dirname "$SCRIPT_DIR")"
@@ -41,6 +39,12 @@ if [ -f "$ENV_FILE" ]; then
     load_env_file
 else
     echo "No .env file found. Using local environment variables."
+    # Convert \n to newlines for all existing environment variables
+    while IFS='=' read -r name value ; do
+        if [[ $name == *_* ]]; then  # Only process variables with underscores (to avoid system vars)
+            export "$name"="$(convert_newlines "$value")"
+        fi
+    done < <(env)
 fi
 
 # Function to check if a variable is set and print its value
@@ -63,7 +67,6 @@ export FREETDSCONF=~/.apt/etc/freetds/freetds.conf
 export LD_LIBRARY_PATH=~/.apt/usr/lib/x86_64-linux-gnu:~/.apt/usr/lib/x86_64-linux-gnu/odbc:$LD_LIBRARY_PATH
 
 # Check and print all required variables
-echo "Checking and printing variables:"
 check_and_print_variable "SSH_TUNNEL_FORWARD"
 check_and_print_variable "SSH_TUNNEL_PORT"
 check_and_print_variable "SSH_TUNNEL_TARGET"
@@ -106,9 +109,9 @@ chmod 700 ~/.ssh
 echo "$PRIVATE_SSH_KEY" > ~/.ssh/id_rsa
 chmod 600 ~/.ssh/id_rsa
 
-# Print the contents of the private key
-echo "Contents of id_rsa:"
-cat ~/.ssh/id_rsa
+# Print the contents of the private key (first few lines for security)
+echo "First 3 lines of ~/.ssh/id_rsa:"
+head -n 3 ~/.ssh/id_rsa
 
 # Function to kill existing SSH tunnels
 kill_existing_tunnels() {
