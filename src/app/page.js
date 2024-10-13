@@ -115,8 +115,8 @@ export default function Home() {
       </div>
 
       {isLoadingNotes || isLoadingEmails ? (
-        <div className="flex items-center justify-center text-neutral-500">
-          <SpinnerIcon />
+        <div className="flex h-screen items-center justify-center text-neutral-500">
+          <SpinnerIcon className="scale-150" />
         </div>
       ) : notesError || emailsError ? (
         <div className="flex items-center justify-center text-neutral-700">
