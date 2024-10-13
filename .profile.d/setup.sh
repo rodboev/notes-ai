@@ -2,6 +2,8 @@
 set -e  # Exit immediately if a command exits with a non-zero status
 # set -x  # Print commands and their arguments as they are executed
 
+echo "Starting setup.sh script"
+
 # Determine the script's directory and project root
 SCRIPT_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" &> /dev/null && pwd )"
 PROJECT_ROOT="$(dirname "$SCRIPT_DIR")"
@@ -9,9 +11,14 @@ PROJECT_ROOT="$(dirname "$SCRIPT_DIR")"
 # Check for .env in the project root
 ENV_FILE="$PROJECT_ROOT/.env"
 
-# Function to convert \n to newlines
-convert_newlines() {
-    echo -e "${1//\\n/\\n}"
+# Function to convert \n to newlines and remove surrounding quotes
+convert_newlines_and_remove_quotes() {
+    local value="$1"
+    # Remove surrounding quotes if present
+    value="${value%\"}"
+    value="${value#\"}"
+    # Convert \n to newlines
+    echo -e "${value//\\n/\\n}"
 }
 
 # Function to load variables from .env file
@@ -26,11 +33,8 @@ load_env_file() {
         # Extract variable name and value
         var_name="${line%%=*}"
         var_value="${line#*=}"
-        # Remove surrounding quotes if present
-        var_value="${var_value%\"}"
-        var_value="${var_value#\"}"
-        # Convert \n to newlines and export the variable
-        export "$var_name"="$(convert_newlines "$var_value")"
+        # Convert \n to newlines, remove quotes, and export the variable
+        export "$var_name"="$(convert_newlines_and_remove_quotes "$var_value")"
     done < "$ENV_FILE"
 }
 
@@ -39,10 +43,10 @@ if [ -f "$ENV_FILE" ]; then
     load_env_file
 else
     echo "No .env file found. Using local environment variables."
-    # Convert \n to newlines for all existing environment variables
+    # Convert \n to newlines and remove quotes for all existing environment variables
     while IFS='=' read -r name value ; do
         if [[ $name == *_* ]]; then  # Only process variables with underscores (to avoid system vars)
-            export "$name"="$(convert_newlines "$value")"
+            export "$name"="$(convert_newlines_and_remove_quotes "$value")"
         fi
     done < <(env)
 fi
