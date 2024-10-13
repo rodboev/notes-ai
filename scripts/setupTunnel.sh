@@ -159,7 +159,7 @@ kill_existing_tunnels_windows() {
         echo "Found processes using port 1433: ${port_1433_pids[*]}"
         for pid in "${port_1433_pids[@]}"; do
             echo "Attempting to terminate process with PID $pid using port 1433"
-            taskkill //F //PID $pid 2>NUL
+            taskkill //F //PID $pid > /dev/null 2>&1
             if [ $? -eq 0 ]; then
                 echo "Successfully terminated process with PID $pid using port 1433"
             else
@@ -171,12 +171,12 @@ kill_existing_tunnels_windows() {
     fi
 
     # Additional check for any remaining SSH processes
-    ssh_pids=($(tasklist //FI "IMAGENAME eq ssh.exe" //FO CSV //NH | findstr /I "ssh.exe" 2>NUL | awk -F'","' '{print $2}'))
+    ssh_pids=($(tasklist //FI "IMAGENAME eq ssh.exe" //FO CSV //NH | findstr /I "ssh.exe" | awk -F'","' '{print $2}' 2> /dev/null))
     if [ ${#ssh_pids[@]} -gt 0 ]; then
         echo "Found additional SSH processes: ${ssh_pids[*]}"
         for pid in "${ssh_pids[@]}"; do
             echo "Attempting to terminate SSH process with PID $pid"
-            taskkill //F //PID $pid 2>NUL
+            taskkill //F //PID $pid > /dev/null 2>&1
             if [ $? -eq 0 ]; then
                 echo "Successfully terminated SSH process with PID $pid"
             else
