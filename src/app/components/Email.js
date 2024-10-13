@@ -100,7 +100,7 @@ const Email = ({
           </>
         )}
         {email?.error && (
-          <div className="relative -mt-4 inline-flex min-w-full max-w-2xl flex-col items-center self-center rounded-lg border-2 border-dashed px-4 py-8 text-neutral-500 sm:min-w-96 sm:px-6 sm:py-10 md:px-8 md:py-12 lg:px-10 lg:py-14">
+          <div className="relative -mt-4 inline-flex min-w-full max-w-2xl flex-col items-center self-center rounded-lg border-2 border-dashed px-4 py-8 text-neutral-500 sm:px-6 sm:py-10 md:px-8 md:py-12 lg:min-w-96 lg:px-10 lg:py-14">
             <RefreshButton onClick={refreshEmail} />
             <ExclamationTriangleIcon className="m-2 w-6 sm:m-3 sm:w-8 md:m-4 md:w-10" />
             <div className="text-center text-sm sm:text-base">{email.error}</div>
