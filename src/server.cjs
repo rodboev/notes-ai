@@ -8,7 +8,6 @@ require('dotenv').config()
 
 const hostname = 'localhost'
 const port = process.env.PORT || 3000
-
 const dev = process.env.NODE_ENV !== 'production'
 
 let httpServer
@@ -117,13 +116,12 @@ const handleWebSocketConnection = async (ws) => {
 }
 
 webSocketServer.on('connection', handleWebSocketConnection)
-;(async () => {
-  await app.prepare()
 
+function startServer(port) {
   httpServer
     .on('request', async (req, res) => {
       const parsedUrl = parse(req.url, true)
-      if (req.pathname === '/api/ws' /* || req.pathname === '/_next/webpack-hmr' */) {
+      if (parsedUrl.pathname === '/api/ws' /* || parsedUrl.pathname === '/_next/webpack-hmr' */) {
         // Handle the /api/ws request directly
         res.writeHead(200, { 'Content-Type': 'application/json' })
         const responseData = JSON.stringify({
@@ -153,6 +151,20 @@ webSocketServer.on('connection', handleWebSocketConnection)
       const protocol = isHttps ? 'https' : 'http'
       log(` ▲ Ready on ${protocol}://${hostname}:${port}`)
     })
+    .on('error', (err) => {
+      if (err.code === 'EADDRINUSE') {
+        log(`Port ${port} is in use, trying ${port + 1}...`)
+        startServer(port + 1)
+      } else {
+        console.error('Failed to start server:', err)
+        process.exit(1)
+      }
+    })
+}
+
+;(async () => {
+  await app.prepare()
+  startServer(port)
 })().catch((err) => {
   console.error('Failed to start server:', err)
   process.exit(1)
