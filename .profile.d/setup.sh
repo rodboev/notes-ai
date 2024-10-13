@@ -134,21 +134,25 @@ start_tunnel() {
     while [ $attempt -le $max_attempts ]; do
         echo "Attempt $attempt to start SSH tunnel..."
         
-        # Start the SSH tunnel in the background without verbose logging
-        ssh -N -L $SSH_TUNNEL_FORWARD -i ~/.ssh/id_rsa -o StrictHostKeyChecking=no -p $SSH_TUNNEL_PORT $SSH_TUNNEL_TARGET > /dev/null 2>&1 &
+        # Start the SSH tunnel in the background and redirect output to a log file
+        ssh -v -N -L $SSH_TUNNEL_FORWARD -i ~/.ssh/id_rsa -o StrictHostKeyChecking=no -p $SSH_TUNNEL_PORT $SSH_TUNNEL_TARGET > ~/ssh_tunnel.log 2>&1 &
         local tunnel_pid=$!
         echo $tunnel_pid > ~/ssh_tunnel.pid
         echo "Tunnel started. PID: $tunnel_pid"
         
         # Wait a moment to allow the tunnel to establish
-        sleep 5
+        sleep 1
         
         # Check if the tunnel process is still running and port is in use
         if kill -0 $tunnel_pid 2>/dev/null && lsof -i :1433 > /dev/null 2>&1; then
             echo "Tunnel successfully established."
+            echo "Tunnel log output:"
+            tail -n 20 ~/ssh_tunnel.log
             return 0
         else
             echo "Failed to establish tunnel or bind to port."
+            echo "Tunnel log output:"
+            tail -n 20 ~/ssh_tunnel.log
             if [ $attempt -lt $max_attempts ]; then
                 echo "Killing existing tunnels and retrying..."
                 kill_existing_tunnels
