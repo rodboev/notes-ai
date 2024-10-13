@@ -167,7 +167,6 @@ export async function GET(req) {
           { role: 'system', content: systemContent },
           { role: 'user', content: userContent },
         ]
-        console.log(messages)
 
         let stream
         try {
