@@ -1,7 +1,7 @@
 #!/bin/bash
 
-# set -e  # Exit immediately if a command exits with a non-zero status
-# set -x  # Print commands and their arguments as they are executed
+set -e  # Exit immediately if a command exits with a non-zero status
+set -x  # Print commands and their arguments as they are executed
 
 echo "Starting setup-wsl.sh script"
 
@@ -59,7 +59,11 @@ echo "SSH_TUNNEL_TARGET: $SSH_TUNNEL_TARGET"
 echo "SSH_PRIVATE_KEY: $([ -n "$SSH_PRIVATE_KEY" ] && echo "Set" || echo "Not set")"
 
 # Start the SSH tunnel in the background
-ssh -f -N -L "$SSH_TUNNEL_FORWARD" -i "$CONFIG_DIR/ssh/id_rsa" -o StrictHostKeyChecking=no -p "$SSH_TUNNEL_PORT" "$SSH_TUNNEL_TARGET"
+nohup ssh -N -L "$SSH_TUNNEL_FORWARD" -i "$CONFIG_DIR/ssh/id_rsa" -o StrictHostKeyChecking=no -p "$SSH_TUNNEL_PORT" "$SSH_TUNNEL_TARGET" > "$CONFIG_DIR/ssh_tunnel.log" 2>&1 &
 
-echo "Tunnel setup successful."
+# Save the PID of the SSH tunnel process
+echo $! > "$CONFIG_DIR/ssh_tunnel.pid"
+
+echo "Tunnel setup initiated in the background. PID: $(cat "$CONFIG_DIR/ssh_tunnel.pid")"
+echo "Check $CONFIG_DIR/ssh_tunnel.log for tunnel output"
 echo "setup-wsl.sh script completed"
