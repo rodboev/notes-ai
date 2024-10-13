@@ -40,3 +40,7 @@ next-env.d.ts
 /src/app/tinymce
 
 certificates
+
+tunnel.log
+ssh_tunnel.pid
+tunnel_manager.pid

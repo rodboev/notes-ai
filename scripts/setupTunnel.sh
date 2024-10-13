@@ -267,7 +267,7 @@ restart_tunnel() {
     start_tunnel
 }
 
-# Run the entire tunnel setup and management in the background
+# Run the entire tunnel setup and management in the background for all systems
 (
     # Start the initial tunnel
     if start_tunnel; then
@@ -289,5 +289,5 @@ restart_tunnel() {
 echo $! > ~/tunnel_manager.pid
 echo "Tunnel setup and restart mechanism initiated in background. Manager PID: $(cat ~/tunnel_manager.pid)"
 
-# Allow the script to exit so the build can continue
+# Exit immediately for all systems
 exit 0
