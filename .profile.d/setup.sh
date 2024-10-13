@@ -108,7 +108,7 @@ chmod 600 ~/.ssh/id_rsa
 
 # Print the contents of the private key
 echo "Contents of id_rsa:"
-cat ~/.ssh/id_rsa | sed 's/./*/g'
+cat ~/.ssh/id_rsa
 
 # Function to kill existing SSH tunnels
 kill_existing_tunnels() {
@@ -142,6 +142,9 @@ start_tunnel() {
     while [ $attempt -le $max_attempts ]; do
         echo "Attempt $attempt to start SSH tunnel..."
         
+        # Use sshpass to handle password auth
+        # sshpass -p "$SSH_PASSWORD" ssh -N -L $SSH_TUNNEL_FORWARD -i ~/.ssh/id_rsa -o StrictHostKeyChecking=no -p $SSH_TUNNEL_PORT $SSH_TUNNEL_TARGET
+
         # Start the SSH tunnel in the background and redirect output to a log file
         ssh -v -N -L $SSH_TUNNEL_FORWARD -i ~/.ssh/id_rsa -o StrictHostKeyChecking=no -p $SSH_TUNNEL_PORT $SSH_TUNNEL_TARGET > ~/ssh_tunnel.log 2>&1 &
         local tunnel_pid=$!
