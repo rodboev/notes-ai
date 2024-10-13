@@ -1,4 +1,7 @@
 #!/bin/bash
+set -e  # Exit immediately if a command exits with a non-zero status
+# set -x  # Print commands and their arguments as they are executed
+
 echo "Starting setup.sh script"
 
 # Determine the script's directory and project root
@@ -102,8 +105,22 @@ chmod 600 ~/.ssh/id_rsa
 # Function to kill existing SSH tunnels
 kill_existing_tunnels() {
     echo "Attempting to kill existing SSH tunnels..."
-    pgrep -f "ssh -N -L $SSH_TUNNEL_FORWARD" | xargs -r kill
-    sleep 1  # Wait a bit for the ports to be released
+    pkill -f "ssh -N -L $SSH_TUNNEL_FORWARD"
+    sleep 1  # Wait a bit for the processes to terminate
+    
+    # Check if port is still in use
+    if lsof -i :1433 > /dev/null 2>&1; then
+        echo "Port 1433 is still in use. Attempting to force close..."
+        fuser -k 1433/tcp
+        sleep 1
+    fi
+    
+    # Double-check and forcefully kill any remaining processes
+    if lsof -i :1433 > /dev/null 2>&1; then
+        echo "Port 1433 is still in use. Forcefully terminating processes..."
+        lsof -i :1433 | awk 'NR!=1 {print $2}' | xargs kill -9
+        sleep 1
+    fi
 }
 
 # Function to start the SSH tunnel
@@ -111,28 +128,34 @@ start_tunnel() {
     local attempt=1
     local max_attempts=3
 
+    # Kill existing tunnels before the first attempt
+    kill_existing_tunnels
+
     while [ $attempt -le $max_attempts ]; do
         echo "Attempt $attempt to start SSH tunnel..."
-        ssh -N -L $SSH_TUNNEL_FORWARD -i ~/.ssh/id_rsa -o StrictHostKeyChecking=no -p $SSH_TUNNEL_PORT $SSH_TUNNEL_TARGET &
+        
+        # Start the SSH tunnel in the background without verbose logging
+        ssh -N -L $SSH_TUNNEL_FORWARD -i ~/.ssh/id_rsa -o StrictHostKeyChecking=no -p $SSH_TUNNEL_PORT $SSH_TUNNEL_TARGET > /dev/null 2>&1 &
         local tunnel_pid=$!
         echo $tunnel_pid > ~/ssh_tunnel.pid
         echo "Tunnel started. PID: $tunnel_pid"
         
-        # Wait a moment to ensure the tunnel is established
+        # Wait a moment to allow the tunnel to establish
         sleep 5
         
-        # Check if the tunnel process is still running
-        if kill -0 $tunnel_pid 2>/dev/null; then
+        # Check if the tunnel process is still running and port is in use
+        if kill -0 $tunnel_pid 2>/dev/null && lsof -i :1433 > /dev/null 2>&1; then
             echo "Tunnel successfully established."
             return 0
         else
-            echo "Failed to establish tunnel."
+            echo "Failed to establish tunnel or bind to port."
             if [ $attempt -lt $max_attempts ]; then
                 echo "Killing existing tunnels and retrying..."
                 kill_existing_tunnels
             fi
-            attempt=$((attempt+1))
         fi
+
+        attempt=$((attempt+1))
     done
 
     echo "Failed to establish tunnel after $max_attempts attempts."
