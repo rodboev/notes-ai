@@ -267,23 +267,27 @@ restart_tunnel() {
     start_tunnel
 }
 
-# Start the initial tunnel
-if start_tunnel; then
-    echo "Initial tunnel setup completed. PID: $(cat ~/ssh_tunnel.pid)"
-    
-    # Start the tunnel restart mechanism in the background
-    (
+# Run the entire tunnel setup and management in the background
+(
+    # Start the initial tunnel
+    if start_tunnel; then
+        echo "Initial tunnel setup completed. PID: $(cat ~/ssh_tunnel.pid)"
+        
+        # Start the tunnel restart mechanism
         while true; do
-            sleep 900  # Sleep for 15 minutes (900 seconds)
+            sleep 300  # Sleep for 5 minutes (300 seconds)
             echo "Restarting SSH tunnel..."
             restart_tunnel
         done
-    ) &
+    else
+        echo "Failed to set up initial tunnel. Exiting."
+        exit 1
+    fi
+) &
 
-    # Save the PID of the background process
-    echo $! > ~/tunnel_manager.pid
-    echo "Tunnel restart mechanism initiated in background. Manager PID: $(cat ~/tunnel_manager.pid)"
-else
-    echo "Failed to set up initial tunnel. Exiting."
-    exit 1
-fi
+# Save the PID of the background process
+echo $! > ~/tunnel_manager.pid
+echo "Tunnel setup and restart mechanism initiated in background. Manager PID: $(cat ~/tunnel_manager.pid)"
+
+# Allow the script to exit so the build can continue
+exit 0
