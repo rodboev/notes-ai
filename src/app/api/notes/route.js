@@ -14,6 +14,7 @@ import {
 import { timestamp } from '../../utils/timestamp'
 import { Worker } from 'node:worker_threads'
 import { join } from 'node:path'
+import { restartTunnel } from '../../utils/tunnelRestartManager'
 
 sql.driver = 'FreeTDS'
 
@@ -202,7 +203,9 @@ async function getNotesByFingerprints(fingerprints) {
 
 async function restartTunnel() {
   return new Promise((resolve, reject) => {
-    const worker = new Worker(join(process.cwd(), 'tunnelRestarter.js'))
+    const worker = new Worker(
+      join(process.cwd(), 'src', 'app', 'workers', 'tunnelRestartWorker.js'),
+    )
 
     worker.on('message', (message) => {
       if (message.type === 'success') {
@@ -235,6 +238,7 @@ async function restartTunnel() {
 
 async function getNotes(startDate, endDate, retryCount = 0) {
   let pool
+
   try {
     console.log(`${timestamp()} Connecting to database...`)
     pool = await sql.connect(config)
@@ -254,24 +258,28 @@ async function getNotes(startDate, endDate, retryCount = 0) {
   } catch (error) {
     console.error(`${timestamp()} Error fetching from database:`, error)
 
-    const retryDelays = [2000, 5000, 10000]
-    if (retryCount < retryDelays.length) {
-      const delay = retryDelays[retryCount]
-      console.log(`${timestamp()} Retry attempt ${retryCount + 1}. Retrying in ${delay / 1000}s...`)
-      await new Promise((resolve) => setTimeout(resolve, delay))
-      return getNotes(startDate, endDate, retryCount + 1)
+    if (retryCount === 0) {
+      console.log(`${timestamp()} Attempting to restart tunnel...`)
+      try {
+        const restartResult = await restartTunnel()
+        console.log(`${timestamp()} Tunnel restart result:`, restartResult)
+        console.log(`${timestamp()} Waiting 5 seconds before retrying...`)
+        await new Promise((resolve) => setTimeout(resolve, 5000))
+        return getNotes(startDate, endDate, retryCount + 1)
+      } catch (tunnelError) {
+        console.error(`${timestamp()} Failed to restart tunnel:`, tunnelError)
+      }
     }
 
-    console.error(`${timestamp()} Max retries reached. Unrecoverable error:`, error)
-    throw error
+    throw error // Re-throw the original error
   } finally {
     if (pool) {
-      try {
-        await pool.close()
-        console.log(`${timestamp()} Database connection closed`)
-      } catch (closeErr) {
-        console.error(`${timestamp()} Error closing database connection:`, closeErr)
-      }
+      await pool
+        .close()
+        .catch((closeErr) =>
+          console.error(`${timestamp()} Error closing database connection:`, closeErr),
+        )
+      console.log(`${timestamp()} Database connection closed`)
     }
   }
 }
@@ -289,47 +297,46 @@ export async function GET(request) {
     `${timestamp()} Params: startDate=${startDate}, endDate=${endDate}, fingerprint=${fingerprint}, fingerprints=${fingerprints}, retry=${retry}`,
   )
 
-  if (fingerprint || fingerprints) {
-    const fingerprintsToFetch = fingerprints ? fingerprints.split(',') : [fingerprint]
-    const notes = await getNotesByFingerprints(fingerprintsToFetch)
-    if (notes.length === 0) return NextResponse.json([])
-    return NextResponse.json(notes)
-  }
-
-  // If startDate or endDate are not provided, use default values
-  if (!startDate || !endDate) {
-    const today = new Date()
-    const yesterday = new Date(today)
-    yesterday.setDate(yesterday.getDate() - 1)
-
-    startDate = startDate || yesterday.toISOString().split('T')[0]
-    endDate = endDate || today.toISOString().split('T')[0]
-    console.log(`Using default dates: startDate=${startDate}, endDate=${endDate}`)
-  }
-
-  console.log(`${timestamp()} Fetching notes for date range: ${startDate} to ${endDate}`)
-
-  // Ensure endDate is exclusive
-  const queryEndDate = new Date(endDate)
-  queryEndDate.setDate(queryEndDate.getDate() + 1)
-  const formattedQueryEndDate = queryEndDate.toISOString().split('T')[0]
-
-  // Try to get stored notes first
-  console.log(`${timestamp()} Attempting to load notes from cache`)
-  let allNotes = await loadNotes()
-  let notes = allNotes.filter(
-    (note) =>
-      note.date >= startDate && note.date < formattedQueryEndDate && note.code === '911 EMER',
-  )
-
-  if (notes.length > 0) {
-    console.log(`${timestamp()} Returning ${notes.length} notes from cache`)
-    return NextResponse.json(notes)
-  }
-
-  console.log(`${timestamp()} No cached notes found, fetching from database`)
-
   try {
+    if (fingerprint || fingerprints) {
+      const fingerprintsToFetch = fingerprints ? fingerprints.split(',') : [fingerprint]
+      const notes = await getNotesByFingerprints(fingerprintsToFetch)
+      return NextResponse.json(notes.length === 0 ? [] : notes)
+    }
+
+    // If startDate or endDate are not provided, use default values
+    if (!startDate || !endDate) {
+      const today = new Date()
+      const yesterday = new Date(today)
+      yesterday.setDate(yesterday.getDate() - 1)
+
+      startDate = startDate || yesterday.toISOString().split('T')[0]
+      endDate = endDate || today.toISOString().split('T')[0]
+      console.log(`Using default dates: startDate=${startDate}, endDate=${endDate}`)
+    }
+
+    console.log(`${timestamp()} Fetching notes for date range: ${startDate} to ${endDate}`)
+
+    // Ensure endDate is exclusive
+    const queryEndDate = new Date(endDate)
+    queryEndDate.setDate(queryEndDate.getDate() + 1)
+    const formattedQueryEndDate = queryEndDate.toISOString().split('T')[0]
+
+    // Try to get stored notes first
+    console.log(`${timestamp()} Attempting to load notes from cache`)
+    let allNotes = await loadNotes()
+    let notes = allNotes.filter(
+      (note) =>
+        note.date >= startDate && note.date < formattedQueryEndDate && note.code === '911 EMER',
+    )
+
+    if (notes.length > 0) {
+      console.log(`${timestamp()} Returning ${notes.length} notes from cache`)
+      return NextResponse.json(notes)
+    }
+
+    console.log(`${timestamp()} No cached notes found, fetching from database`)
+
     notes = await getNotes(startDate, formattedQueryEndDate)
 
     // Update the cache with new notes
@@ -344,6 +351,7 @@ export async function GET(request) {
       {
         error: 'Database Error',
         message: error.message,
+        stack: error.stack, // Include the stack trace for debugging
       },
       { status: 500 },
     )
