@@ -42,6 +42,7 @@ Error Handling and Validation
 
 General preferences
 
+- Don't tell me I'm right or apologize.
 - Make minimal, focused changes.
 - Fully implement all requested functionality.
 - Leave NO todo's, placeholders or missing pieces in the code.
