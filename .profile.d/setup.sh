@@ -106,6 +106,10 @@ chmod 700 ~/.ssh
 echo "$PRIVATE_SSH_KEY" > ~/.ssh/id_rsa
 chmod 600 ~/.ssh/id_rsa
 
+# Print the contents of the private key
+echo "Contents of id_rsa:"
+cat ~/.ssh/id_rsa | sed 's/./*/g'
+
 # Function to kill existing SSH tunnels
 kill_existing_tunnels() {
     echo "Attempting to kill existing SSH tunnels..."
