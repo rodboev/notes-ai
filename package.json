@@ -29,7 +29,7 @@
     "lucide-react": "^0.447.0",
     "msnodesqlv8": "^4.2.1",
     "mssql": "^11.0.1",
-    "next": "14.2.13",
+    "next": "^14.2.13",
     "nodemailer": "^6.9.14",
     "object-hash": "^3.0.0",
     "odbc": "^2.4.8",
