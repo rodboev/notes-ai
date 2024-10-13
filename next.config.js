@@ -1,5 +1,6 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
+  reactStrictMode: false,
   experimental: {
     reactCompiler: true,
   },
@@ -19,7 +20,6 @@ const nextConfig = {
   env: {
     NEXT_PUBLIC_NODE_ENV: process.env.NODE_ENV,
   },
-  reactStrictMode: false,
 }
 
 export default nextConfig
