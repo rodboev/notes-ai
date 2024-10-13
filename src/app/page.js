@@ -88,7 +88,7 @@ export default function Home() {
   }, [])
 
   return (
-    <div className="flex h-screen max-w-full snap-y snap-mandatory flex-col items-center overflow-y-scroll">
+    <div className="flex h-screen max-w-full snap-y snap-mandatory flex-col items-center">
       <Nav>
         <Datepicker
           useRange={false}
@@ -97,12 +97,12 @@ export default function Home() {
           separator={'-'}
           displayFormat={'M/D/YY'}
           inputClassName={
-            'h-10 w-40 items-center overflow-hidden rounded px-3 pt-0.5 focus-visible:outline-none align-middle text-right cursor-pointer'
+            'h-8 w-32 sm:h-10 sm:w-40 items-center overflow-hidden rounded pt-0.5 focus-visible:outline-none align-middle text-right cursor-pointer bg-transparent text-sm sm:text-base'
           }
           readOnly={true}
           containerClassName={'relative w-fit text-black border-color z-30'}
           toggleClassName={
-            'h-10 w-fit items-center overflow-hidden rounded px-4 pb-0.5 font-bold hover:bg-opacity-95 active:bg-opacity-100 bg-teal text-white align-middle ml-4'
+            'h-8 w-fit sm:h-10 items-center overflow-hidden rounded px-2 sm:px-4 pb-0.5 text-sm sm:text-base font-bold hover:bg-opacity-95 active:bg-opacity-100 bg-teal text-white align-middle ml-2 sm:ml-4'
           }
           value={{
             startDate: date.startDate,
@@ -118,25 +118,27 @@ export default function Home() {
         </div>
       ) : notesError || emailsError ? (
         <div className="flex h-full items-center justify-center text-neutral-700">
-          <div className="max-w-screen-md">
+          <div className="max-w-screen-md px-4 sm:px-6">
             {notesError && (
-              <div className="space-y-6">
-                <div className="font-md font-semibold">Notes Error:</div>
-                <pre className="font-mono whitespace-pre-wrap text-[10pt]">
+              <div className="space-y-4 sm:space-y-6">
+                <div className="text-base font-semibold sm:text-lg">Notes Error:</div>
+                <pre className="font-mono whitespace-pre-wrap text-xs sm:text-sm">
                   {notesError.message}
                 </pre>
               </div>
             )}
             {emailsError && (
-              <div>
-                <div className="font-semibold">Emails Error:</div>
-                <p>{emailsError.message || 'An unknown error occurred while fetching emails.'}</p>
+              <div className="mt-4 sm:mt-6">
+                <div className="text-base font-semibold sm:text-lg">Emails Error:</div>
+                <p className="text-sm sm:text-base">
+                  {emailsError.message || 'An unknown error occurred while fetching emails.'}
+                </p>
               </div>
             )}
           </div>
         </div>
       ) : pairs.length === 0 ? (
-        <div className="flex h-full items-center text-neutral-700">
+        <div className="flex h-full items-center justify-center text-sm text-neutral-700 sm:text-base">
           No notes found for the selected date range.
         </div>
       ) : null}
@@ -147,7 +149,7 @@ export default function Home() {
           ref={(el) => {
             pairRefs.current[index] = el
           }}
-          className="pair container -m-4 flex max-w-screen-2xl snap-center snap-always p-4 pb-0"
+          className="pair -!mx-[10px] container -m-4 flex max-w-screen-2xl snap-center snap-always p-4 pb-0"
         >
           <Note note={note} index={index} total={pairs.length} />
           <Email

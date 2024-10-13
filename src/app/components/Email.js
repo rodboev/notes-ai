@@ -8,7 +8,7 @@ import SendEmailButton from './SendEmailButton'
 import FeedbackButton from './FeedbackButton'
 import RefreshButton from './RefreshButton'
 import { useSingleEmail } from '../hooks/useEmails'
-import VoiceButton from './VoiceButton'
+import CallButton from './CallButton'
 
 const Email = ({
   initialEmail,
@@ -42,9 +42,9 @@ const Email = ({
   const email = data || initialEmail
 
   return (
-    <div className="right -mr-4 flex min-h-screen flex-1.4 flex-col justify-center pt-16">
+    <div className="right flex min-h-screen w-1/2 flex-col justify-center p-4 sm:p-6 md:p-8 lg:p-10">
       {children}
-      <div className="email flex flex-col p-10 pr-4">
+      <div className="email flex flex-col">
         {isLoading && (
           <div className="flex h-64 items-center justify-center text-neutral-500">
             <SpinnerIcon />
@@ -52,23 +52,23 @@ const Email = ({
         )}
         {error && (
           <div className="flex h-64 items-center justify-center">
-            <p>Error: {error.message}</p>
+            <p className="text-sm sm:text-base">Error: {error.message}</p>
           </div>
         )}
         {email?.emailAddress && email?.body && (
           <>
             {email.subject && (
-              <h2 className="mb-1 text-2xl font-bold text-teal">{email.subject}</h2>
+              <h2 className="mb-1 text-xl font-bold text-teal sm:text-2xl">{email.subject}</h2>
             )}
-            <p className="text-base text-gray-600">
+            <p className="mb-2 text-sm text-gray-600 sm:mb-3 sm:text-base">
               To: {email.emailAddress.toLowerCase().replace(/,/g, ', ')}
             </p>
             <Editor email={email} emailStatus={emailStatus} editorRef={editorRef}>
               {!(emailStatus?.status === 'sending' || emailStatus?.status === 'success') && (
                 <RefreshButton onClick={refreshEmail} />
               )}
-              <div className="buttons mt-3 flex items-center justify-between">
-                <div className="flex items-center space-x-3">
+              <div className="buttons mt-3 flex flex-col items-start justify-between sm:flex-row sm:items-center">
+                <div className="mb-2 flex items-center space-x-2 sm:mb-0 sm:space-x-3">
                   <SendEmailButton
                     fingerprint={noteFingerprint}
                     subject={email.subject}
@@ -77,7 +77,7 @@ const Email = ({
                     updateStatus={updateStatus}
                     emailStatus={emailStatus}
                   />
-                  <VoiceButton
+                  <CallButton
                     note={note}
                     activeCallFingerprint={activeCallFingerprint}
                     isPending={isPending}
@@ -100,17 +100,19 @@ const Email = ({
           </>
         )}
         {email?.error && (
-          <div className="relative -mt-4 inline-flex min-w-96 max-w-2xl flex-col items-center self-center rounded-lg border-2 border-dashed px-10 py-14 text-neutral-500">
+          <div className="relative -mt-4 inline-flex min-w-full max-w-2xl flex-col items-center self-center rounded-lg border-2 border-dashed px-4 py-8 text-neutral-500 sm:min-w-96 sm:px-6 sm:py-10 md:px-8 md:py-12 lg:px-10 lg:py-14">
             <RefreshButton onClick={refreshEmail} />
-            <ExclamationTriangleIcon className="m-4 w-10" />
-            <div>{email.error}</div>
+            <ExclamationTriangleIcon className="m-2 w-6 sm:m-3 sm:w-8 md:m-4 md:w-10" />
+            <div className="text-center text-sm sm:text-base">{email.error}</div>
           </div>
         )}
         {email?.subject && !email?.emailAddress && (
-          <div className="relative -mt-4 inline-flex min-w-96 max-w-2xl flex-col items-center self-center rounded-lg border-2 border-dashed px-10 py-14 text-neutral-500">
+          <div className="relative -mt-4 inline-flex min-w-full max-w-2xl flex-col items-center self-center rounded-lg border-2 border-dashed px-4 py-8 text-neutral-500 sm:min-w-96 sm:px-6 sm:py-10 md:px-8 md:py-12 lg:px-10 lg:py-14">
             <RefreshButton onClick={refreshEmail} />
-            <ExclamationTriangleIcon className="m-4 w-10" />
-            <div>No email address found in PestPac.</div>
+            <ExclamationTriangleIcon className="m-2 w-6 sm:m-3 sm:w-8 md:m-4 md:w-10" />
+            <div className="text-center text-sm sm:text-base">
+              No email address found in PestPac.
+            </div>
           </div>
         )}
       </div>

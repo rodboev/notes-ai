@@ -2,13 +2,13 @@ import React from 'react'
 import { Phone, PhoneOff } from 'lucide-react'
 import SpinnerIcon from './Icons/SpinnerIcon'
 
-const VoiceButton = ({
+export default function CallButton({
   note,
   activeCallFingerprint,
   isPending,
   connectConversation,
   disconnectConversation,
-}) => {
+}) {
   const isThisCallActive = activeCallFingerprint === note.fingerprint
 
   const handleClick = () => {
@@ -23,14 +23,14 @@ const VoiceButton = ({
     <button
       onClick={handleClick}
       disabled={isPending}
-      className={`rounded px-4 py-2 ${
+      className={`btn-teal flex ${
         isThisCallActive ? 'bg-neutral-500 hover:bg-neutral-600' : 'hover:bg-teal-600 bg-teal-500'
-      } flex items-center font-bold text-white ${isPending ? 'cursor-not-allowed opacity-50' : ''}`}
+      } ${isPending ? 'cursor-not-allowed opacity-50' : ''}`}
       type="button"
     >
       {isPending ? (
         <>
-          <SpinnerIcon className="-m-1 mr-2 h-4 w-4" />
+          <SpinnerIcon className="-m-1 -mb-2 mr-2 h-4 w-4" />
           <span>Starting...</span>
         </>
       ) : !isThisCallActive ? (
@@ -47,5 +47,3 @@ const VoiceButton = ({
     </button>
   )
 }
-
-export default VoiceButton

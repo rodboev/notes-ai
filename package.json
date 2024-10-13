@@ -4,7 +4,7 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "dev": "node src/server.js",
+    "dev": "bash scripts/setupTunnel.sh & next dev --experimental-https",
     "build": "next build && bash scripts/setupTunnel.sh > tunnel.log 2>&1",
     "start": "cross-env NODE_ENV=production node src/server.js",
     "lint": "next lint",

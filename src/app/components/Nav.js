@@ -13,18 +13,20 @@ export default function Nav({ children }) {
   }
 
   return (
-    <div className="nav align-center fixed z-20 -ml-4 flex w-full flex-col">
-      <nav className="z-30 ml-4 flex h-20 justify-center border-b bg-white/50 p-3 backdrop-blur-md">
-        <div className="container flex w-full max-w-screen-2xl items-center justify-between">
+    <div className="nav fixed z-20 flex w-full flex-col">
+      <nav className="z-30 flex h-20 w-full justify-center border-b bg-white/50 backdrop-blur-md">
+        <div className="container flex w-full max-w-full items-center justify-between px-4 sm:px-6 lg:px-8 2xl:max-w-screen-2xl">
           <div className="left tracking-tighter">
-            <span className="display-inline mx-1 text-5xl font-bold text-teal">liberty</span>
-            <span className="display-inline mx-1 text-2xl">notes ai</span>
+            <span className="display-inline mx-1 text-4xl font-bold text-teal sm:text-5xl">
+              liberty
+            </span>
+            <span className="display-inline mx-1 text-xl sm:text-2xl">notes ai</span>
           </div>
-          <div className="right align-center flex items-center px-3">
+          <div className="right flex items-center">
             {children}
-            <div className="relative m-1 ml-4 mr-2">
+            <div className="relative ml-4 hidden md:block">
               <SettingsIcon
-                className="icon align-center flex cursor-pointer text-neutral-500 hover:opacity-85"
+                className="icon h-5 w-5 cursor-pointer text-neutral-500 hover:opacity-85 sm:h-6 sm:w-6"
                 onClick={toggleSettings}
               />
             </div>

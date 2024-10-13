@@ -79,7 +79,8 @@ const Editor = ({ email, emailStatus, editorRef, children, onRefresh }) => {
           toolbar: 'bold italic bullist numlist',
           autoresize_bottom_margin: 0,
           autoresize_min_height: 300,
-          content_style: 'body { font-family: sans-serif; }',
+          content_style:
+            'body { font-family: sans-serif; font-size: 10pt; } @media (min-width: 480px) { body { font-size: initial; } }',
           base_url: '/api/tinymce',
           suffix: '.min',
           license_key: 'gpl',
