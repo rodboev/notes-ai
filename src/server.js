@@ -5,8 +5,9 @@ import { parse } from 'node:url'
 import next from 'next'
 import { WebSocketServer } from 'ws'
 import dotenv from 'dotenv'
+import path from 'node:path'
 
-dotenv.config()
+dotenv.config({ path: path.resolve(process.cwd(), '.env') })
 
 const hostname = 'localhost'
 const port = process.env.PORT || 3000

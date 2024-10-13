@@ -3,36 +3,69 @@ echo "Starting setup.sh script"
 
 # Determine the script's directory and project root
 SCRIPT_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" &> /dev/null && pwd )"
-PROJECT_ROOT="$(dirname "$(dirname "$SCRIPT_DIR")")"
+PROJECT_ROOT="$(dirname "$SCRIPT_DIR")"
 
 # Check for .env.local in the project root
-ENV_FILE="$PROJECT_ROOT/.env.local"
+ENV_FILE="$PROJECT_ROOT/.env"
 if [ ! -f "$ENV_FILE" ]; then
     echo "Error: .env.local file not found in $PROJECT_ROOT"
     exit 1
 fi
 
 echo "Loading environment variables from $ENV_FILE"
-set -a
-source "$ENV_FILE"
-set +a
 
-# Debug: Print SSH-related environment variables
-echo "SSH_TUNNEL_FORWARD: $SSH_TUNNEL_FORWARD"
-echo "SSH_TUNNEL_PORT: $SSH_TUNNEL_PORT"
-echo "SSH_TUNNEL_TARGET: $SSH_TUNNEL_TARGET"
+# Function to convert \n to newlines
+convert_newlines() {
+    echo -e "${1//\\n/\\n}"
+}
 
-# Check if required variables are set
-if [ -z "$SSH_TUNNEL_FORWARD" ] || [ -z "$SSH_TUNNEL_PORT" ] || [ -z "$SSH_TUNNEL_TARGET" ]; then
-    echo "Error: One or more required SSH tunnel variables are not set in .env.local"
-    exit 1
-fi
+# Use a while loop to read the file line by line
+while IFS= read -r line || [[ -n "$line" ]]; do
+    # Skip comments and empty lines
+    if [[ $line =~ ^#.*$ ]] || [[ -z $line ]]; then
+        continue
+    fi
+    # Extract variable name and value
+    var_name="${line%%=*}"
+    var_value="${line#*=}"
+    # Remove surrounding quotes if present
+    var_value="${var_value%\"}"
+    var_value="${var_value#\"}"
+    # Convert \n to newlines and export the variable
+    export "$var_name"="$(convert_newlines "$var_value")"
+done < "$ENV_FILE"
+
+# Function to check if a variable is set and print its value
+check_and_print_variable() {
+    if [ -z "${!1}" ]; then
+        echo "Error: $1 is not set in .env"
+        exit 1
+    else
+        if [[ "$1" == *"KEY"* ]]; then
+            echo "$1=${!1:0:10}..."
+        else
+            echo "$1=${!1}"
+        fi
+    fi
+}
 
 # ODBC and FreeTDS Setup
 export ODBCSYSINI=~/.apt/etc
 export ODBCINI=~/.apt/etc/odbc.ini
 export FREETDSCONF=~/.apt/etc/freetds/freetds.conf
 export LD_LIBRARY_PATH=~/.apt/usr/lib/x86_64-linux-gnu:~/.apt/usr/lib/x86_64-linux-gnu/odbc:$LD_LIBRARY_PATH
+
+# Check and print all required variables
+echo "Checking and printing variables:"
+check_and_print_variable "SSH_TUNNEL_FORWARD"
+check_and_print_variable "SSH_TUNNEL_PORT"
+check_and_print_variable "SSH_TUNNEL_TARGET"
+check_and_print_variable "PRIVATE_SSH_KEY"
+check_and_print_variable "SQL_DATABASE"
+check_and_print_variable "ODBCSYSINI"
+check_and_print_variable "ODBCINI"
+check_and_print_variable "FREETDSCONF"
+check_and_print_variable "LD_LIBRARY_PATH"
 
 mkdir -p ~/.apt/etc/freetds
 echo "[global]
@@ -66,25 +99,44 @@ chmod 700 ~/.ssh
 echo "$PRIVATE_SSH_KEY" > ~/.ssh/id_rsa
 chmod 600 ~/.ssh/id_rsa
 
+# Function to kill existing SSH tunnels
+kill_existing_tunnels() {
+    echo "Attempting to kill existing SSH tunnels..."
+    pgrep -f "ssh -N -L $SSH_TUNNEL_FORWARD" | xargs -r kill
+    sleep 1  # Wait a bit for the ports to be released
+}
+
 # Function to start the SSH tunnel
 start_tunnel() {
-    echo "Starting SSH tunnel with: -L $SSH_TUNNEL_FORWARD"
-    ssh -N -L "$SSH_TUNNEL_FORWARD" -i ~/.ssh/id_rsa -o StrictHostKeyChecking=no -p "$SSH_TUNNEL_PORT" "$SSH_TUNNEL_TARGET" &
-    local tunnel_pid=$!
-    echo $tunnel_pid > ~/ssh_tunnel.pid
-    echo "Tunnel started. PID: $tunnel_pid"
-    
-    # Wait a moment to ensure the tunnel is established
-    sleep 5
-    
-    # Check if the tunnel process is still running
-    if kill -0 $tunnel_pid 2>/dev/null; then
-        echo "Tunnel successfully established."
-        return 0
-    else
-        echo "Failed to establish tunnel."
-        return 1
-    fi
+    local attempt=1
+    local max_attempts=3
+
+    while [ $attempt -le $max_attempts ]; do
+        echo "Attempt $attempt to start SSH tunnel..."
+        ssh -N -L $SSH_TUNNEL_FORWARD -i ~/.ssh/id_rsa -o StrictHostKeyChecking=no -p $SSH_TUNNEL_PORT $SSH_TUNNEL_TARGET &
+        local tunnel_pid=$!
+        echo $tunnel_pid > ~/ssh_tunnel.pid
+        echo "Tunnel started. PID: $tunnel_pid"
+        
+        # Wait a moment to ensure the tunnel is established
+        sleep 5
+        
+        # Check if the tunnel process is still running
+        if kill -0 $tunnel_pid 2>/dev/null; then
+            echo "Tunnel successfully established."
+            return 0
+        else
+            echo "Failed to establish tunnel."
+            if [ $attempt -lt $max_attempts ]; then
+                echo "Killing existing tunnels and retrying..."
+                kill_existing_tunnels
+            fi
+            attempt=$((attempt+1))
+        fi
+    done
+
+    echo "Failed to establish tunnel after $max_attempts attempts."
+    return 1
 }
 
 # Function to restart the tunnel
@@ -92,6 +144,7 @@ restart_tunnel() {
     if [ -f ~/ssh_tunnel.pid ]; then
         kill $(cat ~/ssh_tunnel.pid) 2>/dev/null
     fi
+    kill_existing_tunnels
     start_tunnel
 }
 
@@ -107,7 +160,7 @@ if start_tunnel; then
             restart_tunnel
         done
     ) &
-    
+
     # Save the PID of the background process
     echo $! > ~/tunnel_manager.pid
     echo "Tunnel restart mechanism initiated in background. Manager PID: $(cat ~/tunnel_manager.pid)"
