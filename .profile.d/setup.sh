@@ -7,22 +7,22 @@ if [ -f .env.local ]; then
 fi
 
 # ODBC and FreeTDS Setup
-export ODBCSYSINI=/app/.apt/etc
-export ODBCINI=/app/.apt/etc/odbc.ini
-export FREETDSCONF=/app/.apt/etc/freetds/freetds.conf
-export LD_LIBRARY_PATH=/app/.apt/usr/lib/x86_64-linux-gnu:/app/.apt/usr/lib/x86_64-linux-gnu/odbc:$LD_LIBRARY_PATH
+export ODBCSYSINI=~/.apt/etc
+export ODBCINI=~/.apt/etc/odbc.ini
+export FREETDSCONF=~/.apt/etc/freetds/freetds.conf
+export LD_LIBRARY_PATH=~/.apt/usr/lib/x86_64-linux-gnu:~/.apt/usr/lib/x86_64-linux-gnu/odbc:$LD_LIBRARY_PATH
 
-mkdir -p /app/.apt/etc/freetds
+mkdir -p ~/.apt/etc/freetds
 echo "[global]
 tds version = 7.4
-" > /app/.apt/etc/freetds/freetds.conf
+" > ~/.apt/etc/freetds/freetds.conf
 
 mkdir -p $ODBCSYSINI
 cat > "$ODBCSYSINI/odbcinst.ini" << EOL
 [FreeTDS]
 Description = FreeTDS Driver
-Driver = /app/.apt/usr/lib/x86_64-linux-gnu/odbc/libtdsodbc.so
-Setup = /app/.apt/usr/lib/x86_64-linux-gnu/odbc/libtdsS.so
+Driver = ~/.apt/usr/lib/x86_64-linux-gnu/odbc/libtdsodbc.so
+Setup = ~/.apt/usr/lib/x86_64-linux-gnu/odbc/libtdsS.so
 EOL
 
 cat > "$ODBCINI" << EOL
@@ -34,26 +34,26 @@ Database = ${SQL_DATABASE}
 EOL
 
 # Add FreeTDS bin to PATH
-export PATH=$PATH:/app/.apt/usr/bin
+export PATH=$PATH:~/.apt/usr/bin
 
 # SSH Tunnel Setup
 echo "Setting up SSH tunnel..."
-mkdir -p /app/.ssh
-chmod 700 /app/.ssh
-echo "$SSH_PRIVATE_KEY" > /app/.ssh/id_rsa
-chmod 600 /app/.ssh/id_rsa
+mkdir -p ~/.ssh
+chmod 700 ~/.ssh
+echo "$SSH_PRIVATE_KEY" > ~/.ssh/id_rsa
+chmod 600 ~/.ssh/id_rsa
 
 # Function to start the SSH tunnel
 start_tunnel() {
-    ssh -N -L $SSH_TUNNEL_FORWARD -i /app/.ssh/id_rsa -o StrictHostKeyChecking=no -p $SSH_TUNNEL_PORT $SSH_TUNNEL_TARGET &
-    echo $! > /app/ssh_tunnel.pid
-    echo "Tunnel started. PID: $(cat /app/ssh_tunnel.pid)"
+    ssh -N -L $SSH_TUNNEL_FORWARD -i ~/.ssh/id_rsa -o StrictHostKeyChecking=no -p $SSH_TUNNEL_PORT $SSH_TUNNEL_TARGET &
+    echo $! > ~/ssh_tunnel.pid
+    echo "Tunnel started. PID: $(cat ~/ssh_tunnel.pid)"
 }
 
 # Function to restart the tunnel
 restart_tunnel() {
-    if [ -f /app/ssh_tunnel.pid ]; then
-        kill $(cat /app/ssh_tunnel.pid) 2>/dev/null
+    if [ -f ~/ssh_tunnel.pid ]; then
+        kill $(cat ~/ssh_tunnel.pid) 2>/dev/null
     fi
     start_tunnel
 }
@@ -69,7 +69,7 @@ restart_tunnel() {
 ) &
 
 # Save the PID of the background process
-echo $! > /app/tunnel_manager.pid
+echo $! > ~/tunnel_manager.pid
 
-echo "Tunnel setup initiated in background. Manager PID: $(cat /app/tunnel_manager.pid)"
+echo "Tunnel setup initiated in background. Manager PID: $(cat ~/tunnel_manager.pid)"
 echo "setup.sh script completed"
