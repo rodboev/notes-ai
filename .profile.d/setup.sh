@@ -8,41 +8,45 @@ echo "Starting setup.sh script"
 SCRIPT_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" &> /dev/null && pwd )"
 PROJECT_ROOT="$(dirname "$SCRIPT_DIR")"
 
-# Check for .env.local in the project root
+# Check for .env in the project root
 ENV_FILE="$PROJECT_ROOT/.env"
-if [ ! -f "$ENV_FILE" ]; then
-    echo "Error: .env.local file not found in $PROJECT_ROOT"
-    exit 1
-fi
-
-echo "Loading environment variables from $ENV_FILE"
 
 # Function to convert \n to newlines
 convert_newlines() {
     echo -e "${1//\\n/\\n}"
 }
 
-# Use a while loop to read the file line by line
-while IFS= read -r line || [[ -n "$line" ]]; do
-    # Skip comments and empty lines
-    if [[ $line =~ ^#.*$ ]] || [[ -z $line ]]; then
-        continue
-    fi
-    # Extract variable name and value
-    var_name="${line%%=*}"
-    var_value="${line#*=}"
-    # Remove surrounding quotes if present
-    var_value="${var_value%\"}"
-    var_value="${var_value#\"}"
-    # Convert \n to newlines and export the variable
-    export "$var_name"="$(convert_newlines "$var_value")"
-done < "$ENV_FILE"
+# Function to load variables from .env file
+load_env_file() {
+    echo "Loading environment variables from $ENV_FILE"
+    # Use a while loop to read the file line by line
+    while IFS= read -r line || [[ -n "$line" ]]; do
+        # Skip comments and empty lines
+        if [[ $line =~ ^#.*$ ]] || [[ -z $line ]]; then
+            continue
+        fi
+        # Extract variable name and value
+        var_name="${line%%=*}"
+        var_value="${line#*=}"
+        # Remove surrounding quotes if present
+        var_value="${var_value%\"}"
+        var_value="${var_value#\"}"
+        # Convert \n to newlines and export the variable
+        export "$var_name"="$(convert_newlines "$var_value")"
+    done < "$ENV_FILE"
+}
+
+# Load variables from .env if it exists, otherwise use local environment
+if [ -f "$ENV_FILE" ]; then
+    load_env_file
+else
+    echo "No .env file found. Using local environment variables."
+fi
 
 # Function to check if a variable is set and print its value
 check_and_print_variable() {
     if [ -z "${!1}" ]; then
-        echo "Error: $1 is not set in .env"
-        exit 1
+        echo "Warning: $1 is not set"
     else
         if [[ "$1" == *"KEY"* ]]; then
             echo "$1=${!1:0:10}..."
