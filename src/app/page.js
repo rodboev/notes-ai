@@ -152,7 +152,7 @@ export default function Home() {
             }}
             className="flex h-[calc(100vh-64px)] snap-start flex-col items-center justify-center"
           >
-            <div className="container flex max-w-screen-2xl flex-col md:flex-row">
+            <div className="container flex max-w-screen-2xl md:flex-row">
               <Note note={note} index={index} total={pairs.length} />
               <Email
                 initialEmail={email}
