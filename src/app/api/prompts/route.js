@@ -1,14 +1,13 @@
 // src/app/api/prompts/route.js
 
 import { NextResponse } from 'next/server'
-import { readFile, writeFile } from 'fs/promises'
-import { join, dirname } from 'path'
-import { fileURLToPath } from 'url'
+import { readFile, writeFile } from 'node:fs/promises'
+import { join } from 'node:path'
 import { getDoc, setDoc, doc } from 'firebase/firestore'
-import { firestore } from '../../../firebase.js'
+import { firestore } from '@/firebase.js'
+import promptsDefault from './prompts-default.js'
 
 const promptsCurrent = join(process.cwd(), 'data', 'prompts-current.json')
-const promptsDefault = join(process.cwd(), 'src', 'app', 'api', 'prompts', 'prompts-default.json')
 
 async function loadPromptsFromDisk(path) {
   try {
@@ -58,13 +57,7 @@ async function savePrompts(prompts) {
 }
 
 export async function getPrompts() {
-  const defaultPrompts = await loadPromptsFromDisk(promptsDefault)
   let currentPrompts = await loadPromptsFromDisk(promptsCurrent)
-
-  if (!defaultPrompts) {
-    console.error(`Default prompts not found at ${promptsDefault}`)
-    return { error: 'Default prompts not found' }
-  }
 
   if (!currentPrompts) {
     console.log('Current prompts not found on disk, fetching from Firestore')
@@ -75,8 +68,8 @@ export async function getPrompts() {
     } else {
       console.log('No current prompts found in Firestore, using defaults')
       currentPrompts = {
-        email: { current: defaultPrompts.email.default },
-        system: { current: defaultPrompts.system.default },
+        email: { current: promptsDefault.email.default },
+        system: { current: promptsDefault.system.default },
       }
       console.log('Saving default prompts as current')
       await savePrompts(currentPrompts)
@@ -87,16 +80,16 @@ export async function getPrompts() {
 
   const mergedPrompts = {
     email: {
-      object: defaultPrompts.email?.object || '',
-      default: defaultPrompts.email?.default || '',
-      current: currentPrompts.email?.current || defaultPrompts.email?.default || '',
+      object: promptsDefault.email?.object || '',
+      default: promptsDefault.email?.default || '',
+      current: currentPrompts.email?.current || promptsDefault.email?.default || '',
     },
     system: {
-      default: defaultPrompts.system?.default || '',
-      current: currentPrompts.system?.current || defaultPrompts.system?.default || '',
+      default: promptsDefault.system?.default || '',
+      current: currentPrompts.system?.current || promptsDefault.system?.default || '',
     },
-    user: defaultPrompts.user || '',
-    error: defaultPrompts.error || '',
+    user: promptsDefault.user || '',
+    error: promptsDefault.error || '',
   }
 
   return mergedPrompts
@@ -109,6 +102,7 @@ export async function GET() {
 
 export async function PATCH(request) {
   const updatedPrompts = await request.json()
+  console.log('Updated prompts:', updatedPrompts)
   const toSave = {
     email: { current: updatedPrompts.email.current },
     system: { current: updatedPrompts.system.current },
