@@ -171,7 +171,7 @@ kill_existing_tunnels_windows() {
     fi
 
     # Additional check for any remaining SSH processes
-    ssh_pids=($(tasklist //FI "IMAGENAME eq ssh.exe" //FO CSV //NH | findstr /I "ssh.exe" | awk -F'","' '{print $2}'))
+    ssh_pids=($(tasklist //FI "IMAGENAME eq ssh.exe" //FO CSV //NH | findstr /I "ssh.exe" 2>nul | awk -F'","' '{print $2}'))
     if [ ${#ssh_pids[@]} -gt 0 ]; then
         echo "Found additional SSH processes: ${ssh_pids[*]}"
         for pid in "${ssh_pids[@]}"; do
@@ -204,7 +204,7 @@ start_tunnel() {
         echo "Attempt $attempt to start SSH tunnel..."
         
         # Start the SSH tunnel in the background and redirect output to a log file
-        ssh -v -N -L $SSH_TUNNEL_FORWARD -i ~/.ssh/id_rsa -o StrictHostKeyChecking=no -p $SSH_TUNNEL_PORT $SSH_TUNNEL_TARGET > ~/ssh_tunnel.log 2>&1 &
+        ssh -N -L $SSH_TUNNEL_FORWARD -i ~/.ssh/id_rsa -o StrictHostKeyChecking=no -p $SSH_TUNNEL_PORT $SSH_TUNNEL_TARGET > ~/ssh_tunnel.log 2>&1 &
         local tunnel_pid=$!
         echo $tunnel_pid > ~/ssh_tunnel.pid
         echo "Tunnel started. PID: $tunnel_pid"
