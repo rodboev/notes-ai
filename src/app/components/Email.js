@@ -58,9 +58,11 @@ const Email = ({
         {email?.emailAddress && email?.body && (
           <>
             {email.subject && (
-              <h2 className="mb-1 text-xl font-bold text-teal sm:text-2xl">{email.subject}</h2>
+              <h2 className="mb-1 text-lg font-bold !leading-[1.2] tracking-tighter text-teal md:text-xl lg:text-2xl lg:tracking-tight xl:tracking-normal">
+                {email.subject}
+              </h2>
             )}
-            <p className="mb-2 text-sm text-gray-600 sm:mb-3 sm:text-base">
+            <p className="text-xs text-gray-600 sm:text-sm md:text-base lg:mb-1 xl:mb-2">
               To: {email.emailAddress.toLowerCase().replace(/,/g, ', ')}
             </p>
             <Editor email={email} emailStatus={emailStatus} editorRef={editorRef}>
@@ -100,7 +102,7 @@ const Email = ({
           </>
         )}
         {email?.error && (
-          <div className="inline-flex min-w-full max-w-2xl flex-col items-center self-center rounded-lg border-2 border-dashed px-4 py-8 text-neutral-500 sm:px-6 sm:py-10 md:px-8 md:py-12 lg:px-10 lg:py-14 xl:min-w-96">
+          <div className="relative inline-flex min-w-full max-w-2xl flex-col items-center self-center rounded-lg border-2 border-dashed px-4 py-8 text-neutral-500 sm:px-6 sm:py-10 md:px-8 md:py-12 lg:px-10 lg:py-14 xl:min-w-96">
             <RefreshButton onClick={refreshEmail} />
             <ExclamationTriangleIcon className="m-2 w-6 sm:m-3 sm:w-8 md:m-4 md:w-10" />
             <div className="text-center text-xs md:text-sm lg:text-base">{email.error}</div>
