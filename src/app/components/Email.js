@@ -42,7 +42,7 @@ const Email = ({
   const email = data || initialEmail
 
   return (
-    <div className="right flex min-h-screen w-1/2 flex-col justify-center p-4 sm:p-6 md:p-8 lg:p-10">
+    <div className="right flex min-h-screen w-1/2 flex-col justify-center px-4 pt-36 sm:px-6 md:px-8 lg:px-10">
       {children}
       <div className="email flex flex-col">
         {isLoading && (

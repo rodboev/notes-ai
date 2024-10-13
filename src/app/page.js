@@ -88,36 +88,38 @@ export default function Home() {
   }, [])
 
   return (
-    <div className="flex h-screen max-w-full snap-y snap-mandatory flex-col items-center">
-      <Nav>
-        <Datepicker
-          useRange={false}
-          primaryColor={'teal'}
-          placeholder={'Select date range'}
-          separator={'-'}
-          displayFormat={'M/D/YY'}
-          inputClassName={
-            'h-8 w-32 sm:h-10 sm:w-40 items-center overflow-hidden rounded pt-0.5 focus-visible:outline-none align-middle text-right cursor-pointer bg-transparent text-sm sm:text-base'
-          }
-          readOnly={true}
-          containerClassName={'relative w-fit text-black border-color z-30'}
-          toggleClassName={
-            'h-8 w-fit sm:h-10 items-center overflow-hidden rounded px-2 sm:px-4 pb-0.5 text-sm sm:text-base font-bold hover:bg-opacity-95 active:bg-opacity-100 bg-teal text-white align-middle ml-2 sm:ml-4'
-          }
-          value={{
-            startDate: date.startDate,
-            endDate: date.endDate,
-          }}
-          onChange={handleDateChange}
-        />
-      </Nav>
+    <div className="h-screen snap-y snap-mandatory overflow-y-auto">
+      <div className="sticky top-0 z-50 bg-white">
+        <Nav>
+          <Datepicker
+            useRange={false}
+            primaryColor={'teal'}
+            placeholder={'Select date range'}
+            separator={'-'}
+            displayFormat={'M/D/YY'}
+            inputClassName={
+              'h-8 w-32 sm:h-10 sm:w-40 items-center overflow-hidden rounded pt-0.5 focus-visible:outline-none align-middle text-right cursor-pointer bg-transparent text-sm sm:text-base'
+            }
+            readOnly={true}
+            containerClassName={'relative w-fit text-black border-color z-30'}
+            toggleClassName={
+              'h-8 w-fit sm:h-10 items-center overflow-hidden rounded px-2 sm:px-4 pb-0.5 text-sm sm:text-base font-bold hover:bg-opacity-95 active:bg-opacity-100 bg-teal text-white align-middle ml-2 sm:ml-4'
+            }
+            value={{
+              startDate: date.startDate,
+              endDate: date.endDate,
+            }}
+            onChange={handleDateChange}
+          />
+        </Nav>
+      </div>
 
       {isLoadingNotes || isLoadingEmails ? (
-        <div className="flex h-full items-center text-neutral-500">
+        <div className="flex h-[calc(100vh-64px)] items-center justify-center text-neutral-500">
           <SpinnerIcon />
         </div>
       ) : notesError || emailsError ? (
-        <div className="flex h-full items-center justify-center text-neutral-700">
+        <div className="flex h-[calc(100vh-64px)] items-center justify-center text-neutral-700">
           <div className="max-w-screen-md px-4 sm:px-6">
             {notesError && (
               <div className="space-y-4 sm:space-y-6">
@@ -138,38 +140,40 @@ export default function Home() {
           </div>
         </div>
       ) : pairs.length === 0 ? (
-        <div className="flex h-full items-center justify-center text-sm text-neutral-700 sm:text-base">
+        <div className="flex h-[calc(100vh-64px)] items-center justify-center text-sm text-neutral-700 sm:text-base">
           No notes found for the selected date range.
         </div>
-      ) : null}
-
-      {pairs.map(({ note, email }, index) => (
-        <div
-          key={note.fingerprint}
-          ref={(el) => {
-            pairRefs.current[index] = el
-          }}
-          className="pair -!mx-[10px] container -m-4 flex max-w-screen-2xl snap-center snap-always p-4 pb-0"
-        >
-          <Note note={note} index={index} total={pairs.length} />
-          <Email
-            initialEmail={email}
-            noteFingerprint={note.fingerprint}
-            note={note}
-            index={index}
-            total={pairs.length}
-            scrollToNextPair={scrollToNextPair}
-            emailStatus={emailStatuses?.[note.fingerprint]}
-            updateStatus={updateStatus}
-            activeCallFingerprint={activeCallFingerprint}
-            isPending={isPending}
-            isResponding={isResponding}
-            connectConversation={connectConversation}
-            disconnectConversation={disconnectConversation}
-            cancelResponse={cancelResponse}
-          />
-        </div>
-      ))}
+      ) : (
+        pairs.map(({ note, email }, index) => (
+          <div
+            key={note.fingerprint}
+            ref={(el) => {
+              pairRefs.current[index] = el
+            }}
+            className="flex h-[calc(100vh-64px)] snap-start flex-col items-center justify-center"
+          >
+            <div className="container flex max-w-screen-2xl flex-col md:flex-row">
+              <Note note={note} index={index} total={pairs.length} />
+              <Email
+                initialEmail={email}
+                noteFingerprint={note.fingerprint}
+                note={note}
+                index={index}
+                total={pairs.length}
+                scrollToNextPair={scrollToNextPair}
+                emailStatus={emailStatuses?.[note.fingerprint]}
+                updateStatus={updateStatus}
+                activeCallFingerprint={activeCallFingerprint}
+                isPending={isPending}
+                isResponding={isResponding}
+                connectConversation={connectConversation}
+                disconnectConversation={disconnectConversation}
+                cancelResponse={cancelResponse}
+              />
+            </div>
+          </div>
+        ))
+      )}
     </div>
   )
 }
