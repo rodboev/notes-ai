@@ -1,6 +1,6 @@
 #!/bin/bash
 set -e  # Exit immediately if a command exits with a non-zero status
-set -x  # Print commands and their arguments as they are executed
+# set -x  # Print commands and their arguments as they are executed
 
 # Detect the operating system
 if [[ "$OSTYPE" == "msys"* || "$OSTYPE" == "cygwin"* || "$OSTYPE" == "win"* ]] || [[ -n "$WINDIR" ]]; then
@@ -187,9 +187,9 @@ kill_existing_tunnels() {
         fi
     else
         echo "Killing SSH processes for Unix-like systems..."
-        pkill -f "ssh -.*$SSH_TUNNEL_TARGET" || echo "No SSH processes found to kill."
+        pkill -f "ssh -.*$SSH_TUNNEL_TARGET" || true
         sleep 1
-        pkill -9 -f "ssh -.*$SSH_TUNNEL_TARGET" || echo "No remaining SSH processes found to force kill."
+        pkill -9 -f "ssh -.*$SSH_TUNNEL_TARGET" || true
         
         if command -v lsof >/dev/null 2>&1; then
             echo "Killing processes using port 1433..."
@@ -208,10 +208,8 @@ start_tunnel() {
     local attempt=1
     local max_attempts=3
 
-    # Only kill existing tunnels before the first attempt
-    if [ $attempt -eq 1 ]; then
-        kill_existing_tunnels
-    fi
+    # Kill existing tunnels before the first attempt
+    kill_existing_tunnels
 
     while [ $attempt -le $max_attempts ]; do
         echo "Attempt $attempt to start SSH tunnel..."
@@ -220,14 +218,13 @@ start_tunnel() {
         ssh -v -N -L $SSH_TUNNEL_FORWARD -i ~/.ssh/id_rsa -o StrictHostKeyChecking=no -p $SSH_TUNNEL_PORT $SSH_TUNNEL_TARGET > ~/ssh_tunnel.log 2>&1 &
         local tunnel_pid=$!
         echo $tunnel_pid > ~/ssh_tunnel.pid
-        echo "Tunnel process started. PID: $tunnel_pid"
+        echo "Tunnel started. PID: $tunnel_pid"
         
-        # Wait a short time to allow the tunnel to establish
-        sleep 1
+        # Wait a moment to allow the tunnel to establish
+        sleep 5
         
-        # Check if port 1433 is in use
+        # Check if the tunnel process is still running and the forwarding is set up
         if $IS_WINDOWS; then
-            echo "Checking tunnel status on Windows..."
             if netstat -ano | findstr :1433 | findstr LISTENING > /dev/null; then
                 echo "Port 1433 is listening. Assuming tunnel is established."
                 echo "Tunnel successfully established."
@@ -238,23 +235,17 @@ start_tunnel() {
                 echo "Port 1433 is not listening."
             fi
         else
-            echo "Checking tunnel status on Unix-like system..."
-            if lsof -i :1433 > /dev/null 2>&1; then
-                echo "Port 1433 is in use. Assuming tunnel is established."
+            if ps -p $tunnel_pid > /dev/null && grep -q "Local forwarding listening on.*port 1433" ~/ssh_tunnel.log; then
                 echo "Tunnel successfully established."
                 echo "Tunnel log output:"
                 tail -n 20 ~/ssh_tunnel.log
                 return 0
-            else
-                echo "Port 1433 is not in use."
             fi
         fi
 
         echo "Failed to establish tunnel or bind to port."
         echo "Tunnel log output:"
         tail -n 20 ~/ssh_tunnel.log
-        
-        # Only kill existing tunnels and retry if this is not the last attempt
         if [ $attempt -lt $max_attempts ]; then
             echo "Killing existing tunnels and retrying..."
             kill_existing_tunnels
@@ -269,7 +260,9 @@ start_tunnel() {
 
 # Function to restart the tunnel
 restart_tunnel() {
-    echo "Restarting SSH tunnel..."
+    if [ -f ~/ssh_tunnel.pid ]; then
+        kill -9 $(cat ~/ssh_tunnel.pid) 2>/dev/null || true
+    fi
     kill_existing_tunnels
     start_tunnel
 }
