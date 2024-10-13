@@ -21,10 +21,10 @@ const Note = ({ note, index, total, children }) => {
       {children}
       <div className="note relative left-4 w-full rounded-lg bg-white p-4 sm:p-6 md:p-8 lg:p-10 2xl:left-0">
         <div className="text-xl font-bold sm:text-2xl md:text-3xl">{note.code?.split(' ')[0]}</div>
-        <div className="text-base font-bold sm:space-x-3 sm:text-lg md:text-xl">
+        <div className="text-base font-bold sm:text-lg md:text-xl">
           <a
             href={`https://app.pestpac.com/location/detail.asp?LocationID=${note.locationID}`}
-            className="pr-2 hover:underline"
+            className="pr-3 hover:underline"
           >
             {note.company} - {note.locationCode}
           </a>
