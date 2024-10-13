@@ -152,48 +152,44 @@ kill_existing_tunnels() {
 }
 
 kill_existing_tunnels_windows() {
-    # Find and kill SSH processes
-    tasklist //FI "IMAGENAME eq ssh.exe" //FO CSV //NH | findstr /I "ssh.exe" > ssh_pids.txt 2>/dev/null
-    if [ -s ssh_pids.txt ]; then
-        echo "Found existing SSH processes. Terminating..."
-        while IFS=',' read -r _ pid _; do
-            pid=${pid//\"/}
-            taskkill //F //PID $pid 2>/dev/null
-            echo "Terminated process with PID $pid"
-        done < ssh_pids.txt
-    else
-        echo "No existing SSH processes found."
-    fi
-    rm -f ssh_pids.txt
+    echo "Searching for processes using port 1433..."
+    port_1433_pids=($(netstat -ano | findstr :1433 | findstr LISTENING | awk '{print $NF}' | sort -u))
 
-    # Find and kill processes using port 1433
-    netstat -ano | findstr :1433 | findstr LISTENING > port_1433.txt
-    if [ -s port_1433.txt ]; then
-        echo "Found processes using port 1433. Terminating..."
-        while read -r line; do
-            pid=$(echo $line | awk '{print $NF}')
+    if [ ${#port_1433_pids[@]} -gt 0 ]; then
+        echo "Found processes using port 1433: ${port_1433_pids[*]}"
+        for pid in "${port_1433_pids[@]}"; do
+            echo "Attempting to terminate process with PID $pid using port 1433"
             taskkill //F //PID $pid 2>/dev/null
-            echo "Terminated process with PID $pid using port 1433"
-        done < port_1433.txt
+            if [ $? -eq 0 ]; then
+                echo "Successfully terminated process with PID $pid using port 1433"
+            else
+                echo "Failed to terminate process with PID $pid using port 1433"
+            fi
+        done
     else
         echo "No processes found using port 1433."
     fi
-    rm -f port_1433.txt
+
+    # Additional check for any remaining SSH processes
+    ssh_pids=($(tasklist //FI "IMAGENAME eq ssh.exe" //FO CSV //NH | findstr /I "ssh.exe" | awk -F'","' '{print $2}'))
+    if [ ${#ssh_pids[@]} -gt 0 ]; then
+        echo "Found additional SSH processes: ${ssh_pids[*]}"
+        for pid in "${ssh_pids[@]}"; do
+            echo "Attempting to terminate SSH process with PID $pid"
+            taskkill //F //PID $pid 2>/dev/null
+            if [ $? -eq 0 ]; then
+                echo "Successfully terminated SSH process with PID $pid"
+            else
+                echo "Failed to terminate SSH process with PID $pid"
+            fi
+        done
+    fi
 }
 
 kill_existing_tunnels_unix() {
     pkill -f "ssh -.*$SSH_TUNNEL_TARGET" || true
     sleep 1
     pkill -9 -f "ssh -.*$SSH_TUNNEL_TARGET" || true
-    
-    if command -v lsof >/dev/null 2>&1; then
-        if lsof -i :1433 > /dev/null 2>&1; then
-            echo "Port 1433 is still in use. Attempting to force close..."
-            fuser -k 1433/tcp || true
-        fi
-    else
-        echo "lsof command not found. Skipping port check."
-    fi
 }
 
 # Function to start the SSH tunnel
