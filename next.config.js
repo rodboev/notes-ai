@@ -1,8 +1,9 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
   experimental: {
-    serverComponentsExternalPackages: ['mssql'],
+    reactCompiler: true,
   },
+  serverExternalPackages: ['mssql'],
   webpack: (config, { isServer }) => {
     if (!isServer) {
       config.resolve.fallback = {
