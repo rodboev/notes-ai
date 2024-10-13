@@ -43,11 +43,12 @@ const Editor = ({ email, emailStatus, editorRef, children, onRefresh }) => {
       styleElement.remove()
     }
 
-    editor.container.querySelectorAll('.tox-toolbar__group .tox-tbtn').forEach((button) => {
+    for (const button of editor.container.querySelectorAll('.tox-toolbar__group .tox-tbtn')) {
       button.classList.toggle('tox-tbtn--disabled', isDisabled)
-    })
+    }
   }
 
+  // biome-ignore lint/correctness/useExhaustiveDependencies: updateEditorState would make the dependencies of useEffect change on every render
   useEffect(() => {
     if (editorRef.current) {
       editorRef.current.setContent(email.body || '')
@@ -56,6 +57,7 @@ const Editor = ({ email, emailStatus, editorRef, children, onRefresh }) => {
       const isDisabled = emailStatus && ['sending', 'success'].includes(emailStatus.status)
       updateEditorState(isDisabled)
     }
+    /* eslint-disable-next-line react-hooks/exhaustive-deps */
   }, [emailStatus, editorReady, email.body])
 
   return (
