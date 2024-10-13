@@ -12,8 +12,6 @@ import {
   firestoreGetAllDocs,
 } from '../../utils/firestoreHelper'
 import { timestamp } from '../../utils/timestamp'
-import { Worker } from 'node:worker_threads'
-import { join } from 'node:path'
 
 sql.driver = 'FreeTDS'
 
@@ -200,94 +198,12 @@ async function getNotesByFingerprints(fingerprints) {
   return foundNotes
 }
 
-async function restartTunnel() {
-  return new Promise((resolve, reject) => {
-    const worker = new Worker(join(process.cwd(), 'tunnelRestarter.js'))
-
-    worker.on('message', (message) => {
-      if (message.type === 'success') {
-        console.log(`${timestamp()} Tunnel restart success:`, message.message)
-        resolve({ success: true, message: message.message })
-      } else if (message.type === 'error') {
-        console.error(`${timestamp()} Tunnel restart error:`, message.message)
-        reject({ success: false, error: message.message })
-      } else if (message.type === 'log') {
-        console.log(message.message) // Log messages already have timestamps
-      }
-    })
-
-    worker.on('error', (error) => {
-      console.error(`${timestamp()} Worker error:`, error)
-      reject({ success: false, error: error.message })
-    })
-
-    worker.on('exit', (code) => {
-      if (code !== 0) {
-        const errorMessage = `Worker stopped with exit code ${code}`
-        console.error(`${timestamp()} ${errorMessage}`)
-        reject({ success: false, error: errorMessage })
-      }
-    })
-
-    worker.postMessage('restart')
-  })
-}
-
-async function getNotes(startDate, endDate, retryCount = 0) {
-  let pool
-  try {
-    console.log(`${timestamp()} Connecting to database...`)
-    pool = await sql.connect(config)
-    console.log(`${timestamp()} Connected to database`)
-
-    console.log(`${timestamp()} Fetching notes from database...`)
-    const notes = await getJoinedNotes(pool, startDate, endDate)
-    console.log(`${timestamp()} Fetched ${notes.length} notes from database`)
-
-    return transformNotes(notes)
-      .filter((note) => note.code === '911 EMER')
-      .sort((a, b) => new Date(a.date) - new Date(b.date))
-      .map((note) => ({
-        ...note,
-        fingerprint: hash(note),
-      }))
-  } catch (error) {
-    console.error(`${timestamp()} Error fetching from database:`, error)
-
-    const retryDelays = [2000, 5000, 10000]
-    if (retryCount < retryDelays.length) {
-      const delay = retryDelays[retryCount]
-      console.log(`${timestamp()} Retry attempt ${retryCount + 1}. Retrying in ${delay / 1000}s...`)
-      await new Promise((resolve) => setTimeout(resolve, delay))
-      return getNotes(startDate, endDate, retryCount + 1)
-    }
-
-    console.error(`${timestamp()} Max retries reached. Unrecoverable error:`, error)
-    throw error
-  } finally {
-    if (pool) {
-      try {
-        await pool.close()
-        console.log(`${timestamp()} Database connection closed`)
-      } catch (closeErr) {
-        console.error(`${timestamp()} Error closing database connection:`, closeErr)
-      }
-    }
-  }
-}
-
 export async function GET(request) {
-  console.log(`${timestamp()} GET request received for /api/notes`)
   const { searchParams } = new URL(request.url)
   let startDate = searchParams.get('startDate')
   let endDate = searchParams.get('endDate')
   const fingerprint = searchParams.get('fingerprint')
   const fingerprints = searchParams.get('fingerprints')
-  const retry = searchParams.get('retry') === 'true'
-
-  console.log(
-    `${timestamp()} Params: startDate=${startDate}, endDate=${endDate}, fingerprint=${fingerprint}, fingerprints=${fingerprints}, retry=${retry}`,
-  )
 
   if (fingerprint || fingerprints) {
     const fingerprintsToFetch = fingerprints ? fingerprints.split(',') : [fingerprint]
@@ -296,18 +212,19 @@ export async function GET(request) {
     return NextResponse.json(notes)
   }
 
-  // If startDate or endDate are not provided, use default values
-  if (!startDate || !endDate) {
+  // Set default dates if not provided
+  if (!startDate || startDate === 'null' || !endDate || endDate === 'null') {
     const today = new Date()
     const yesterday = new Date(today)
     yesterday.setDate(yesterday.getDate() - 1)
 
-    startDate = startDate || yesterday.toISOString().split('T')[0]
-    endDate = endDate || today.toISOString().split('T')[0]
+    startDate =
+      startDate && startDate !== 'null' ? startDate : yesterday.toISOString().split('T')[0]
+    endDate = endDate && endDate !== 'null' ? endDate : today.toISOString().split('T')[0]
     console.log(`Using default dates: startDate=${startDate}, endDate=${endDate}`)
   }
 
-  console.log(`${timestamp()} Fetching notes for date range: ${startDate} to ${endDate}`)
+  console.log(`Fetching notes for date range: ${startDate} to ${endDate}`)
 
   // Ensure endDate is exclusive
   const queryEndDate = new Date(endDate)
@@ -315,7 +232,6 @@ export async function GET(request) {
   const formattedQueryEndDate = queryEndDate.toISOString().split('T')[0]
 
   // Try to get stored notes first
-  console.log(`${timestamp()} Attempting to load notes from cache`)
   let allNotes = await loadNotes()
   let notes = allNotes.filter(
     (note) =>
@@ -323,29 +239,48 @@ export async function GET(request) {
   )
 
   if (notes.length > 0) {
-    console.log(`${timestamp()} Returning ${notes.length} notes from cache`)
+    console.log(`Returning ${notes.length} notes from cache`)
     return NextResponse.json(notes)
   }
 
-  console.log(`${timestamp()} No cached notes found, fetching from database`)
-
+  // If not in cache, fetch from database
+  let pool
   try {
-    notes = await getNotes(startDate, formattedQueryEndDate)
+    console.log('Fetching notes from database...')
+    pool = await sql.connect(config)
+
+    notes = await getJoinedNotes(pool, startDate, formattedQueryEndDate)
+
+    notes = transformNotes(notes)
+      .filter((note) => note.code === '911 EMER')
+      .sort((a, b) => new Date(a.date) - new Date(b.date))
+
+    // Add fingerprint to each note
+    notes = notes.map((note) => ({
+      ...note,
+      fingerprint: hash(note),
+    }))
 
     // Update the cache with new notes
     allNotes = [...allNotes, ...notes]
     await saveNotes(allNotes)
 
-    console.log(`${timestamp()} Returning ${notes.length} notes from database`)
+    console.log(`Returning ${notes.length} notes from database`)
     return NextResponse.json(notes)
   } catch (error) {
-    console.error(`${timestamp()} Error fetching notes:`, error)
+    console.error('Error fetching from database:', error)
     return NextResponse.json(
-      {
-        error: 'Database Error',
-        message: error.message,
-      },
+      { error: 'Internal Server Error', details: error.message },
       { status: 500 },
     )
+  } finally {
+    if (pool) {
+      try {
+        await pool.close()
+        console.log('Database connection closed')
+      } catch (closeErr) {
+        console.error('Error closing database connection:', closeErr)
+      }
+    }
   }
 }
