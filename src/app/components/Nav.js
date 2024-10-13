@@ -13,9 +13,9 @@ export default function Nav({ children }) {
   }
 
   return (
-    <div className="nav fixed z-20 flex w-full flex-col">
-      <nav className="z-30 flex h-20 w-full justify-center border-b bg-white/50 backdrop-blur-md">
-        <div className="container flex w-full max-w-full items-center justify-between px-4 sm:px-6 lg:px-8 2xl:max-w-screen-2xl">
+    <div className="nav relative z-20 flex w-full flex-col">
+      <nav className="z-30 flex h-20 w-full justify-center border-b bg-white/20 backdrop-blur-md">
+        <div className="container flex w-full max-w-full items-center justify-between pl-4 pr-4 sm:pr-6 md:pr-8 lg:pr-10 2xl:max-w-screen-2xl 2xl:pl-0">
           <div className="left tracking-tighter">
             <span className="display-inline mx-1 text-4xl font-bold text-teal sm:text-5xl">
               liberty

@@ -89,7 +89,7 @@ export default function Home() {
 
   return (
     <div className="h-screen snap-y snap-mandatory overflow-y-scroll">
-      <div className="sticky top-0 z-50 bg-white">
+      <div className="sticky top-0 z-50 bg-white/50 backdrop-blur-md">
         <Nav>
           <Datepicker
             useRange={false}
