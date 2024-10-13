@@ -3,7 +3,7 @@
 import { useState, useEffect } from 'react'
 import { CheckIcon, ExclamationTriangleIcon } from '@heroicons/react/16/solid'
 import SpinnerIcon from './Icons/SpinnerIcon'
-import SendIcon from './Icons/SendIcon-v1'
+import SendIcon from './Icons/SendIcon'
 import { motion, AnimatePresence } from 'framer-motion'
 import { useSendFeedback } from '../hooks/useSendFeedback'
 

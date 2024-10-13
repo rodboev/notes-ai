@@ -1,6 +1,6 @@
 // src/app/components/RefreshButton.js
 
-import RefreshIcon from './Icons/RefreshIcon-v4'
+import RefreshIcon from './Icons/RefreshIcon'
 
 const RefreshButton = ({ onClick }) => (
   <button onClick={onClick} className="refresh absolute right-0 top-0 z-10 m-6 self-end">

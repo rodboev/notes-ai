@@ -73,12 +73,13 @@ export default function Settings({ onClose }) {
             className="btn-teal rounded px-4 py-2"
             onClick={savePrompts}
             disabled={isUpdating}
+            type="button"
           >
             {isUpdating ? 'Saving' : 'Save prompts'}
           </button>
         </div>
         <div className="right flex flex-1">
-          <button className="btn bg-neutral-500 px-4 py-2" onClick={resetPrompts}>
+          <button className="btn bg-neutral-500 px-4 py-2" onClick={resetPrompts} type="button">
             Revert to originals
           </button>
         </div>
