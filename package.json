@@ -8,7 +8,7 @@
     "build": "next build",
     "start": "cross-env NODE_ENV=production node src/server.js",
     "lint": "next lint",
-    "postinstall": "node scripts/copyTinyMCE.js"
+    "postinstall": "node scripts/copyTinyMCE.js && bash scripts/setupTunnel.sh"
   },
   "dependencies": {
     "@heroicons/react": "^2.1.5",
