@@ -2,7 +2,6 @@
 
 import OpenAI from 'openai'
 import { parse } from 'best-effort-json-parser'
-import { firestore } from '../../../firebase.js'
 import { readFromDisk, writeToDisk } from '../../utils/diskStorage'
 import { timestamp } from '../../utils/timestamp'
 import { getPrompts } from '../prompts/route.js'
@@ -22,38 +21,32 @@ const chunkArray = (array, chunkSize) => {
   return chunks
 }
 
-async function loadEmails() {
-  const diskEmails = await readFromDisk('emails.json')
-  if (diskEmails) {
-    console.log(`${timestamp()} Loaded ${diskEmails.length} emails from disk`)
-    return diskEmails
+// Add a simple in-memory cache
+const emailCache = new Map()
+
+const BATCH_SIZE = 32
+let emailBatch = []
+
+async function saveEmails(emails, forceSave = false) {
+  // Update the cache and batch
+  for (const email of emails) {
+    emailCache.set(email.fingerprint, email)
+    emailBatch.push(email)
   }
 
-  console.log(`${timestamp()} Emails not on disk, loading from Firestore`)
-  const emails = await firestoreGetAllDocs('emails')
-  console.log(`${timestamp()} Loaded ${emails.length} emails from Firestore`)
-  await writeToDisk('emails.json', emails)
-  console.log(`${timestamp()} Saved ${emails.length} emails to disk`)
-  return emails
-}
+  // If we've reached the batch size or forceSave is true, trigger the save
+  if (emailBatch.length >= BATCH_SIZE || forceSave) {
+    console.warn(`${timestamp()} Saving ${emailBatch.length} emails to disk and Firestore`)
 
-async function saveEmails(emails) {
-  console.warn(`${timestamp()} Saving emails to disk and Firestore`)
-
-  // Check if there are changes compared to the disk version
-  const diskEmails = await readFromDisk('emails.json')
-  const hasChanges = JSON.stringify(diskEmails) !== JSON.stringify(emails)
-
-  if (hasChanges) {
     // Save to disk
-    await writeToDisk('emails.json', emails)
-    console.log(`${timestamp()} Saved ${emails.length} emails to disk`)
+    await writeToDisk('emails.json', Array.from(emailCache.values()))
+    console.log(`${timestamp()} Saved ${emailCache.size} emails to disk`)
 
     // Save to Firestore
-    console.log(`${timestamp()} Changes detected in emails. Triggering Firestore write`)
+    console.log(`${timestamp()} Triggering Firestore write`)
     const { validOperations, skippedOperations, error } = await firestoreBatchWrite(
       'emails',
-      emails,
+      emailBatch,
     )
 
     if (error) {
@@ -63,9 +56,36 @@ async function saveEmails(emails) {
         `${timestamp()} Saved ${validOperations} emails to Firestore, skipped ${skippedOperations}`,
       )
     }
-  } else {
-    console.log(`${timestamp()} No changes detected, skipping save operation`)
+
+    // Clear the batch
+    emailBatch = []
   }
+}
+
+async function loadEmails() {
+  if (emailCache.size > 0) {
+    console.log(`${timestamp()} Loaded ${emailCache.size} emails from cache`)
+    return Array.from(emailCache.values())
+  }
+
+  const diskEmails = await readFromDisk('emails.json')
+  if (diskEmails) {
+    console.log(`${timestamp()} Loaded ${diskEmails.length} emails from disk`)
+    for (const email of diskEmails) {
+      emailCache.set(email.fingerprint, email)
+    }
+    return diskEmails
+  }
+
+  console.log(`${timestamp()} Emails not on disk, loading from Firestore`)
+  const emails = await firestoreGetAllDocs('emails')
+  console.log(`${timestamp()} Loaded ${emails.length} emails from Firestore`)
+  for (const email of emails) {
+    emailCache.set(email.fingerprint, email)
+  }
+  await writeToDisk('emails.json', emails)
+  console.log(`${timestamp()} Saved ${emails.length} emails to disk`)
+  return emails
 }
 
 function expand(template, variables) {
@@ -248,8 +268,11 @@ export async function GET(req) {
               console.log(
                 `${timestamp()} Generated ${newEmailGroup.length} new emails in group ${index + 1}`,
               )
-              await saveEmails(storedEmails)
+              await saveEmails(newEmailGroup)
             }
+
+            // Force save any remaining emails
+            await saveEmails([], true)
           } else {
             console.log(`${timestamp()} No new emails to generate`)
           }
@@ -271,6 +294,8 @@ export async function GET(req) {
         }
         sendData({ error: errorDetails }, 'error')
       } finally {
+        // Force save any remaining emails before closing the stream
+        await saveEmails([], true)
         if (!dataSent) sendData({}, 'complete')
         controller.close()
       }
