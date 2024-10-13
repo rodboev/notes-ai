@@ -20,7 +20,7 @@ const FeedbackInput = ({ value, onChange, disabled }) => (
         type="text"
         value={value}
         onChange={onChange}
-        className={`mr-2 w-[calc(8rem+11vw)] rounded border-2 p-1.5 px-3 ${
+        className={`mr-2 w-72 rounded border-2 p-1.5 px-3 ${
           disabled ? 'cursor-not-allowed bg-gray-100' : ''
         }`}
         placeholder="Enter feedback"
@@ -67,7 +67,7 @@ const FeedbackButton = ({ note, email, subject }) => {
   }
 
   return (
-    <div className="mx-2 flex items-center justify-end">
+    <div className="mx-2 hidden items-center justify-end 2xl:flex">
       {(feedbackFieldVisible || sendFeedbackMutation.isSuccess) && (
         <FeedbackInput
           value={feedbackText}

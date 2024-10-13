@@ -13,7 +13,7 @@ export default function RootLayout({ children }) {
       <head>
         <title>Liberty Notes AI</title>
       </head>
-      <body className={inter.className}>
+      <body className={`${inter.className} overflow-hidden`}>
         <QueryClientProvider client={queryClient}>{children}</QueryClientProvider>
       </body>
     </html>

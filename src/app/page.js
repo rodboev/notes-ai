@@ -88,7 +88,7 @@ export default function Home() {
   }, [])
 
   return (
-    <div className="h-screen snap-y snap-mandatory overflow-y-auto">
+    <div className="h-screen snap-y snap-mandatory overflow-y-scroll">
       <div className="sticky top-0 z-50 bg-white">
         <Nav>
           <Datepicker
@@ -115,11 +115,11 @@ export default function Home() {
       </div>
 
       {isLoadingNotes || isLoadingEmails ? (
-        <div className="flex h-[calc(100vh-64px)] items-center justify-center text-neutral-500">
+        <div className="flex items-center justify-center text-neutral-500">
           <SpinnerIcon />
         </div>
       ) : notesError || emailsError ? (
-        <div className="flex h-[calc(100vh-64px)] items-center justify-center text-neutral-700">
+        <div className="flex items-center justify-center text-neutral-700">
           <div className="max-w-screen-md px-4 sm:px-6">
             {notesError && (
               <div className="space-y-4 sm:space-y-6">
@@ -140,7 +140,7 @@ export default function Home() {
           </div>
         </div>
       ) : pairs.length === 0 ? (
-        <div className="flex h-[calc(100vh-64px)] items-center justify-center text-sm text-neutral-700 sm:text-base">
+        <div className="flex items-center justify-center text-sm text-neutral-700 sm:text-base">
           No notes found for the selected date range.
         </div>
       ) : (
@@ -150,7 +150,7 @@ export default function Home() {
             ref={(el) => {
               pairRefs.current[index] = el
             }}
-            className="flex h-[calc(100vh-64px)] snap-start flex-col items-center justify-center"
+            className="flex snap-start flex-col items-center justify-center"
           >
             <div className="container flex max-w-screen-2xl md:flex-row">
               <Note note={note} index={index} total={pairs.length} />

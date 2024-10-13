@@ -17,9 +17,9 @@ const formatOccurrences = (annualOccurrences) => {
 
 const Note = ({ note, index, total, children }) => {
   return (
-    <div className="left -ml-full flex min-h-screen flex-1 flex-col justify-center border-s bg-neutral-200 p-10 pl-full pt-72">
+    <div className="left -ml-full flex min-h-screen flex-1 flex-col justify-center border-s bg-neutral-200 p-10 pl-full pt-44 lg:pt-56">
       {children}
-      <div className="note nd:p-10 relative w-full rounded-lg bg-white p-4 sm:left-4 sm:p-6 md:p-8">
+      <div className="note relative left-4 w-full rounded-lg bg-white p-4 sm:p-6 md:p-8 lg:p-10 2xl:left-0">
         <div className="text-xl font-bold sm:text-2xl md:text-3xl">{note.code?.split(' ')[0]}</div>
         <div className="text-base font-bold sm:space-x-3 sm:text-lg md:text-xl">
           <a

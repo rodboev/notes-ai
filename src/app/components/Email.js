@@ -42,7 +42,7 @@ const Email = ({
   const email = data || initialEmail
 
   return (
-    <div className="right flex min-h-screen w-1/2 flex-col justify-center px-4 pt-36 sm:px-6 md:px-8 lg:px-10">
+    <div className="right flex min-h-screen w-1/2 flex-col justify-center px-4 pt-20 sm:max-h-full sm:px-6 md:px-8 lg:px-10">
       {children}
       <div className="email flex flex-col">
         {isLoading && (
@@ -100,7 +100,7 @@ const Email = ({
           </>
         )}
         {email?.error && (
-          <div className="relative -mt-4 inline-flex min-w-full max-w-2xl flex-col items-center self-center rounded-lg border-2 border-dashed px-4 py-8 text-neutral-500 sm:px-6 sm:py-10 md:px-8 md:py-12 lg:min-w-96 lg:px-10 lg:py-14">
+          <div className="relative -top-8 -mt-4 inline-flex min-w-full max-w-2xl flex-col items-center self-center rounded-lg border-2 border-dashed px-4 py-8 text-neutral-500 sm:px-6 sm:py-10 md:px-8 md:py-12 lg:top-0 lg:min-w-96 lg:px-10 lg:py-14">
             <RefreshButton onClick={refreshEmail} />
             <ExclamationTriangleIcon className="m-2 w-6 sm:m-3 sm:w-8 md:m-4 md:w-10" />
             <div className="text-center text-sm sm:text-base">{email.error}</div>
