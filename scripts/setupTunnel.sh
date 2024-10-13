@@ -1,6 +1,6 @@
 #!/bin/bash
 set -e  # Exit immediately if a command exits with a non-zero status
-# set -x  # Print commands and their arguments as they are executed
+set -x  # Print commands and their arguments as they are executed
 
 # Detect the operating system
 if [[ "$OSTYPE" == "msys"* || "$OSTYPE" == "cygwin"* || "$OSTYPE" == "win"* ]] || [[ -n "$WINDIR" ]]; then
@@ -124,53 +124,83 @@ chmod 600 ~/.ssh/id_rsa
 echo "First 3 lines of ~/.ssh/id_rsa:"
 head -n 3 ~/.ssh/id_rsa
 
+# Function to check if the tunnel is running
+is_tunnel_running() {
+    if [ -f ~/ssh_tunnel.pid ]; then
+        local pid=$(cat ~/ssh_tunnel.pid)
+        if $IS_WINDOWS; then
+            tasklist //FI "PID eq $pid" //NH | findstr $pid > /dev/null && \
+            netstat -ano | findstr :1433 | findstr LISTENING > /dev/null
+        else
+            ps -p $pid > /dev/null && lsof -i :1433 -t > /dev/null
+        fi
+        return $?
+    else
+        return 1
+    fi
+}
+
 # Function to kill existing SSH tunnels
 kill_existing_tunnels() {
     echo "Attempting to kill existing SSH tunnels..."
     if $IS_WINDOWS; then
         # Find and kill SSH processes
-        tasklist //FI "IMAGENAME eq ssh.exe" //FO CSV //NH | findstr /I "ssh.exe" > ssh_pids.txt 2>/dev/null
-        if [ -s ssh_pids.txt ]; then
-            echo "Found existing SSH processes. Terminating..."
-            while IFS=',' read -r _ pid _; do
-                pid=${pid//\"/}
+        echo "Searching for SSH processes..."
+        ssh_pids=()
+        while IFS=',' read -r _ pid _; do
+            pid=${pid//\"/}
+            ssh_pids+=("$pid")
+        done < <(tasklist //FI "IMAGENAME eq ssh.exe" //FO CSV //NH | findstr /I "ssh.exe")
+
+        if [ ${#ssh_pids[@]} -gt 0 ]; then
+            echo "Found SSH processes: ${ssh_pids[*]}"
+            for pid in "${ssh_pids[@]}"; do
+                echo "Attempting to terminate SSH process with PID $pid"
                 taskkill //F //PID $pid 2>/dev/null
-                echo "Terminated process with PID $pid"
-            done < ssh_pids.txt
+                if [ $? -eq 0 ]; then
+                    echo "Successfully terminated SSH process with PID $pid"
+                else
+                    echo "Failed to terminate SSH process with PID $pid"
+                fi
+            done
         else
-            echo "No existing SSH processes found."
+            echo "No SSH processes found."
         fi
-        rm -f ssh_pids.txt
 
         # Find and kill processes using port 1433
-        netstat -ano | findstr :1433 | findstr LISTENING > port_1433.txt
-        if [ -s port_1433.txt ]; then
-            echo "Found processes using port 1433. Terminating..."
-            while read -r line; do
-                pid=$(echo $line | awk '{print $NF}')
+        echo "Searching for processes using port 1433..."
+        port_1433_pids=($(netstat -ano | findstr :1433 | findstr LISTENING | awk '{print $NF}' | sort -u))
+
+        if [ ${#port_1433_pids[@]} -gt 0 ]; then
+            echo "Found processes using port 1433: ${port_1433_pids[*]}"
+            for pid in "${port_1433_pids[@]}"; do
+                echo "Attempting to terminate process with PID $pid using port 1433"
                 taskkill //F //PID $pid 2>/dev/null
-                echo "Terminated process with PID $pid using port 1433"
-            done < port_1433.txt
+                if [ $? -eq 0 ]; then
+                    echo "Successfully terminated process with PID $pid using port 1433"
+                else
+                    echo "Failed to terminate process with PID $pid using port 1433"
+                fi
+            done
         else
             echo "No processes found using port 1433."
         fi
-        rm -f port_1433.txt
     else
-        pkill -f "ssh -.*$SSH_TUNNEL_TARGET" || true
+        echo "Killing SSH processes for Unix-like systems..."
+        pkill -f "ssh -.*$SSH_TUNNEL_TARGET" || echo "No SSH processes found to kill."
         sleep 1
-        pkill -9 -f "ssh -.*$SSH_TUNNEL_TARGET" || true
+        pkill -9 -f "ssh -.*$SSH_TUNNEL_TARGET" || echo "No remaining SSH processes found to force kill."
         
         if command -v lsof >/dev/null 2>&1; then
-            if lsof -i :1433 > /dev/null 2>&1; then
-                echo "Port 1433 is still in use. Attempting to force close..."
-                fuser -k 1433/tcp || true
-            fi
+            echo "Killing processes using port 1433..."
+            lsof -ti:1433 | xargs kill -9 2>/dev/null || echo "No processes found using port 1433."
         else
-            echo "lsof command not found. Skipping port check."
+            echo "lsof command not found. Skipping port 1433 process termination."
         fi
     fi
     
     sleep 1
+    echo "Finished attempting to kill existing tunnels and processes."
 }
 
 # Function to start the SSH tunnel
@@ -178,8 +208,10 @@ start_tunnel() {
     local attempt=1
     local max_attempts=3
 
-    # Kill existing tunnels before the first attempt
-    kill_existing_tunnels
+    # Only kill existing tunnels before the first attempt
+    if [ $attempt -eq 1 ]; then
+        kill_existing_tunnels
+    fi
 
     while [ $attempt -le $max_attempts ]; do
         echo "Attempt $attempt to start SSH tunnel..."
@@ -188,22 +220,41 @@ start_tunnel() {
         ssh -v -N -L $SSH_TUNNEL_FORWARD -i ~/.ssh/id_rsa -o StrictHostKeyChecking=no -p $SSH_TUNNEL_PORT $SSH_TUNNEL_TARGET > ~/ssh_tunnel.log 2>&1 &
         local tunnel_pid=$!
         echo $tunnel_pid > ~/ssh_tunnel.pid
-        echo "Tunnel started. PID: $tunnel_pid"
+        echo "Tunnel process started. PID: $tunnel_pid"
         
-        # Wait a moment to allow the tunnel to establish
-        sleep 5
+        # Wait a short time to allow the tunnel to establish
+        sleep 1
         
-        # Check if the tunnel process is still running and the forwarding is set up
-        if ps -p $tunnel_pid > /dev/null && grep -q "Local forwarding listening on.*port 1433" ~/ssh_tunnel.log; then
-            echo "Tunnel successfully established."
-            echo "Tunnel log output:"
-            tail -n 20 ~/ssh_tunnel.log
-            return 0
+        # Check if port 1433 is in use
+        if $IS_WINDOWS; then
+            echo "Checking tunnel status on Windows..."
+            if netstat -ano | findstr :1433 | findstr LISTENING > /dev/null; then
+                echo "Port 1433 is listening. Assuming tunnel is established."
+                echo "Tunnel successfully established."
+                echo "Tunnel log output:"
+                tail -n 20 ~/ssh_tunnel.log
+                return 0
+            else
+                echo "Port 1433 is not listening."
+            fi
+        else
+            echo "Checking tunnel status on Unix-like system..."
+            if lsof -i :1433 > /dev/null 2>&1; then
+                echo "Port 1433 is in use. Assuming tunnel is established."
+                echo "Tunnel successfully established."
+                echo "Tunnel log output:"
+                tail -n 20 ~/ssh_tunnel.log
+                return 0
+            else
+                echo "Port 1433 is not in use."
+            fi
         fi
 
         echo "Failed to establish tunnel or bind to port."
         echo "Tunnel log output:"
         tail -n 20 ~/ssh_tunnel.log
+        
+        # Only kill existing tunnels and retry if this is not the last attempt
         if [ $attempt -lt $max_attempts ]; then
             echo "Killing existing tunnels and retrying..."
             kill_existing_tunnels
@@ -218,9 +269,7 @@ start_tunnel() {
 
 # Function to restart the tunnel
 restart_tunnel() {
-    if [ -f ~/ssh_tunnel.pid ]; then
-        kill -9 $(cat ~/ssh_tunnel.pid) 2>/dev/null || true
-    fi
+    echo "Restarting SSH tunnel..."
     kill_existing_tunnels
     start_tunnel
 }
@@ -232,7 +281,7 @@ if start_tunnel; then
     # Start the tunnel restart mechanism in the background
     (
         while true; do
-            sleep 300  # Sleep for 5 minutes (300 seconds)
+            sleep 300  # 5 minutes
             echo "Restarting SSH tunnel..."
             restart_tunnel
         done
