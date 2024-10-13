@@ -2,10 +2,10 @@
 
 import OpenAI from 'openai'
 import { parse } from 'best-effort-json-parser'
-import { readFromDisk, writeToDisk } from '../../utils/diskStorage'
-import { timestamp } from '../../utils/timestamp'
-import { getPrompts } from '../prompts/route.js'
-import { firestoreBatchWrite, firestoreGetAllDocs } from '../../utils/firestoreHelper'
+import { readFromDisk, writeToDisk } from '@/app/utils/diskStorage'
+import { timestamp } from '@/app/utils/timestamp'
+import { getPrompts } from '@/app/api/prompts/route.js'
+import { firestoreBatchWrite, firestoreGetAllDocs } from '@/app/utils/firestoreHelper'
 import { headers } from 'next/headers'
 import { GET as getNotes } from '../notes/route'
 
@@ -162,7 +162,8 @@ export async function GET(req) {
         if (!prompts.system || !prompts.user) throw new Error('Required prompts not found')
 
         const systemContent = expand(prompts.system.current || prompts.system.default, prompts)
-        const userContent = prompts.user + JSON.stringify(chunk)
+        const chunkWithoutAddress = chunk.map(({ address, ...rest }) => rest)
+        const userContent = `${prompts.user}\n\n${JSON.stringify(chunkWithoutAddress)}`
         const messages = [
           { role: 'system', content: systemContent },
           { role: 'user', content: userContent },
