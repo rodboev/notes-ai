@@ -36,7 +36,7 @@ load_env_file() {
         # Convert \n to newlines, remove quotes, and export the variable
         export "$var_name"="$(convert_newlines_and_remove_quotes "$var_value")"
     done < "$ENV_FILE"
-}
+} 
 
 # Load variables from .env if it exists, otherwise use local environment
 if [ -f "$ENV_FILE" ]; then
@@ -120,8 +120,12 @@ head -n 3 ~/.ssh/id_rsa
 # Function to kill existing SSH tunnels
 kill_existing_tunnels() {
     echo "Attempting to kill existing SSH tunnels..."
-    pkill -f "ssh -N -L $SSH_TUNNEL_FORWARD"
+    pkill -f "ssh -.*$SSH_TUNNEL_TARGET"
     sleep 1  # Wait a bit for the processes to terminate
+    
+    # Force kill any remaining processes
+    pkill -9 -f "ssh -.*$SSH_TUNNEL_TARGET"
+    sleep 1
     
     # Check if port is still in use
     if lsof -i :1433 > /dev/null 2>&1; then
@@ -149,9 +153,6 @@ start_tunnel() {
     while [ $attempt -le $max_attempts ]; do
         echo "Attempt $attempt to start SSH tunnel..."
         
-        # Use sshpass to handle password auth
-        # sshpass -p "$SSH_PASSWORD" ssh -N -L $SSH_TUNNEL_FORWARD -i ~/.ssh/id_rsa -o StrictHostKeyChecking=no -p $SSH_TUNNEL_PORT $SSH_TUNNEL_TARGET
-
         # Start the SSH tunnel in the background and redirect output to a log file
         ssh -v -N -L $SSH_TUNNEL_FORWARD -i ~/.ssh/id_rsa -o StrictHostKeyChecking=no -p $SSH_TUNNEL_PORT $SSH_TUNNEL_TARGET > ~/ssh_tunnel.log 2>&1 &
         local tunnel_pid=$!
@@ -159,10 +160,10 @@ start_tunnel() {
         echo "Tunnel started. PID: $tunnel_pid"
         
         # Wait a moment to allow the tunnel to establish
-        sleep 1
+        sleep 5
         
-        # Check if the tunnel process is still running and port is in use
-        if kill -0 $tunnel_pid 2>/dev/null && lsof -i :1433 > /dev/null 2>&1; then
+        # Check if the tunnel process is still running and the forwarding is set up
+        if kill -0 $tunnel_pid 2>/dev/null && grep -q "Local forwarding listening on.*port 1433" ~/ssh_tunnel.log; then
             echo "Tunnel successfully established."
             echo "Tunnel log output:"
             tail -n 20 ~/ssh_tunnel.log
