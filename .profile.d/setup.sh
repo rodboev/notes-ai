@@ -1,16 +1,9 @@
 #!/bin/bash
-set -e  # Exit immediately if a command exits with a non-zero status
-
 echo "Starting setup.sh script"
 
-# Check if required variables are set
-if [ -z "$SSH_TUNNEL_FORWARD" ] || [ -z "$SSH_TUNNEL_PORT" ] || [ -z "$SSH_TUNNEL_TARGET" ] || [ -z "$SSH_PRIVATE_KEY" ]; then
-    echo "Error: One or more required SSH variables are not set."
-    echo "SSH_TUNNEL_FORWARD: $SSH_TUNNEL_FORWARD"
-    echo "SSH_TUNNEL_PORT: $SSH_TUNNEL_PORT"
-    echo "SSH_TUNNEL_TARGET: $SSH_TUNNEL_TARGET"
-    echo "SSH_PRIVATE_KEY: $([ -n "$SSH_PRIVATE_KEY" ] && echo "Set" || echo "Not set")"
-    exit 1
+# Load environment variables from .env.local file
+if [ -f .env.local ]; then
+    export $(grep -v '^#' .env.local | xargs)
 fi
 
 # ODBC and FreeTDS Setup
@@ -50,14 +43,33 @@ chmod 700 /app/.ssh
 echo "$SSH_PRIVATE_KEY" > /app/.ssh/id_rsa
 chmod 600 /app/.ssh/id_rsa
 
-# Debug: Print the values of the SSH-related variables
-echo "SSH_TUNNEL_FORWARD: $SSH_TUNNEL_FORWARD"
-echo "SSH_TUNNEL_PORT: $SSH_TUNNEL_PORT"
-echo "SSH_TUNNEL_TARGET: $SSH_TUNNEL_TARGET"
-echo "SSH_PRIVATE_KEY: $([ -n "$SSH_PRIVATE_KEY" ] && echo "Set" || echo "Not set")"
+# Function to start the SSH tunnel
+start_tunnel() {
+    ssh -N -L $SSH_TUNNEL_FORWARD -i /app/.ssh/id_rsa -o StrictHostKeyChecking=no -p $SSH_TUNNEL_PORT $SSH_TUNNEL_TARGET &
+    echo $! > /app/ssh_tunnel.pid
+    echo "Tunnel started. PID: $(cat /app/ssh_tunnel.pid)"
+}
 
-# Start the SSH tunnel in the background
-ssh -f -N -L $SSH_TUNNEL_FORWARD -i /app/.ssh/id_rsa -o StrictHostKeyChecking=no -p $SSH_TUNNEL_PORT $SSH_TUNNEL_TARGET
+# Function to restart the tunnel
+restart_tunnel() {
+    if [ -f /app/ssh_tunnel.pid ]; then
+        kill $(cat /app/ssh_tunnel.pid) 2>/dev/null
+    fi
+    start_tunnel
+}
 
-echo "Tunnel setup successful."
+# Start the initial tunnel and the restart mechanism in the background
+(
+    start_tunnel
+    while true; do
+        sleep 300  # Sleep for 5 minutes (300 seconds)
+        echo "Restarting SSH tunnel..."
+        restart_tunnel
+    done
+) &
+
+# Save the PID of the background process
+echo $! > /app/tunnel_manager.pid
+
+echo "Tunnel setup initiated in background. Manager PID: $(cat /app/tunnel_manager.pid)"
 echo "setup.sh script completed"
