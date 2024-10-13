@@ -274,7 +274,7 @@ if start_tunnel; then
     # Start the tunnel restart mechanism in the background
     (
         while true; do
-            sleep 300  # Sleep for 5 minutes (300 seconds)
+            sleep 900  # Sleep for 15 minutes (900 seconds)
             echo "Restarting SSH tunnel..."
             restart_tunnel
         done
