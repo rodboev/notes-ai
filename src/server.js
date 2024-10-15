@@ -6,6 +6,8 @@ import next from 'next'
 import { WebSocketServer } from 'ws'
 import dotenv from 'dotenv'
 import path from 'node:path'
+import fetch from 'node-fetch'
+import https from 'node:https'
 
 dotenv.config({ path: path.resolve(process.cwd(), '.env') })
 
@@ -120,6 +122,26 @@ const handleWebSocketConnection = async (ws) => {
 
 webSocketServer.on('connection', handleWebSocketConnection)
 
+const preloadRootPath = async (protocol, hostname, port) => {
+  try {
+    const agent = new https.Agent({
+      rejectUnauthorized: false,
+    })
+
+    const response = await fetch(`${protocol}://${hostname}:${port}/`, {
+      agent: protocol === 'https' ? agent : undefined,
+    })
+
+    if (response.ok) {
+      console.log('Root path preloaded successfully')
+    } else {
+      console.error('Failed to preload root path:', response.status, response.statusText)
+    }
+  } catch (error) {
+    console.error('Error preloading root path:', error)
+  }
+}
+
 const startServer = (port) => {
   httpServer
     .on('request', async (req, res) => {
@@ -153,6 +175,11 @@ const startServer = (port) => {
     .listen(port, () => {
       const protocol = isHttps ? 'https' : 'http'
       log(` ▲ Ready on ${protocol}://${hostname}:${port}`)
+
+      // Preload the root path after the server starts
+      if (dev) {
+        preloadRootPath(protocol, hostname, port)
+      }
     })
     .on('error', (err) => {
       if (err.code === 'EADDRINUSE') {
