@@ -6,7 +6,7 @@ import { defineConfig } from 'vite'
 import path from 'node:path'
 import dotenv from 'dotenv'
 
-dotenv.config()
+dotenv.config({ path: '.env.local' })
 
 export default defineConfig(() => {
   return {

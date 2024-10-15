@@ -4,7 +4,7 @@ import { initializeApp } from 'firebase/app'
 import { getFirestore } from 'firebase/firestore'
 import dotenv from 'dotenv'
 
-dotenv.config()
+dotenv.config({ path: '.env.local' })
 
 const firebaseConfig = {
   apiKey: process.env.FIREBASE_API_KEY,

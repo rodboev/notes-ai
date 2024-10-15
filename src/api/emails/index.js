@@ -9,7 +9,7 @@ import { firestoreBatchWrite, firestoreGetAllDocs } from '@/utils/firestoreHelpe
 import { getNotes } from '../notes'
 import dotenv from 'dotenv'
 
-dotenv.config()
+dotenv.config({ path: '.env.local' })
 
 const isProduction = process.env.NODE_ENV === 'production'
 const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY })
@@ -119,11 +119,6 @@ async function fetchWithErrorHandling(searchParams) {
 }
 
 export const GET = async (req, res) => {
-  if (req.method !== 'GET') {
-    res.status(405).json({ error: 'Method not allowed' })
-    return
-  }
-
   const { searchParams } = new URL(req.url, `http://${req.headers.host}`)
   const startDate = searchParams.get('startDate')
   const endDate = searchParams.get('endDate')

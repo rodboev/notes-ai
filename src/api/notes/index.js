@@ -9,7 +9,7 @@ import {
 import { timestamp } from '@/utils/timestamp'
 import dotenv from 'dotenv'
 
-dotenv.config()
+dotenv.config({ path: '.env.local' })
 
 sql.driver = 'FreeTDS'
 

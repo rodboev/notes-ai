@@ -3,7 +3,7 @@
 import dotenv from 'dotenv'
 import { createTransporter, sendEmail } from '@/utils/emailUtils'
 
-dotenv.config()
+dotenv.config({ path: '.env.local' })
 
 export const POST = async (req, res) => {
   const { feedback, note, email, subject } = await req.json()

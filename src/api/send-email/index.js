@@ -3,7 +3,7 @@ import { google } from 'googleapis'
 import dotenv from 'dotenv'
 import { loadStatuses, saveStatus } from '@/api/status'
 
-dotenv.config()
+dotenv.config({ path: '.env.local' })
 
 export const POST = async (req, res) => {
   if (req.method !== 'POST') {
