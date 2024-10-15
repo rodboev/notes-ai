@@ -88,8 +88,8 @@ export default function Home() {
   }, [])
 
   return (
-    <div className="h-screen snap-y snap-mandatory overflow-y-scroll">
-      <div className="sticky top-0 z-50 -mt-20 bg-white/50 backdrop-blur-md">
+    <div className="flex h-screen snap-y snap-mandatory flex-col items-center overflow-y-scroll">
+      <div className="sticky top-0 z-50 -mt-16 w-full bg-white/50 backdrop-blur-md">
         <Nav>
           <Datepicker
             useRange={false}
