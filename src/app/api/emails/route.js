@@ -117,22 +117,31 @@ async function fetchWithErrorHandling(searchParams) {
   }
 }
 
+function updateStoredEmails(newEmails) {
+  for (const email of newEmails) {
+    const index = storedEmails.findIndex((e) => e.fingerprint === email.fingerprint)
+    if (index !== -1) {
+      storedEmails[index] = email
+    } else {
+      storedEmails.push(email)
+    }
+    emailCache[email.fingerprint] = email
+  }
+  return saveEmails(newEmails)
+}
 export async function GET(req) {
-  const headersList = headers()
   const { searchParams } = new URL(req.url)
   const startDate = searchParams.get('startDate')
   const endDate = searchParams.get('endDate')
-  const fingerprint = searchParams.get('fingerprint')
   const fingerprints = searchParams.get('fingerprints')
-  const requestedFingerprints = fingerprints?.split(',') || []
+  const requestedFingerprints = fingerprints.split(',')
 
-  console.log(
-    `${timestamp()} GET /api/emails request params: startDate=${startDate}, endDate=${endDate}, fingerprint=${fingerprint}, fingerprints=${fingerprints}`,
-  )
+  const params = { startDate, endDate, fingerprints }
+  console.log(`${timestamp()} GET /api/emails request params:`, JSON.stringify(params, null, 2))
 
-  let storedEmails = await loadEmails()
+  const storedEmails = await loadEmails()
   const emailCache = storedEmails.reduce((acc, email) => {
-    if (email.fingerprint) acc[email.fingerprint] = email
+    acc[email.fingerprint] = email
     return acc
   }, {})
 
@@ -206,30 +215,29 @@ export async function GET(req) {
       }
 
       try {
-        if (fingerprint) {
-          // Handle single note refresh (always stream)
-          console.log(`${timestamp()} Fetching note for fingerprint: ${fingerprint}`)
-          const note = await fetchWithErrorHandling(`fingerprint=${fingerprint}`)
-          if (!note || note.length === 0)
-            throw new Error(`Note not found for fingerprint: ${fingerprint}`)
+        if (requestedFingerprints.length === 1) {
+          // Single fingerprint: force refresh
+          const fingerprint = requestedFingerprints[0]
+          console.log(`${timestamp()} Forcing refresh for fingerprint: ${fingerprint}`)
+          const notesToProcess = await fetchWithErrorHandling(
+            `fingerprints=${fingerprint}&startDate=${startDate}&endDate=${endDate}`,
+          )
 
-          // Force refresh the email
-          const [generatedEmail] = await streamResponse([note[0]])
-          if (!generatedEmail)
-            throw new Error(`Failed to generate email for fingerprint: ${fingerprint}`)
+          if (notesToProcess.length === 0) {
+            throw new Error(`Note not found for fingerprint: ${fingerprint}`)
+          }
+
+          const [generatedEmail] = await streamResponse(notesToProcess)
 
           // Update stored emails and cache
-          storedEmails = storedEmails.filter((e) => e.fingerprint !== fingerprint)
-          storedEmails.push(generatedEmail)
-          emailCache[fingerprint] = generatedEmail
-          await saveEmails(storedEmails)
-        } else if (requestedFingerprints.length > 0) {
-          // Filter out empty strings from requestedFingerprints
-          const validRequestedFingerprints = requestedFingerprints.filter((fp) => fp.trim() !== '')
+          await updateStoredEmails([generatedEmail])
 
+          sendData({ emails: [generatedEmail] }, 'stored')
+        } else if (requestedFingerprints.length > 1) {
+          // Multiple fingerprints: existing logic
           // Send stored emails that match the request
           const storedEmailsToSend = storedEmails.filter((email) =>
-            validRequestedFingerprints.includes(email.fingerprint),
+            requestedFingerprints.includes(email.fingerprint),
           )
 
           if (storedEmailsToSend.length > 0) {
@@ -242,18 +250,18 @@ export async function GET(req) {
             }
           }
 
-          const fingerprintsToFetch = validRequestedFingerprints.filter((fp) => !emailCache[fp])
+          const fingerprintsToFetch = requestedFingerprints.filter((fp) => !emailCache[fp])
 
           if (fingerprintsToFetch.length > 0) {
             console.log(
               `${timestamp()} Fetching notes for fingerprints: ${fingerprintsToFetch.join(',')}`,
             )
             const notesToProcess = await fetchWithErrorHandling(
-              `fingerprints=${fingerprintsToFetch.join(',')}`,
+              `fingerprints=${fingerprintsToFetch.join(',')}&startDate=${startDate}&endDate=${endDate}`,
             )
             console.log(`${timestamp()} Fetched ${notesToProcess.length} notes to process`)
 
-            // Process notes in groups of 10 or less at a time
+            // Process notes in groups of NOTES_PER_GROUP at a time
             const noteGroups = chunkArray(notesToProcess, NOTES_PER_GROUP)
             console.log(
               `${timestamp()} Created ${noteGroups.length} note groups (${NOTES_PER_GROUP} notes each)`,
@@ -262,14 +270,10 @@ export async function GET(req) {
             for (const [index, noteGroup] of noteGroups.entries()) {
               console.log(`${timestamp()} Processing group ${index + 1} of ${noteGroups.length}`)
               const newEmailGroup = await streamResponse(noteGroup)
-              storedEmails = [...storedEmails, ...newEmailGroup]
-              for (const email of newEmailGroup) {
-                emailCache[email.fingerprint] = email
-              }
+              await updateStoredEmails(newEmailGroup)
               console.log(
                 `${timestamp()} Generated ${newEmailGroup.length} new emails in group ${index + 1}`,
               )
-              await saveEmails(newEmailGroup)
             }
 
             // Force save any remaining emails
@@ -278,7 +282,8 @@ export async function GET(req) {
             console.log(`${timestamp()} No new emails to generate`)
           }
         } else {
-          console.log(`${timestamp()} All requested emails are already cached`)
+          console.log(`${timestamp()} No fingerprints provided`)
+          sendData({}, 'complete')
         }
 
         console.log(`${timestamp()} responseComplete = true`)

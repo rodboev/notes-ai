@@ -17,7 +17,7 @@ const processServerMessage = ({
   allEmails,
   queryClient,
   setEmailsUpdateCounter,
-  fingerprint,
+  fingerprints,
 }) => {
   const { chunk, status } = JSON.parse(event.data)
 
@@ -25,8 +25,8 @@ const processServerMessage = ({
     // Handle full response
     const parsedChunk = parse(chunk)
     allEmails = merge(allEmails, parsedChunk?.emails || [])
-    if (fingerprint && parsedChunk?.emails?.length > 0) {
-      queryClient.setQueryData(['email', fingerprint], parsedChunk.emails[0])
+    if (fingerprints?.length === 1 && parsedChunk?.emails?.length > 0) {
+      queryClient.setQueryData(['email', fingerprints[0]], parsedChunk.emails[0])
     }
   } else if (status === 'streaming') {
     // Handle streaming data
@@ -35,9 +35,9 @@ const processServerMessage = ({
     const validEmails =
       parsedJson?.emails?.filter((email) => email.fingerprint?.length === 40) || []
 
-    if (fingerprint) {
+    if (fingerprints?.length === 1) {
       if (validEmails.length > 0) {
-        queryClient.setQueryData(['email', fingerprint], validEmails[0])
+        queryClient.setQueryData(['email', fingerprints[0]], validEmails[0])
       }
     } else {
       allEmails = merge(allEmails, validEmails)
@@ -79,12 +79,12 @@ const createEventSourceHandler = ({
   url,
   queryClient,
   setEmailsUpdateCounter,
-  fingerprint,
+  fingerprints,
   cleanupRef,
 }) => {
   return new Promise((resolve, reject) => {
-    let allEmails = [],
-      streamingJson = ''
+    let allEmails = []
+    let streamingJson = ''
     const eventSource = new EventSource(url)
 
     const cleanup = () => {
@@ -107,7 +107,7 @@ const createEventSourceHandler = ({
         allEmails,
         queryClient,
         setEmailsUpdateCounter,
-        fingerprint,
+        fingerprints,
       })
       streamingJson = result.streamingJson
       allEmails = result.allEmails
@@ -134,10 +134,12 @@ export const useEmails = (notes) => {
   const [emailsUpdateCounter, setEmailsUpdateCounter] = useState(0)
   const cleanupRef = useRef(null)
 
+  // biome-ignore lint/correctness/useExhaustiveDependencies: <explanation>
   useEffect(() => {
     return () => {
       // Call cleanup when component unmounts or notes change
       if (cleanupRef.current) {
+        // eslint-disable-next-line react-hooks/exhaustive-deps
         cleanupRef.current()
       }
     }
@@ -158,6 +160,7 @@ export const useEmails = (notes) => {
       url,
       queryClient,
       setEmailsUpdateCounter,
+      fingerprints,
       cleanupRef,
     })
     return emails
@@ -171,6 +174,7 @@ export const useEmails = (notes) => {
     cacheTime: 3600000, // Keep unused data in cache for 1 hour
   })
 
+  // biome-ignore lint/correctness/useExhaustiveDependencies: <explanation>
   useEffect(() => {
     setEmailsUpdateCounter(0)
   }, [notes])
@@ -182,9 +186,11 @@ export const useSingleEmail = (fingerprint) => {
   const queryClient = useQueryClient()
   const cleanupRef = useRef(null)
 
+  // biome-ignore lint/correctness/useExhaustiveDependencies: <explanation>
   useEffect(() => {
     return () => {
       if (cleanupRef.current) {
+        // eslint-disable-next-line react-hooks/exhaustive-deps
         cleanupRef.current()
       }
     }
@@ -197,11 +203,11 @@ export const useSingleEmail = (fingerprint) => {
       cleanupRef.current()
     }
 
-    const url = `/api/emails?fingerprint=${fingerprint}`
+    const url = `/api/emails?fingerprints=${fingerprint}`
     return await createEventSourceHandler({
       url,
       queryClient,
-      fingerprint,
+      fingerprints: [fingerprint],
       cleanupRef,
     })
   }, [fingerprint, queryClient])
