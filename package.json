@@ -65,5 +65,5 @@
     "unplugin-swc": "^1.5.1",
     "wait-on": "^8.0.1"
   },
-  "packageManager": "yarn@3.7.0"
+  "packageManager": "yarn@4.5.0"
 }
