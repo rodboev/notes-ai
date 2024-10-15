@@ -1,8 +1,8 @@
 'use client'
 
 import { useState, useEffect, useRef, useCallback } from 'react'
-import { WavRecorder, WavStreamPlayer } from '@/app/lib/wavtools'
-import { instructions } from '@/app/voice/conversation_config'
+import { WavRecorder, WavStreamPlayer } from '@/lib/wavtools'
+import { instructions } from '@/voice/conversation_config'
 import Nav from '../components/Nav'
 import { Phone, PhoneOff, Check, X } from 'lucide-react'
 import SpinnerIcon from '../components/Icons/SpinnerIcon'

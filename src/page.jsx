@@ -1,5 +1,3 @@
-// src/app/page.js
-
 'use client'
 
 import { useRef, useEffect } from 'react'

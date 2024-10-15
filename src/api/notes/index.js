@@ -4,7 +4,7 @@ import { NextResponse } from 'next/server'
 import sql from 'mssql/msnodesqlv8.js'
 import hash from 'object-hash'
 import { readFromDisk, writeToDisk } from '../../utils/diskStorage'
-import { firestore } from '../../../firebase'
+import { firestore } from '../../firebase'
 import { doc } from 'firebase/firestore'
 import {
   firestoreBatchGet,

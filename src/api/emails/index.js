@@ -2,10 +2,10 @@
 
 import OpenAI from 'openai'
 import { parse } from 'best-effort-json-parser'
-import { readFromDisk, writeToDisk } from '@/app/utils/diskStorage'
-import { timestamp } from '@/app/utils/timestamp'
-import { getPrompts } from '@/app/api/prompts/route.js'
-import { firestoreBatchWrite, firestoreGetAllDocs } from '@/app/utils/firestoreHelper'
+import { readFromDisk, writeToDisk } from '@/utils/diskStorage'
+import { timestamp } from '@/utils/timestamp'
+import { getPrompts } from '@/api/prompts/route.js'
+import { firestoreBatchWrite, firestoreGetAllDocs } from '@/utils/firestoreHelper'
 import { headers } from 'next/headers'
 import { GET as getNotes } from '../notes/route'
 

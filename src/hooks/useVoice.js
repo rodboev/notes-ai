@@ -1,8 +1,8 @@
 import { useState, useCallback, useRef, useEffect } from 'react'
 import { RealtimeClient } from '@openai/realtime-api-beta'
-import { WavRecorder, WavStreamPlayer } from '@/app/lib/wavtools'
-import { getPrompt } from '@/app/utils/voicePrompt'
-import { getWsUrl } from '@/app/utils/voice'
+import { WavRecorder, WavStreamPlayer } from '@/lib/wavtools'
+import { getPrompt } from '@/utils/voicePrompt'
+import { getWsUrl } from '@/utils/voice'
 
 let activeClientRef = null
 let activeCall = null
