@@ -1,10 +1,8 @@
-// src/app/api/prompts/route.js
-
 import { readFile, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
 import { getDoc, setDoc, doc } from 'firebase/firestore'
-import { firestore } from '@/firebase.js'
-import promptsDefault from '@/utils/prompts-default.js'
+import { firestore } from '../../firebase.js'
+import promptsDefault from '../../utils/prompts-default.js'
 
 const promptsCurrent = join(process.cwd(), 'data', 'prompts-current.json')
 
@@ -94,12 +92,12 @@ export async function getPrompts() {
   return mergedPrompts
 }
 
-export const GET = async (req, res) => {
+export const get = async (req, res) => {
   const prompts = await getPrompts()
   res.status(200).json(prompts)
 }
 
-export const PATCH = async (req, res) => {
+export const patch = async (req, res) => {
   const updatedPrompts = await req.json()
   console.log('Updated prompts:', updatedPrompts)
   const toSave = {

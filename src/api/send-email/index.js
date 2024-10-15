@@ -1,11 +1,11 @@
 import nodemailer from 'nodemailer'
 import { google } from 'googleapis'
 import dotenv from 'dotenv'
-import { loadStatuses, saveStatus } from '@/api/status'
+import { loadStatuses, saveStatus } from '../status/index.js'
 
 dotenv.config({ path: '.env.local' })
 
-export const POST = async (req, res) => {
+export const post = async (req, res) => {
   if (req.method !== 'POST') {
     res.status(405).json({ error: 'Method not allowed' })
     return

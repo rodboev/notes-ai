@@ -1,11 +1,9 @@
-// src/app/api/send-feedback/route.js
-
 import dotenv from 'dotenv'
-import { createTransporter, sendEmail } from '@/utils/emailUtils'
+import { createTransporter, sendEmail } from '../../utils/emailUtils.js'
 
 dotenv.config({ path: '.env.local' })
 
-export const POST = async (req, res) => {
+export const post = async (req, res) => {
   const { feedback, note, email, subject } = await req.json()
   const { GMAIL_USER, FEEDBACK_RECIPIENT_EMAIL } = process.env
 

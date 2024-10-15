@@ -1,8 +1,6 @@
-// src/app/api/status/route.js
-
-import { readFromDisk, writeToDisk } from '@/utils/diskStorage'
-import { firestoreGetAllDocs, firestoreSetDoc } from '@/utils/firestoreHelper'
-import { timestamp } from '@/utils/timestamp'
+import { readFromDisk, writeToDisk } from '../../utils/diskStorage.js'
+import { firestoreGetAllDocs, firestoreSetDoc } from '../../utils/firestoreHelper.js'
+import { timestamp } from '../../utils/timestamp.js'
 
 const STATUS_COLLECTION = 'status'
 
@@ -67,7 +65,7 @@ export async function saveStatus(fingerprint, newStatus) {
   }
 }
 
-export const GET = async (req, res) => {
+export const get = async (req, res) => {
   try {
     const url = new URL(req.url, `http://${req.headers.host}`)
     const fingerprints = url.searchParams.get('fingerprints')?.split(',') || []
@@ -90,7 +88,7 @@ export const GET = async (req, res) => {
   }
 }
 
-export const PATCH = async (req, res) => {
+export const patch = async (req, res) => {
   try {
     const { fingerprint, status } = await req.json()
 

@@ -1,7 +1,6 @@
 /** @type {import('vite').UserConfig} */
 
 import pluginReact from '@vitejs/plugin-react-swc'
-import { pluginAPIRoutes } from 'vite-plugin-api-routes'
 import { defineConfig } from 'vite'
 import path from 'node:path'
 import dotenv from 'dotenv'
@@ -20,10 +19,6 @@ export default defineConfig(() => {
           },
         },
       }),
-      pluginAPIRoutes({
-        minify: false,
-        server: 'server.js',
-      }),
     ],
     resolve: {
       alias: {
@@ -32,8 +27,23 @@ export default defineConfig(() => {
     },
     server: {
       port: 3000,
-      hmr: {
-        port: 24678, // Default HMR port
+      proxy: {
+        '/api': {
+          target: 'http://localhost:3001',
+          changeOrigin: true,
+          ws: true,
+          configure: (proxy, _options) => {
+            proxy.on('error', (err, _req, _res) => {
+              console.log('[Vite] Proxy error:', err)
+            })
+            proxy.on('proxyReq', (proxyReq, req, _res) => {
+              console.log('[Vite] Sending Request to the Target:', req.method, req.url)
+            })
+            proxy.on('proxyRes', (proxyRes, req, _res) => {
+              console.log('[Vite] Received Response from the Target:', proxyRes.statusCode, req.url)
+            })
+          },
+        },
       },
     },
     preview: {
@@ -44,13 +54,12 @@ export default defineConfig(() => {
     },
     optimizeDeps: {
       exclude: ['msnodesqlv8'],
-      include: ['vite-plugin-api-routes'],
     },
     build: {
       commonjsOptions: {
         exclude: ['msnodesqlv8'],
       },
-      minify: false, // process.env.NODE_ENV === 'production',
+      minify: process.env.NODE_ENV === 'production',
       outDir: path.resolve(__dirname, 'dist'),
     },
     ssr: {

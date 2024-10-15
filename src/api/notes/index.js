@@ -1,12 +1,12 @@
 import sql from 'mssql/msnodesqlv8.js'
 import hash from 'object-hash'
-import { readFromDisk, writeToDisk } from '@/utils/diskStorage'
+import { readFromDisk, writeToDisk } from '../../utils/diskStorage.js'
 import {
   firestoreBatchGet,
   firestoreBatchWrite,
   firestoreGetAllDocs,
-} from '@/utils/firestoreHelper'
-import { timestamp } from '@/utils/timestamp'
+} from '../../utils/firestoreHelper.js'
+import { timestamp } from '../../utils/timestamp.js'
 import dotenv from 'dotenv'
 
 dotenv.config({ path: '.env.local' })
@@ -196,92 +196,99 @@ async function getNotesByFingerprints(fingerprints) {
   return foundNotes
 }
 
-export const GET = async (req, res) => {
-  const { searchParams } = new URL(req.url, `http://${req.headers.host}`)
-  const startDate = searchParams.get('startDate')
-  const endDate = searchParams.get('endDate')
-  const fingerprint = searchParams.get('fingerprint')
-  const fingerprints = searchParams.get('fingerprints')
+export const get = async (req, res) => {
+  try {
+    console.log('[Notes API] Handling GET request')
+    const url = new URL(req.url, `http://${req.headers.host}`)
+    const searchParams = url.searchParams
+    const startDate = searchParams.get('startDate')
+    const endDate = searchParams.get('endDate')
+    const fingerprint = searchParams.get('fingerprint')
+    const fingerprints = searchParams.get('fingerprints')
 
-  if (fingerprint || fingerprints) {
-    const fingerprintsToFetch = fingerprints ? fingerprints.split(',') : [fingerprint]
-    const notes = await getNotesByFingerprints(fingerprintsToFetch)
-    if (notes.length === 0) {
-      res.status(200).json([])
+    if (fingerprint || fingerprints) {
+      const fingerprintsToFetch = fingerprints ? fingerprints.split(',') : [fingerprint]
+      const notes = await getNotesByFingerprints(fingerprintsToFetch)
+      if (notes.length === 0) {
+        res.status(200).json([])
+        return
+      }
+      res.status(200).json(notes)
       return
     }
-    res.status(200).json(notes)
-    return
-  }
 
-  // Set default dates if not provided
-  const today = new Date()
-  const yesterday = new Date(today)
-  yesterday.setDate(yesterday.getDate() - 1)
+    // Set default dates if not provided
+    const today = new Date()
+    const yesterday = new Date(today)
+    yesterday.setDate(yesterday.getDate() - 1)
 
-  const effectiveStartDate =
-    startDate && startDate !== 'null' ? startDate : yesterday.toISOString().split('T')[0]
-  const effectiveEndDate =
-    endDate && endDate !== 'null' ? endDate : today.toISOString().split('T')[0]
-  console.log(`Using dates: startDate=${effectiveStartDate}, endDate=${effectiveEndDate}`)
+    const effectiveStartDate =
+      startDate && startDate !== 'null' ? startDate : yesterday.toISOString().split('T')[0]
+    const effectiveEndDate =
+      endDate && endDate !== 'null' ? endDate : today.toISOString().split('T')[0]
+    console.log(`Using dates: startDate=${effectiveStartDate}, endDate=${effectiveEndDate}`)
 
-  console.log(`Fetching notes for date range: ${effectiveStartDate} to ${effectiveEndDate}`)
+    console.log(`Fetching notes for date range: ${effectiveStartDate} to ${effectiveEndDate}`)
 
-  // Ensure endDate is exclusive
-  const queryEndDate = new Date(effectiveEndDate)
-  queryEndDate.setDate(queryEndDate.getDate() + 1)
-  const formattedQueryEndDate = queryEndDate.toISOString().split('T')[0]
+    // Ensure endDate is exclusive
+    const queryEndDate = new Date(effectiveEndDate)
+    queryEndDate.setDate(queryEndDate.getDate() + 1)
+    const formattedQueryEndDate = queryEndDate.toISOString().split('T')[0]
 
-  // Try to get stored notes first
-  let allNotes = await loadNotes()
-  let notes = allNotes.filter(
-    (note) =>
-      note.date >= effectiveStartDate &&
-      note.date < formattedQueryEndDate &&
-      note.code === '911 EMER',
-  )
+    // Try to get stored notes first
+    let allNotes = await loadNotes()
+    let notes = allNotes.filter(
+      (note) =>
+        note.date >= effectiveStartDate &&
+        note.date < formattedQueryEndDate &&
+        note.code === '911 EMER',
+    )
 
-  if (notes.length > 0) {
-    console.log(`Returning ${notes.length} notes from cache`)
-    res.status(200).json(notes)
-    return
-  }
+    if (notes.length > 0) {
+      console.log(`Returning ${notes.length} notes from cache`)
+      res.status(200).json(notes)
+      return
+    }
 
-  // If not in cache, fetch from database
-  let pool
-  try {
-    console.log('Fetching notes from database...')
-    pool = await sql.connect(config)
+    // If not in cache, fetch from database
+    let pool
+    try {
+      console.log('Fetching notes from database...')
+      pool = await sql.connect(config)
 
-    notes = await getJoinedNotes(pool, effectiveStartDate, formattedQueryEndDate)
+      notes = await getJoinedNotes(pool, effectiveStartDate, formattedQueryEndDate)
 
-    notes = transformNotes(notes)
-      .filter((note) => note.code === '911 EMER')
-      .sort((a, b) => new Date(a.date) - new Date(b.date))
+      notes = transformNotes(notes)
+        .filter((note) => note.code === '911 EMER')
+        .sort((a, b) => new Date(a.date) - new Date(b.date))
 
-    // Add fingerprint to each note
-    notes = notes.map((note) => ({
-      ...note,
-      fingerprint: hash(note),
-    }))
+      // Add fingerprint to each note
+      notes = notes.map((note) => ({
+        ...note,
+        fingerprint: hash(note),
+      }))
 
-    // Update the cache with new notes
-    allNotes = [...allNotes, ...notes]
-    await saveNotes(allNotes)
+      // Update the cache with new notes
+      allNotes = [...allNotes, ...notes]
+      await saveNotes(allNotes)
 
-    console.log(`Returning ${notes.length} notes from database`)
-    res.status(200).json(notes)
-  } catch (error) {
-    console.error('Error fetching from database:', error)
-    res.status(500).json({ error: `Internal Server Error: ${error.message}` })
-  } finally {
-    if (pool) {
-      try {
-        await pool.close()
-        console.log('Database connection closed')
-      } catch (closeErr) {
-        console.error('Error closing database connection:', closeErr)
+      console.log(`Returning ${notes.length} notes from database`)
+      res.status(200).json(notes)
+    } catch (error) {
+      console.error('Error fetching from database:', error)
+      res.status(500).json({ error: `Internal Server Error: ${error.message}` })
+    } finally {
+      if (pool) {
+        try {
+          await pool.close()
+          console.log('Database connection closed')
+        } catch (closeErr) {
+          console.error('Error closing database connection:', closeErr)
+        }
       }
     }
+  } catch (error) {
+    console.error('[Notes API] Error in GET handler:', error)
+    res.status(500).json({ error: 'Internal Server Error' })
   }
 }

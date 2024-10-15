@@ -1,9 +1,9 @@
 // src/app/components/Editor.js
 
-import { Editor as TinyMCE } from '@tinymce/tinymce-react'
+import { Editor as TinyMCEEditor } from '@tinymce/tinymce-react'
 import { useState, useEffect } from 'react'
 
-const Editor = ({ email, emailStatus, editorRef, children, onRefresh }) => {
+function Editor({ email, emailStatus, editorRef, children, onRefresh }) {
   const [editorReady, setEditorReady] = useState(false)
 
   const autoResizeEditor = () => {
@@ -62,8 +62,7 @@ const Editor = ({ email, emailStatus, editorRef, children, onRefresh }) => {
 
   return (
     <div className="relative mb-4 mt-2.5 flex flex-col">
-      <TinyMCE
-        tinymceScriptSrc="/tinymce/tinymce.min.js"
+      <TinyMCEEditor
         onInit={(evt, editor) => {
           editorRef.current = editor
           setTimeout(() => {

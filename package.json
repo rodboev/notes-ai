@@ -3,8 +3,8 @@
   "version": "1.1.0",
   "type": "module",
   "scripts": {
-    "dev": "node scripts/copyTinyMCE.js && vite",
-    "start": "vite preview",
+    "dev": "concurrently -n \"TinyMCE,Express,Vite\" -c \"yellow,green,blue\" \"node scripts/copyTinyMCE.js\" \"cross-env NODE_ENV=development node server.js\" \"wait-on tcp:3001 && vite\"",
+    "start": "cross-env NODE_ENV=production node server.js",
     "build": "vite build",
     "postinstall": "node scripts/copyTinyMCE.js"
   },
@@ -17,6 +17,8 @@
     "@tinymce/tinymce-react": "^5.1.1",
     "axios": "^1.7.4",
     "best-effort-json-parser": "^1.1.2",
+    "concurrently": "^9.0.1",
+    "cors": "^2.8.5",
     "cross-env": "^7.0.3",
     "dayjs": "^1.11.12",
     "dotenv": "^16.4.5",
@@ -61,7 +63,7 @@
     "tailwindcss-safe-area": "^0.5.1",
     "unplugin-swc": "^1.5.1",
     "vite": "^5.4.9",
-    "vite-plugin-api-routes": "^1.1.10"
+    "wait-on": "^8.0.1"
   },
   "packageManager": "yarn@4.5.0"
 }

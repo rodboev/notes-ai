@@ -1,12 +1,10 @@
-// src/app/api/emails/route.js
-
 import OpenAI from 'openai'
 import { parse } from 'best-effort-json-parser'
-import { readFromDisk, writeToDisk } from '@/utils/diskStorage'
-import { timestamp } from '@/utils/timestamp'
-import { getPrompts } from '@/api/prompts'
-import { firestoreBatchWrite, firestoreGetAllDocs } from '@/utils/firestoreHelper'
-import { GET as getNotes } from '../notes'
+import { readFromDisk, writeToDisk } from '../../utils/diskStorage.js'
+import { timestamp } from '../../utils/timestamp.js'
+import { getPrompts } from '../prompts/index.js'
+import { firestoreBatchWrite, firestoreGetAllDocs } from '../../utils/firestoreHelper.js'
+import { get as getNotes } from '../notes/index.js'
 import dotenv from 'dotenv'
 
 dotenv.config({ path: '.env.local' })
@@ -118,7 +116,7 @@ async function fetchWithErrorHandling(searchParams) {
   }
 }
 
-export const GET = async (req, res) => {
+export const get = async (req, res) => {
   const { searchParams } = new URL(req.url, `http://${req.headers.host}`)
   const startDate = searchParams.get('startDate')
   const endDate = searchParams.get('endDate')

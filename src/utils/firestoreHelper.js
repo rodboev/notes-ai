@@ -1,6 +1,4 @@
-// src/utils/firestoreHelper.js
-
-import { firestore } from '../firebase'
+import { firestore } from '../firebase.js'
 import { writeBatch, doc, getDoc, setDoc, collection, getDocs } from 'firebase/firestore'
 
 const enabled = true
