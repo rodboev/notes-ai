@@ -1,128 +1,106 @@
-// src/app/api/send-email/route.js
-
-import { NextResponse } from 'next/server'
 import nodemailer from 'nodemailer'
 import { google } from 'googleapis'
 import dotenv from 'dotenv'
-import { loadStatuses, saveStatus } from '../status/route'
+import { loadStatuses, saveStatus } from './status'
 
 dotenv.config()
 
-export default {
-  async POST(req) {
-    const {
-      GMAIL_USER,
+export async function POST(req) {
+  const {
+    GMAIL_USER,
+    SERVICE_ACCOUNT_CLIENT_EMAIL,
+    SERVICE_ACCOUNT_PRIVATE_KEY,
+    SERVICE_ACCOUNT_CLIENT_ID,
+  } = process.env
+
+  console.log('GMAIL_USER:', GMAIL_USER)
+
+  let email, subject, content, fingerprint
+  try {
+    const body = await req.json()
+    ;({ email, subject, content, fingerprint } = body)
+  } catch (error) {
+    console.error('Error parsing request body:', error)
+    return JSON.stringify({ error: 'Invalid request body' })
+  }
+
+  console.log('Received parameters:', {
+    email,
+    subject,
+    content: `${content.substring(0, 100)}...`,
+    fingerprint,
+  })
+
+  if (!email || !subject || !content || !fingerprint) {
+    const missingFields = ['email', 'subject', 'content', 'fingerprint'].filter(
+      (field) => !eval(field),
+    )
+    console.error('Missing fields:', missingFields.join(', '))
+    return JSON.stringify({ error: 'Missing field', details: missingFields })
+  }
+
+  try {
+    const oAuth2Client = new google.auth.JWT(
       SERVICE_ACCOUNT_CLIENT_EMAIL,
-      SERVICE_ACCOUNT_PRIVATE_KEY,
-      SERVICE_ACCOUNT_CLIENT_ID,
-    } = process.env
+      null,
+      SERVICE_ACCOUNT_PRIVATE_KEY.replace(/\\n/gm, '\n'),
+      ['https://mail.google.com/'],
+      GMAIL_USER,
+    )
 
-    console.log('GMAIL_USER:', GMAIL_USER)
+    await oAuth2Client.authorize()
+    const accessToken = await (await oAuth2Client.getAccessToken()).token
 
-    let email, subject, content, fingerprint
-    try {
-      const body = await req.json()
-      ;({ email, subject, content, fingerprint } = body)
-    } catch (error) {
-      console.error('Error parsing request body:', error)
-      return new Response(JSON.stringify({ error: 'Invalid request body' }), {
-        status: 400,
-        headers: { 'Content-Type': 'application/json' },
-      })
-    }
-
-    console.log('Received parameters:', {
-      email,
-      subject,
-      content: `${content.substring(0, 100)}...`,
-      fingerprint,
+    const transporter = nodemailer.createTransport({
+      service: 'gmail',
+      auth: {
+        type: 'OAuth2',
+        user: GMAIL_USER,
+        clientId: SERVICE_ACCOUNT_CLIENT_ID,
+        accessToken: accessToken,
+      },
     })
 
-    if (!email || !subject || !content || !fingerprint) {
-      const missingFields = ['email', 'subject', 'content', 'fingerprint'].filter(
-        (field) => !eval(field),
-      )
-      console.error('Missing fields:', missingFields.join(', '))
-      return new Response(JSON.stringify({ error: 'Missing field', details: missingFields }), {
-        status: 400,
-        headers: { 'Content-Type': 'application/json' },
-      })
+    const mailOptions = {
+      from: GMAIL_USER,
+      to: email,
+      subject: subject,
+      html: content,
     }
 
-    try {
-      const oAuth2Client = new google.auth.JWT(
-        SERVICE_ACCOUNT_CLIENT_EMAIL,
-        null,
-        SERVICE_ACCOUNT_PRIVATE_KEY.replace(/\\n/gm, '\n'),
-        ['https://mail.google.com/'],
-        GMAIL_USER,
-      )
+    await transporter.sendMail(mailOptions)
+    console.log('Email sent successfully')
 
-      await oAuth2Client.authorize()
-      const accessToken = await (await oAuth2Client.getAccessToken()).token
-
-      const transporter = nodemailer.createTransport({
-        service: 'gmail',
-        auth: {
-          type: 'OAuth2',
-          user: GMAIL_USER,
-          clientId: SERVICE_ACCOUNT_CLIENT_ID,
-          accessToken: accessToken,
-        },
-      })
-
-      const mailOptions = {
-        from: GMAIL_USER,
-        to: email,
-        subject: subject,
-        html: content,
-      }
-
-      await transporter.sendMail(mailOptions)
-      console.log('Email sent successfully')
-
-      const emailData = {
-        status: 'success',
-        sentAt: new Date().toISOString(),
-        subject,
-        content,
-        to: email,
-      }
-
-      // Update status using saveStatus function
-      await saveStatus(fingerprint, emailData)
-
-      return new Response(
-        JSON.stringify({ message: 'Email sent successfully', status: emailData }),
-        {
-          headers: { 'Content-Type': 'application/json' },
-        },
-      )
-    } catch (error) {
-      console.error('Error sending email:', error)
-
-      // Update status to error using saveStatus function
-      const errorStatus = {
-        status: 'error',
-        sentAt: new Date().toISOString(),
-        subject,
-        content,
-        to: email,
-        error: error.message,
-      }
-      await saveStatus(fingerprint, errorStatus)
-
-      return new Response(
-        JSON.stringify({
-          error: 'Error sending email',
-          details: error.message,
-          status: errorStatus,
-        }),
-        {
-          status: 500,
-          headers: { 'Content-Type': 'application/json' },
-        },
-      )
+    const emailData = {
+      status: 'success',
+      sentAt: new Date().toISOString(),
+      subject,
+      content,
+      to: email,
     }
-  },
+
+    // Update status using saveStatus function
+    await saveStatus(fingerprint, emailData)
+
+    return JSON.stringify({ message: 'Email sent successfully', status: emailData })
+  } catch (error) {
+    console.error('Error sending email:', error)
+
+    // Update status to error using saveStatus function
+    const errorStatus = {
+      status: 'error',
+      sentAt: new Date().toISOString(),
+      subject,
+      content,
+      to: email,
+      error: error.message,
+    }
+    await saveStatus(fingerprint, errorStatus)
+
+    return JSON.stringify({
+      error: 'Error sending email',
+      details: error.message,
+      status: errorStatus,
+    })
+  }
 }
