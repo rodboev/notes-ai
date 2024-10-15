@@ -74,6 +74,16 @@ export default defineConfig(() => {
       },
       minify: process.env.NODE_ENV === 'production',
       outDir: path.resolve(__dirname, 'dist'),
+      rollupOptions: {
+        output: {
+          manualChunks: {
+            'react-vendor': ['react', 'react-dom'],
+            datepicker: ['react-tailwindcss-datepicker'],
+            'data-management': ['@tanstack/react-query', 'axios', '@openai/realtime-api-beta'],
+            // Add more chunks as needed based on your analysis
+          },
+        },
+      },
     },
     ssr: {
       noExternal: ['msnodesqlv8'],
