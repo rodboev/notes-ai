@@ -15,39 +15,40 @@ export default defineConfig(() => {
         jsc: {
           transform: {
             react: {
-              runtime: 'automatic'
-            }
-          }
-        }
-      })
+              runtime: 'automatic',
+            },
+          },
+        },
+      }),
+      apiRoutes(),
     ],
     resolve: {
       alias: {
-        '@': path.resolve(__dirname, './src')
-      }
+        '@': path.resolve(__dirname, './src'),
+      },
     },
     server: {
       port: 3000,
       hmr: {
-        port: 24678 // Default HMR port
-      }
+        port: 24678, // Default HMR port
+      },
     },
     css: {
-      postcss: './postcss.config.js'
+      postcss: './postcss.config.js',
     },
     optimizeDeps: {
       exclude: ['msnodesqlv8'],
-      include: ['vite-plugin-api-routes']
+      include: ['vite-plugin-api-routes'],
     },
     build: {
       commonjsOptions: {
-        exclude: ['msnodesqlv8']
+        exclude: ['msnodesqlv8'],
       },
       minify: process.env.NODE_ENV === 'production',
-      outDir: 'dist'
+      outDir: path.resolve(__dirname, 'dist'),
     },
     ssr: {
-      noExternal: ['msnodesqlv8']
+      noExternal: ['msnodesqlv8'],
     },
     root: path.resolve(__dirname, 'src'), // Set the root to the src directory
     publicDir: path.resolve(__dirname, 'public'), // Explicitly set the public directory
@@ -57,7 +58,7 @@ export default defineConfig(() => {
       info: (msg) => console.log(`[Vite] ${msg}`),
       warn: (msg) => console.warn(`[Vite] ${msg}`),
       error: (msg) => console.error(`[Vite] ${msg}`),
-      warnOnce: (msg) => console.warn(`[Vite] ${msg}`)
-    }
+      warnOnce: (msg) => console.warn(`[Vite] ${msg}`),
+    },
   }
 })
