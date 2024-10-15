@@ -4867,7 +4867,6 @@ __metadata:
     node-abi: "npm:^3.60.0"
     node-gyp: "npm:latest"
     prebuild-install: "npm:^7.1.2"
-  checksum: 10c0/555a221bc6c33c3d8b36daeeaf4e543666281ea9f2147a054cb09673e88299a6ba074965b799ebe9ff6b5c65b65985b93fe01cef0e50639704afaa6399b822b2
   conditions: (os=win32 | os=linux | os=darwin)
   languageName: node
   linkType: hard
@@ -5097,6 +5096,11 @@ __metadata:
     vite: "npm:^5.4.9"
     wait-on: "npm:^8.0.1"
     ws: "npm:^8.18.0"
+  dependenciesMeta:
+    msnodesqlv8:
+      optional: true
+    odbc:
+      optional: true
   languageName: unknown
   linkType: soft
 
