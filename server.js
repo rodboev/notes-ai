@@ -33,19 +33,27 @@ async function createServer() {
   let httpsOptions = null
 
   if (dev) {
-    const keyPath = './localhost+2-key.pem'
-    const certPath = './localhost+2.pem'
+    const keyPath = 'certificates/localhost+2-key.pem'
+    const certPath = 'certificates/localhost+2.pem'
 
     if (fs.existsSync(keyPath) && fs.existsSync(certPath)) {
-      httpsOptions = {
-        key: fs.readFileSync(keyPath),
-        cert: fs.readFileSync(certPath),
+      try {
+        httpsOptions = {
+          key: fs.readFileSync(keyPath),
+          cert: fs.readFileSync(certPath),
+        }
+        server = createHttpsServer(httpsOptions, app)
+        isHttps = true
+        console.log('Using HTTPS with local certificates')
+      } catch (error) {
+        console.error('Error reading HTTPS certificates:', error)
+        console.warn('Falling back to HTTP due to certificate read error.')
+        server = http.createServer(app)
       }
-      server = createHttpsServer(httpsOptions, app)
-      isHttps = true
-      console.log('Using HTTPS with local certificates')
     } else {
-      console.warn('HTTPS certificates not found. Falling back to HTTP.')
+      console.warn(
+        `HTTPS certificates not found. Looked for:\n${keyPath}\n${certPath}\nFalling back to HTTP.`,
+      )
       server = http.createServer(app)
     }
   } else {
@@ -245,7 +253,9 @@ async function createServer() {
 
   server.listen(PORT, () => {
     const protocol = isHttps ? 'https' : 'http'
-    console.log(`[Express] Server running on ${protocol}://${hostname}:${PORT}`)
+    console.log(
+      `[Express] Server running on ${protocol}://${hostname}:${PORT} (${isHttps ? 'development' : 'production'})`,
+    )
   })
 }
 
