@@ -4839,6 +4839,7 @@ __metadata:
     node-abi: ^3.60.0
     node-gyp: latest
     prebuild-install: ^7.1.2
+  checksum: 0ec163e72c73d7f204aab007fe775584b0c522ba0bdc39769958e965a59187285a42651117808704880ae971cff3f52fa84d349c81b54f3882e7d3d421db5d19
   conditions: (os=win32 | os=linux | os=darwin)
   languageName: node
   linkType: hard
@@ -5068,11 +5069,6 @@ __metadata:
     vite: ^5.4.9
     wait-on: ^8.0.1
     ws: ^8.18.0
-  dependenciesMeta:
-    msnodesqlv8:
-      optional: true
-    odbc:
-      optional: true
   languageName: unknown
   linkType: soft
 

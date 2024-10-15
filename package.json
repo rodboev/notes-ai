@@ -26,9 +26,11 @@
     "framer-motion": "^11.3.24",
     "googleapis": "^140.0.1",
     "lucide-react": "^0.447.0",
+    "msnodesqlv8": "^4.2.1",
     "mssql": "^11.0.1",
     "nodemailer": "^6.9.14",
     "object-hash": "^3.0.0",
+    "odbc": "^2.4.8",
     "openai": "^4.53.0",
     "papaparse": "^5.4.1",
     "react": "^18.2.0",
@@ -62,10 +64,6 @@
     "tailwindcss-safe-area": "^0.5.1",
     "unplugin-swc": "^1.5.1",
     "wait-on": "^8.0.1"
-  },
-  "optionalDependencies": {
-    "msnodesqlv8": "^4.2.1",
-    "odbc": "^2.4.8"
   },
   "packageManager": "yarn@3.7.0"
 }
