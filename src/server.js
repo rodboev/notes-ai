@@ -10,6 +10,7 @@ import fetch from 'node-fetch'
 import https from 'node:https'
 
 dotenv.config({ path: path.resolve(process.cwd(), '.env') })
+dotenv.config({ path: path.resolve(process.cwd(), '.env.local'), override: true })
 
 const hostname = 'localhost'
 const port = process.env.PORT || 3000

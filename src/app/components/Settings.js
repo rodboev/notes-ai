@@ -32,7 +32,6 @@ export default function Settings({ onClose }) {
     }
   }
 
-  if (isLoading) return <div>Loading...</div>
   if (isError) return <div>Error loading prompts</div>
 
   return (

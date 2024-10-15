@@ -1,4 +1,4 @@
 {
-  "watch": ["src/server.js"],
-  "ext": "js, css"
+  "watch": ["**/*.sh", "package.json", "src/server.js", "nodemon.json"],
+  "ext": "js, css, sh"
 }

@@ -235,14 +235,10 @@ start_tunnel() {
 
         if [ $? -eq 0 ]; then
             echo "Tunnel successfully established."
-            echo "Tunnel log output:"
-            tail -n 20 ~/ssh_tunnel.log
             return 0
         fi
 
         echo "Failed to establish tunnel or bind to port."
-        echo "Tunnel log output:"
-        tail -n 20 ~/ssh_tunnel.log
         if [ $attempt -lt $max_attempts ]; then
             echo "Killing existing tunnels and retrying..."
             kill_existing_tunnels
@@ -289,7 +285,7 @@ restart_tunnel() {
         
         # Start the tunnel restart mechanism
         while true; do
-            sleep 300  # Sleep for 5 minutes (300 seconds)
+            sleep 1800  # Sleep for 30 minutes
             echo "Restarting SSH tunnel..."
             restart_tunnel
         done
