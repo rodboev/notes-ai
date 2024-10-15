@@ -15,8 +15,9 @@ fi
 SCRIPT_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" &> /dev/null && pwd )"
 PROJECT_ROOT="$(dirname "$SCRIPT_DIR")"
 
-# Check for .env in the project root
+# Check for .env and .env.local in the project root
 ENV_FILE="$PROJECT_ROOT/.env"
+ENV_LOCAL_FILE="$PROJECT_ROOT/.env.local"
 
 # Function to convert \n to newlines and remove surrounding quotes
 convert_newlines_and_remove_quotes() {
@@ -28,9 +29,10 @@ convert_newlines_and_remove_quotes() {
     echo -e "${value//\\n/\\n}"
 }
 
-# Function to load variables from .env file
+# Function to load variables from a file
 load_env_file() {
-    echo "Loading environment variables from $ENV_FILE"
+    local file="$1"
+    echo "Loading environment variables from $file"
     # Use a while loop to read the file line by line
     while IFS= read -r line || [[ -n "$line" ]]; do
         # Skip comments and empty lines
@@ -42,14 +44,26 @@ load_env_file() {
         var_value="${line#*=}"
         # Convert \n to newlines, remove quotes, and export the variable
         export "$var_name"="$(convert_newlines_and_remove_quotes "$var_value")"
-    done < "$ENV_FILE"
-} 
+    done < "$file"
+}
 
-# Load variables from .env if it exists, otherwise use local environment
+# Load variables from .env if it exists
 if [ -f "$ENV_FILE" ]; then
-    load_env_file
+    load_env_file "$ENV_FILE"
 else
-    echo "No .env file found. Using local environment variables."
+    echo "No .env file found."
+fi
+
+# Load variables from .env.local if it exists (overriding .env)
+if [ -f "$ENV_LOCAL_FILE" ]; then
+    load_env_file "$ENV_LOCAL_FILE"
+else
+    echo "No .env.local file found."
+fi
+
+# If neither .env nor .env.local exist, use local environment variables
+if [ ! -f "$ENV_FILE" ] && [ ! -f "$ENV_LOCAL_FILE" ]; then
+    echo "No .env or .env.local files found. Using local environment variables."
     # Convert \n to newlines and remove quotes for all existing environment variables
     while IFS='=' read -r name value ; do
         if [[ $name == *_* ]]; then  # Only process variables with underscores (to avoid system vars)
