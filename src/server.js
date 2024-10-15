@@ -19,8 +19,8 @@ let httpServer
 let isHttps = false
 
 if (dev) {
-  const keyPath = './localhost+2-key.pem'
-  const certPath = './localhost+2.pem'
+  const keyPath = 'certificates/localhost-key.pem'
+  const certPath = 'certificates/localhost.pem'
 
   if (fs.existsSync(keyPath) && fs.existsSync(certPath)) {
     const httpsOptions = {
@@ -122,26 +122,6 @@ const handleWebSocketConnection = async (ws) => {
 
 webSocketServer.on('connection', handleWebSocketConnection)
 
-const preloadRootPath = async (protocol, hostname, port) => {
-  try {
-    const agent = new https.Agent({
-      rejectUnauthorized: false,
-    })
-
-    const response = await fetch(`${protocol}://${hostname}:${port}/`, {
-      agent: protocol === 'https' ? agent : undefined,
-    })
-
-    if (response.ok) {
-      console.log('Root path preloaded successfully')
-    } else {
-      console.error('Failed to preload root path:', response.status, response.statusText)
-    }
-  } catch (error) {
-    console.error('Error preloading root path:', error)
-  }
-}
-
 const startServer = (port) => {
   httpServer
     .on('request', async (req, res) => {
@@ -172,13 +152,22 @@ const startServer = (port) => {
         socket.destroy()
       }
     })
-    .listen(port, () => {
+    .listen(port, async () => {
       const protocol = isHttps ? 'https' : 'http'
       log(` ▲ Ready on ${protocol}://${hostname}:${port}`)
 
       // Preload the root path after the server starts
       if (dev) {
-        preloadRootPath(protocol, hostname, port)
+        const agent = new https.Agent({
+          rejectUnauthorized: false,
+        })
+
+        const response = await fetch(`${protocol}://${hostname}:${port}/`, {
+          agent: protocol === 'https' ? agent : undefined,
+        })
+
+        if (!response.ok)
+          console.warn('Failed to preload root path:', response.status, response.statusText)
       }
     })
     .on('error', (err) => {
