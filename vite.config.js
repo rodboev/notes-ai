@@ -1,7 +1,6 @@
 /** @type {import('vite').UserConfig} */
 
 import react from '@vitejs/plugin-react-swc'
-import swc from 'unplugin-swc'
 import { pluginAPIRoutes as apiRoutes } from 'vite-plugin-api-routes'
 import { defineConfig } from 'vite'
 import path from 'node:path'
@@ -12,45 +11,43 @@ dotenv.config()
 export default defineConfig(() => {
   return {
     plugins: [
-      react(),
-      swc.vite({
+      react({
         jsc: {
           transform: {
             react: {
-              runtime: 'automatic',
-            },
-          },
-        },
-      }),
-      apiRoutes(),
+              runtime: 'automatic'
+            }
+          }
+        }
+      })
     ],
     resolve: {
       alias: {
-        '@': path.resolve(__dirname, './src'),
-      },
+        '@': path.resolve(__dirname, './src')
+      }
     },
     server: {
       port: 3000,
       hmr: {
-        port: 24678, // Default HMR port
-      },
+        port: 24678 // Default HMR port
+      }
     },
     css: {
-      postcss: './postcss.config.js',
+      postcss: './postcss.config.js'
     },
     optimizeDeps: {
       exclude: ['msnodesqlv8'],
-      include: ['vite-plugin-api-routes'],
+      include: ['vite-plugin-api-routes']
     },
     build: {
       commonjsOptions: {
-        exclude: ['msnodesqlv8'],
+        exclude: ['msnodesqlv8']
       },
       minify: process.env.NODE_ENV === 'production',
-      outDir: 'dist',
+      outDir: 'dist'
     },
     ssr: {
-      noExternal: ['msnodesqlv8'],
+      noExternal: ['msnodesqlv8']
     },
     root: path.resolve(__dirname, 'src'), // Set the root to the src directory
     publicDir: path.resolve(__dirname, 'public'), // Explicitly set the public directory
@@ -60,7 +57,7 @@ export default defineConfig(() => {
       info: (msg) => console.log(`[Vite] ${msg}`),
       warn: (msg) => console.warn(`[Vite] ${msg}`),
       error: (msg) => console.error(`[Vite] ${msg}`),
-      warnOnce: (msg) => console.warn(`[Vite] ${msg}`),
-    },
+      warnOnce: (msg) => console.warn(`[Vite] ${msg}`)
+    }
   }
 })
