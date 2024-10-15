@@ -10,8 +10,8 @@
 /coverage
 
 # vite
-.vite
-src/dist
+/.vite/
+/dist/
 
 # production
 /build

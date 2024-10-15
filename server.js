@@ -33,8 +33,8 @@ async function createServer() {
   let httpsOptions = null
 
   if (dev) {
-    const keyPath = 'certificates/localhost+2-key.pem'
-    const certPath = 'certificates/localhost+2.pem'
+    const keyPath = 'certificates/localhost-key.pem'
+    const certPath = 'certificates/localhost.pem'
 
     if (fs.existsSync(keyPath) && fs.existsSync(certPath)) {
       try {

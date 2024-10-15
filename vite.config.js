@@ -73,7 +73,7 @@ export default defineConfig(() => {
         exclude: ['msnodesqlv8'],
       },
       minify: process.env.NODE_ENV === 'production',
-      outDir: path.resolve(__dirname, 'src', 'dist'),
+      outDir: path.resolve(__dirname, 'dist'),
       rollupOptions: {
         output: {
           manualChunks: {
