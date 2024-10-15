@@ -51,6 +51,3 @@ tunnel_manager.pid
 
 # data
 /data
-
-# yarn
-.yarn
