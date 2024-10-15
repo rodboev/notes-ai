@@ -6,7 +6,7 @@ import { readFromDisk, writeToDisk } from '@/utils/diskStorage'
 import { timestamp } from '@/utils/timestamp'
 import { getPrompts } from '@/api/prompts'
 import { firestoreBatchWrite, firestoreGetAllDocs } from '@/utils/firestoreHelper'
-import { getNotes } from '../notes'
+import { GET as getNotes } from '../notes'
 import dotenv from 'dotenv'
 
 dotenv.config({ path: '.env.local' })
