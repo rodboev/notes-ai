@@ -1,22 +1,17 @@
-// src/app/api/notes/route.js
-
-import { NextResponse } from 'next/server'
 import sql from 'mssql/msnodesqlv8.js'
 import hash from 'object-hash'
-import { readFromDisk, writeToDisk } from '../../utils/diskStorage'
-import { firestore } from '../../firebase'
-import { doc } from 'firebase/firestore'
+import { readFromDisk, writeToDisk } from '@/utils/diskStorage'
 import {
   firestoreBatchGet,
   firestoreBatchWrite,
   firestoreGetAllDocs,
-} from '../../utils/firestoreHelper'
-import { timestamp } from '../../utils/timestamp'
+} from '@/utils/firestoreHelper'
+import { timestamp } from '@/utils/timestamp'
 
 sql.driver = 'FreeTDS'
 
 const DESIRED_NOTE_CODES = ['911 EMER', 'SERVICE', 'KEY ISSUE', 'ALERT', 'HHALERT']
-const isProduction = process.env.NEXT_PUBLIC_NODE_ENV === 'production'
+const isProduction = process.env.NODE_ENV === 'production'
 
 function formatDate(dateString) {
   if (!dateString || !/^\d{4}-\d{2}-\d{2}$/.test(dateString)) {
@@ -198,8 +193,8 @@ async function getNotesByFingerprints(fingerprints) {
   return foundNotes
 }
 
-export async function GET(request) {
-  const { searchParams } = new URL(request.url)
+export async function getNotes({ query }) {
+  const searchParams = new URLSearchParams(query)
   let startDate = searchParams.get('startDate')
   let endDate = searchParams.get('endDate')
   const fingerprint = searchParams.get('fingerprint')
@@ -208,8 +203,13 @@ export async function GET(request) {
   if (fingerprint || fingerprints) {
     const fingerprintsToFetch = fingerprints ? fingerprints.split(',') : [fingerprint]
     const notes = await getNotesByFingerprints(fingerprintsToFetch)
-    if (notes.length === 0) return NextResponse.json([])
-    return NextResponse.json(notes)
+    if (notes.length === 0)
+      return new Response(JSON.stringify([]), {
+        headers: { 'Content-Type': 'application/json' },
+      })
+    return new Response(JSON.stringify(notes), {
+      headers: { 'Content-Type': 'application/json' },
+    })
   }
 
   // Set default dates if not provided
@@ -240,7 +240,9 @@ export async function GET(request) {
 
   if (notes.length > 0) {
     console.log(`Returning ${notes.length} notes from cache`)
-    return NextResponse.json(notes)
+    return new Response(JSON.stringify(notes), {
+      headers: { 'Content-Type': 'application/json' },
+    })
   }
 
   // If not in cache, fetch from database
@@ -266,13 +268,15 @@ export async function GET(request) {
     await saveNotes(allNotes)
 
     console.log(`Returning ${notes.length} notes from database`)
-    return NextResponse.json(notes)
+    return new Response(JSON.stringify(notes), {
+      headers: { 'Content-Type': 'application/json' },
+    })
   } catch (error) {
     console.error('Error fetching from database:', error)
-    return NextResponse.json(
-      { error: 'Internal Server Error', details: error.message },
-      { status: 500 },
-    )
+    return new Response(JSON.stringify({ error: `Internal Server Error: ${error.message}` }), {
+      status: 500,
+      headers: { 'Content-Type': 'application/json' },
+    })
   } finally {
     if (pool) {
       try {
@@ -283,4 +287,8 @@ export async function GET(request) {
       }
     }
   }
+}
+
+export default {
+  getNotes,
 }

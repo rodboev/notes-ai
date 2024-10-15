@@ -4,7 +4,7 @@ import Home from '@/page'
 import Providers from '@/components/Providers'
 import '@/globals.css'
 
-ReactDOM.createRoot(document.body).render(
+ReactDOM.createRoot(document.getElementById('app')).render(
   <React.StrictMode>
     <Providers>
       <Home />

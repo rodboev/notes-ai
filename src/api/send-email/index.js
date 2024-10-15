@@ -8,101 +8,121 @@ import { loadStatuses, saveStatus } from '../status/route'
 
 dotenv.config()
 
-export async function POST(req) {
-  const {
-    GMAIL_USER,
-    SERVICE_ACCOUNT_CLIENT_EMAIL,
-    SERVICE_ACCOUNT_PRIVATE_KEY,
-    SERVICE_ACCOUNT_CLIENT_ID,
-  } = process.env
-
-  console.log('GMAIL_USER:', GMAIL_USER)
-
-  let email, subject, content, fingerprint
-  try {
-    const body = await req.json()
-    ;({ email, subject, content, fingerprint } = body)
-  } catch (error) {
-    console.error('Error parsing request body:', error)
-    return NextResponse.json({ error: 'Invalid request body' }, { status: 400 })
-  }
-
-  console.log('Received parameters:', {
-    email,
-    subject,
-    content: content.substring(0, 100) + '...',
-    fingerprint,
-  })
-
-  if (!email || !subject || !content || !fingerprint) {
-    const missingFields = ['email', 'subject', 'content', 'fingerprint'].filter(
-      (field) => !eval(field),
-    )
-    console.error('Missing fields:', missingFields.join(', '))
-    return NextResponse.json({ error: 'Missing field', details: missingFields }, { status: 400 })
-  }
-
-  try {
-    const oAuth2Client = new google.auth.JWT(
-      SERVICE_ACCOUNT_CLIENT_EMAIL,
-      null,
-      SERVICE_ACCOUNT_PRIVATE_KEY.replace(/\\n/gm, '\n'),
-      ['https://mail.google.com/'],
+export default {
+  async POST(req) {
+    const {
       GMAIL_USER,
-    )
+      SERVICE_ACCOUNT_CLIENT_EMAIL,
+      SERVICE_ACCOUNT_PRIVATE_KEY,
+      SERVICE_ACCOUNT_CLIENT_ID,
+    } = process.env
 
-    await oAuth2Client.authorize()
-    const accessToken = await (await oAuth2Client.getAccessToken()).token
+    console.log('GMAIL_USER:', GMAIL_USER)
 
-    const transporter = nodemailer.createTransport({
-      service: 'gmail',
-      auth: {
-        type: 'OAuth2',
-        user: GMAIL_USER,
-        clientId: SERVICE_ACCOUNT_CLIENT_ID,
-        accessToken: accessToken,
-      },
+    let email, subject, content, fingerprint
+    try {
+      const body = await req.json()
+      ;({ email, subject, content, fingerprint } = body)
+    } catch (error) {
+      console.error('Error parsing request body:', error)
+      return new Response(JSON.stringify({ error: 'Invalid request body' }), {
+        status: 400,
+        headers: { 'Content-Type': 'application/json' },
+      })
+    }
+
+    console.log('Received parameters:', {
+      email,
+      subject,
+      content: `${content.substring(0, 100)}...`,
+      fingerprint,
     })
 
-    const mailOptions = {
-      from: GMAIL_USER,
-      to: email,
-      subject: subject,
-      html: content,
+    if (!email || !subject || !content || !fingerprint) {
+      const missingFields = ['email', 'subject', 'content', 'fingerprint'].filter(
+        (field) => !eval(field),
+      )
+      console.error('Missing fields:', missingFields.join(', '))
+      return new Response(JSON.stringify({ error: 'Missing field', details: missingFields }), {
+        status: 400,
+        headers: { 'Content-Type': 'application/json' },
+      })
     }
 
-    await transporter.sendMail(mailOptions)
-    console.log('Email sent successfully')
+    try {
+      const oAuth2Client = new google.auth.JWT(
+        SERVICE_ACCOUNT_CLIENT_EMAIL,
+        null,
+        SERVICE_ACCOUNT_PRIVATE_KEY.replace(/\\n/gm, '\n'),
+        ['https://mail.google.com/'],
+        GMAIL_USER,
+      )
 
-    const emailData = {
-      status: 'success',
-      sentAt: new Date().toISOString(),
-      subject,
-      content,
-      to: email,
+      await oAuth2Client.authorize()
+      const accessToken = await (await oAuth2Client.getAccessToken()).token
+
+      const transporter = nodemailer.createTransport({
+        service: 'gmail',
+        auth: {
+          type: 'OAuth2',
+          user: GMAIL_USER,
+          clientId: SERVICE_ACCOUNT_CLIENT_ID,
+          accessToken: accessToken,
+        },
+      })
+
+      const mailOptions = {
+        from: GMAIL_USER,
+        to: email,
+        subject: subject,
+        html: content,
+      }
+
+      await transporter.sendMail(mailOptions)
+      console.log('Email sent successfully')
+
+      const emailData = {
+        status: 'success',
+        sentAt: new Date().toISOString(),
+        subject,
+        content,
+        to: email,
+      }
+
+      // Update status using saveStatus function
+      await saveStatus(fingerprint, emailData)
+
+      return new Response(
+        JSON.stringify({ message: 'Email sent successfully', status: emailData }),
+        {
+          headers: { 'Content-Type': 'application/json' },
+        },
+      )
+    } catch (error) {
+      console.error('Error sending email:', error)
+
+      // Update status to error using saveStatus function
+      const errorStatus = {
+        status: 'error',
+        sentAt: new Date().toISOString(),
+        subject,
+        content,
+        to: email,
+        error: error.message,
+      }
+      await saveStatus(fingerprint, errorStatus)
+
+      return new Response(
+        JSON.stringify({
+          error: 'Error sending email',
+          details: error.message,
+          status: errorStatus,
+        }),
+        {
+          status: 500,
+          headers: { 'Content-Type': 'application/json' },
+        },
+      )
     }
-
-    // Update status using saveStatus function
-    await saveStatus(fingerprint, emailData)
-
-    return NextResponse.json({ message: 'Email sent successfully', status: emailData })
-  } catch (error) {
-    console.error('Error sending email:', error)
-
-    // Update status to error using saveStatus function
-    const errorStatus = {
-      status: 'error',
-      sentAt: new Date().toISOString(),
-      subject,
-      content,
-      to: email,
-      error: error.message,
-    }
-    await saveStatus(fingerprint, errorStatus)
-
-    return NextResponse.json(
-      { error: 'Error sending email', details: error.message, status: errorStatus },
-      { status: 500 },
-    )
-  }
+  },
 }

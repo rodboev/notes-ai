@@ -4,12 +4,11 @@ import OpenAI from 'openai'
 import { parse } from 'best-effort-json-parser'
 import { readFromDisk, writeToDisk } from '@/utils/diskStorage'
 import { timestamp } from '@/utils/timestamp'
-import { getPrompts } from '@/api/prompts/route.js'
+import { getPrompts } from '@/api/prompts'
 import { firestoreBatchWrite, firestoreGetAllDocs } from '@/utils/firestoreHelper'
-import { headers } from 'next/headers'
-import { GET as getNotes } from '../notes/route'
+import { getNotes } from '../notes'
 
-const isProduction = process.env.NEXT_PUBLIC_NODE_ENV === 'production'
+const isProduction = process.env.NODE_ENV === 'production'
 const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY })
 const NOTES_PER_GROUP = isProduction ? 10 : 3
 
@@ -102,8 +101,7 @@ function expand(template, variables) {
 async function fetchWithErrorHandling(searchParams) {
   console.log(`${timestamp()} Attempting to fetch notes with params:`, searchParams)
   try {
-    const response = await getNotes({ url: `http://localhost/api/notes?${searchParams}` })
-    const notes = await response.json()
+    const notes = await getNotes({ query: searchParams })
     console.log(`${timestamp()} Fetch completed, retrieved ${notes.length} notes`)
     return notes
   } catch (error) {
@@ -117,9 +115,8 @@ async function fetchWithErrorHandling(searchParams) {
   }
 }
 
-export async function GET(req) {
-  const headersList = headers()
-  const { searchParams } = new URL(req.url)
+export default async function handler(req, res) {
+  const { searchParams } = new URL(req.url, `http://${req.headers.host}`)
   const startDate = searchParams.get('startDate')
   const endDate = searchParams.get('endDate')
   const fingerprint = searchParams.get('fingerprint')

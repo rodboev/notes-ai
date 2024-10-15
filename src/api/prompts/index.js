@@ -1,6 +1,5 @@
 // src/app/api/prompts/route.js
 
-import { NextResponse } from 'next/server'
 import { readFile, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
 import { getDoc, setDoc, doc } from 'firebase/firestore'
@@ -95,19 +94,25 @@ export async function getPrompts() {
   return mergedPrompts
 }
 
-export async function GET() {
-  const prompts = await getPrompts()
-  return NextResponse.json(prompts)
-}
+export default {
+  async GET() {
+    const prompts = await getPrompts()
+    return new Response(JSON.stringify(prompts), {
+      headers: { 'Content-Type': 'application/json' },
+    })
+  },
 
-export async function PATCH(request) {
-  const updatedPrompts = await request.json()
-  console.log('Updated prompts:', updatedPrompts)
-  const toSave = {
-    email: { current: updatedPrompts.email.current },
-    system: { current: updatedPrompts.system.current },
-  }
-  await savePrompts(toSave)
-  const newPrompts = await getPrompts()
-  return NextResponse.json(newPrompts)
+  async PATCH(req) {
+    const updatedPrompts = await req.json()
+    console.log('Updated prompts:', updatedPrompts)
+    const toSave = {
+      email: { current: updatedPrompts.email.current },
+      system: { current: updatedPrompts.system.current },
+    }
+    await savePrompts(toSave)
+    const newPrompts = await getPrompts()
+    return new Response(JSON.stringify(newPrompts), {
+      headers: { 'Content-Type': 'application/json' },
+    })
+  },
 }
