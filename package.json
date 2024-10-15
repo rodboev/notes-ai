@@ -1,9 +1,9 @@
 {
   "name": "notes-ai",
   "version": "1.0.0",
-     "engines": {
-     "node": "20.x"
-   }
+  "engines": {
+    "node": "20.x"
+  },
   "private": true,
   "type": "module",
   "scripts": {
