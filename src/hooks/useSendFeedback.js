@@ -9,11 +9,10 @@ const sendFeedback = async ({ feedback, note, subject, email }) => {
   if (isProduction) {
     const response = await api.post('/send-feedback', { feedback, note, subject, email })
     return response.data
-  } else {
-    // Simulate sending for non-production environments
-    await new Promise((resolve) => setTimeout(resolve, 800))
-    return { message: 'Feedback sent successfully' }
   }
+  // Simulate sending for non-production environments
+  await new Promise((resolve) => setTimeout(resolve, 800))
+  return { message: 'Feedback sent successfully' }
 }
 
 export const useSendFeedback = () => {

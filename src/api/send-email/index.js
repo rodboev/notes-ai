@@ -20,7 +20,11 @@ export const post = async (req, res) => {
 
   console.log('GMAIL_USER:', GMAIL_USER)
 
-  let email, subject, content, fingerprint
+  let email
+  let subject
+  let content
+  let fingerprint
+
   try {
     const body = await req.json()
     ;({ email, subject, content, fingerprint } = body)
@@ -39,7 +43,7 @@ export const post = async (req, res) => {
 
   if (!email || !subject || !content || !fingerprint) {
     const missingFields = ['email', 'subject', 'content', 'fingerprint'].filter(
-      (field) => !eval(field),
+      (field) => !body(field),
     )
     console.error('Missing fields:', missingFields.join(', '))
     res.status(400).json({ error: 'Missing field', details: missingFields })

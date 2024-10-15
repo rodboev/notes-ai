@@ -199,12 +199,12 @@ async function getNotesByFingerprints(fingerprints) {
 export const get = async (req, res) => {
   try {
     console.log('[Notes API] Handling GET request')
-    const url = new URL(req.url, `http://${req.headers.host}`)
-    const searchParams = url.searchParams
-    const startDate = searchParams.get('startDate')
-    const endDate = searchParams.get('endDate')
-    const fingerprint = searchParams.get('fingerprint')
-    const fingerprints = searchParams.get('fingerprints')
+    console.log('Request URL:', req.url)
+    console.log('Request query params:', req.query)
+    let startDate = req.query.startDate
+    let endDate = req.query.endDate
+    const fingerprint = req.query.fingerprint
+    const fingerprints = req.query.fingerprints
 
     if (fingerprint || fingerprints) {
       const fingerprintsToFetch = fingerprints ? fingerprints.split(',') : [fingerprint]
@@ -218,16 +218,17 @@ export const get = async (req, res) => {
     const yesterday = new Date(today)
     yesterday.setDate(yesterday.getDate() - 1)
 
-    const effectiveStartDate =
-      startDate && startDate !== 'null' ? startDate : yesterday.toISOString().split('T')[0]
-    const effectiveEndDate =
-      endDate && endDate !== 'null' ? endDate : today.toISOString().split('T')[0]
-    console.log(`Using dates: startDate=${effectiveStartDate}, endDate=${effectiveEndDate}`)
+    if (!startDate || startDate === 'null' || !endDate || endDate === 'null') {
+      startDate =
+        startDate && startDate !== 'null' ? startDate : yesterday.toISOString().split('T')[0]
+      endDate = endDate && endDate !== 'null' ? endDate : today.toISOString().split('T')[0]
+      console.log(`Using default dates: startDate=${startDate}, endDate=${endDate}`)
+    }
 
-    console.log(`Fetching notes for date range: ${effectiveStartDate} to ${effectiveEndDate}`)
+    console.log(`Fetching notes for date range: ${startDate} to ${endDate}`)
 
     // Ensure endDate is exclusive
-    const queryEndDate = new Date(effectiveEndDate)
+    const queryEndDate = new Date(endDate)
     queryEndDate.setDate(queryEndDate.getDate() + 1)
     const formattedQueryEndDate = queryEndDate.toISOString().split('T')[0]
 
@@ -235,9 +236,7 @@ export const get = async (req, res) => {
     let allNotes = await loadNotes()
     let notes = allNotes.filter(
       (note) =>
-        note.date >= effectiveStartDate &&
-        note.date < formattedQueryEndDate &&
-        note.code === '911 EMER',
+        note.date >= startDate && note.date < formattedQueryEndDate && note.code === '911 EMER',
     )
 
     if (notes.length > 0) {
@@ -252,7 +251,7 @@ export const get = async (req, res) => {
       console.log('Fetching notes from database...')
       pool = await sql.connect(config)
 
-      notes = await getJoinedNotes(pool, effectiveStartDate, formattedQueryEndDate)
+      notes = await getJoinedNotes(pool, startDate, formattedQueryEndDate)
 
       notes = transformNotes(notes)
         .filter((note) => note.code === '911 EMER')

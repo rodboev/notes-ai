@@ -4,10 +4,21 @@ import pluginReact from '@vitejs/plugin-react-swc'
 import { defineConfig } from 'vite'
 import path from 'node:path'
 import dotenv from 'dotenv'
+import fs from 'node:fs'
 
 dotenv.config({ path: '.env.local' })
 
 export default defineConfig(() => {
+  const keyPath = './localhost+2-key.pem'
+  const certPath = './localhost+2.pem'
+  const httpsOptions =
+    fs.existsSync(keyPath) && fs.existsSync(certPath)
+      ? {
+          key: fs.readFileSync(keyPath),
+          cert: fs.readFileSync(certPath),
+        }
+      : false
+
   return {
     plugins: [
       pluginReact({
@@ -27,10 +38,12 @@ export default defineConfig(() => {
     },
     server: {
       port: 3000,
+      https: httpsOptions,
       proxy: {
         '/api': {
-          target: 'http://localhost:3001',
+          target: 'https://localhost:3001',
           changeOrigin: true,
+          secure: false, // Add this line to allow self-signed certificates
           ws: true,
           configure: (proxy, _options) => {
             proxy.on('error', (err, _req, _res) => {
