@@ -209,10 +209,6 @@ export const get = async (req, res) => {
     if (fingerprint || fingerprints) {
       const fingerprintsToFetch = fingerprints ? fingerprints.split(',') : [fingerprint]
       const notes = await getNotesByFingerprints(fingerprintsToFetch)
-      if (notes.length === 0) {
-        res.status(200).json([])
-        return
-      }
       res.status(200).json(notes)
       return
     }
@@ -289,6 +285,6 @@ export const get = async (req, res) => {
     }
   } catch (error) {
     console.error('[Notes API] Error in GET handler:', error)
-    res.status(500).json({ error: 'Internal Server Error' })
+    res.status(500).json({ error: 'Internal Server Error', details: error.message })
   }
 }

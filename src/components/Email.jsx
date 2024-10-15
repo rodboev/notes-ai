@@ -53,7 +53,7 @@ const Email = ({
     if (error) {
       return (
         <div className="flex h-64 items-center justify-center">
-          <p className="text-sm sm:text-base">Error: {error.message}</p>
+          <p className="text-sm sm:text-base">Error: {error}</p>
         </div>
       )
     }

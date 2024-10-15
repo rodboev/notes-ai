@@ -106,7 +106,7 @@ async function fetchWithErrorHandling(searchParams) {
     console.log(`${timestamp()} Fetch completed, retrieved ${notes.length} notes`)
     return notes
   } catch (error) {
-    console.error(`${timestamp()} Error:`, {
+    console.error(`${timestamp()} Error fetching notes:`, {
       message: error.message,
       cause: error.cause?.message,
       code: error.cause?.code,
