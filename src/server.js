@@ -8,6 +8,7 @@ import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 import express from 'express'
 import { createServer as createViteServer } from 'vite'
+import chalk from 'chalk'
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
 dotenv.config({ path: path.resolve(process.cwd(), '.env') })
@@ -34,44 +35,72 @@ async function createServer() {
       httpServer = createHttpsServer(httpsOptions, app)
       isHttps = true
     } else {
-      console.warn('HTTPS certificates not found. Falling back to HTTP.')
+      console.warn(chalk.yellow('HTTPS certificates not found. Falling back to HTTP.'))
       httpServer = createHttpServer(app)
     }
   } else {
     httpServer = createHttpServer(app)
   }
 
-  const vite = await createViteServer({
-    server: {
-      middlewareMode: true,
-      https: isHttps
-        ? {
-            key: fs.readFileSync('./localhost+2-key.pem'),
-            cert: fs.readFileSync('./localhost+2.pem'),
-          }
-        : false,
-    },
-    appType: 'custom',
-    hmr: {
-      server: httpServer,
-      protocol: isHttps ? 'wss' : 'ws',
-      port: 24678,
-    },
-  })
+  let vite
 
-  app.use(vite.middlewares)
+  if (dev) {
+    // Create Vite server in middleware mode
+    vite = await createViteServer({
+      server: {
+        middlewareMode: true,
+        https: isHttps
+          ? {
+              key: fs.readFileSync('./localhost+2-key.pem'),
+              cert: fs.readFileSync('./localhost+2.pem'),
+            }
+          : false,
+      },
+      appType: 'custom',
+      hmr: {
+        server: httpServer,
+        protocol: isHttps ? 'wss' : 'ws',
+        port: 24678,
+      },
+      logLevel: 'info',
+      clearScreen: false,
+    })
+
+    // Capture Vite's console output
+    const originalConsole = console
+    console = new Proxy(console, {
+      get: (target, prop) => {
+        if (prop === 'log' || prop === 'warn' || prop === 'error') {
+          return (...args) => {
+            if (args[0] && typeof args[0] === 'string' && args[0].includes('[vite]')) {
+              originalConsole[prop](chalk.cyan(...args))
+            } else {
+              originalConsole[prop](...args)
+            }
+          }
+        }
+        return target[prop]
+      },
+    })
+
+    // Use vite's connect instance as middleware
+    app.use(vite.middlewares)
+  } else {
+    // Serve static files from the 'dist' directory in production
+    app.use(express.static(path.resolve(__dirname, '../dist')))
+  }
 
   const webSocketServer = new WebSocketServer({ noServer: true })
 
   const OPENAI_API_KEY = process.env.OPENAI_API_KEY_VOICE
 
   if (!OPENAI_API_KEY) {
-    console.error(`Environment variable "OPENAI_API_KEY_VOICE" is missing.`)
+    console.error(chalk.red(`Environment variable "OPENAI_API_KEY_VOICE" is missing.`))
   }
 
   let connectedClients = 0
 
-  const log = (...args) => console.log('[WebSocket]', ...args)
+  const log = (...args) => console.log(chalk.blue('[WebSocket]'), ...args)
 
   const handleWebSocketConnection = async (ws) => {
     connectedClients++
@@ -150,8 +179,8 @@ async function createServer() {
       webSocketServer.handleUpgrade(req, socket, head, (ws) => {
         webSocketServer.emit('connection', ws, req)
       })
-    } else if (vite.ws.handleUpgrade(req, socket, head)) {
-      // Vite handles its own upgrade
+    } else if (dev && vite.ws.handleUpgrade(req, socket, head)) {
+      // Vite handles its own upgrade in development mode
       return
     } else {
       socket.destroy()
@@ -166,26 +195,28 @@ async function createServer() {
     })
   })
 
-  // Serve static files from the 'dist' directory in production
-  if (!dev) {
-    app.use(express.static(path.resolve(__dirname, '../dist')))
-  }
-
   app.use('*', async (req, res, next) => {
-    const url = req.originalUrl
-
     try {
-      const template = await vite.transformIndexHtml(url, '')
-      res.status(200).set({ 'Content-Type': 'text/html' }).end(template)
+      if (dev) {
+        // In development, let Vite handle the request
+        vite.middlewares(req, res, next)
+      } else {
+        // In production, serve the built index.html
+        const indexPath = path.resolve(__dirname, '../dist/index.html')
+        const html = fs.readFileSync(indexPath, 'utf-8')
+        res.status(200).set({ 'Content-Type': 'text/html' }).end(html)
+      }
     } catch (e) {
-      vite.ssrFixStacktrace(e)
+      if (dev) {
+        vite.ssrFixStacktrace(e)
+      }
       next(e)
     }
   })
 
   httpServer.on('error', (e) => {
     if (e.code === 'EADDRINUSE') {
-      console.log('Address in use, retrying...')
+      console.log(chalk.yellow('Address in use, retrying...'))
       setTimeout(() => {
         httpServer.close()
         httpServer.listen(port, hostname)
@@ -195,11 +226,20 @@ async function createServer() {
 
   httpServer.listen(port, () => {
     const protocol = isHttps ? 'https' : 'http'
-    log(` ▲ Ready on ${protocol}://${hostname}:${port}`)
+    console.log(chalk.green(`Server started successfully`))
+    console.log(chalk.blue(` ▲ Ready on ${protocol}://${hostname}:${port}`))
+    if (dev) {
+      console.log(
+        chalk.cyan(`[Vite] HMR websocket server running on ${protocol}://${hostname}:24678`),
+      )
+      console.log(chalk.yellow(`Running in development mode`))
+    } else {
+      console.log(chalk.green(`Running in production mode`))
+    }
   })
 }
 
 createServer().catch((err) => {
-  console.error('Failed to start server:', err)
+  console.error(chalk.red('Failed to start server:'), err)
   process.exit(1)
 })
