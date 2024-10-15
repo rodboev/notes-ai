@@ -6,7 +6,7 @@ const __filename = fileURLToPath(import.meta.url)
 const __dirname = path.dirname(__filename)
 
 const source = path.join(__dirname, '..', 'node_modules', 'tinymce')
-const destination = path.join(__dirname, '..', 'src', 'app', 'tinymce')
+const destination = path.join(__dirname, '..', 'public', 'tinymce')
 
 async function copyTinyMCE() {
   try {
@@ -14,7 +14,6 @@ async function copyTinyMCE() {
     await fs.copy(source, destination, {
       filter: (src) => {
         const relativePath = path.relative(source, src)
-        // Exclude unnecessary files/folders to reduce size
         return (
           !relativePath.startsWith('src') &&
           !relativePath.startsWith('modules') &&

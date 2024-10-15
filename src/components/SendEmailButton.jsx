@@ -4,6 +4,8 @@ import { CheckIcon, ExclamationTriangleIcon } from '@heroicons/react/16/solid'
 import SpinnerIcon from './Icons/SpinnerIcon'
 import { useSendEmail } from '../hooks/useSendEmail'
 import { useState, useEffect } from 'react'
+import dotenv from 'dotenv'
+dotenv.config()
 
 const SendEmailButton = ({
   fingerprint,

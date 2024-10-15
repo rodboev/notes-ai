@@ -1,8 +1,8 @@
 // src/app/api/status/route.js
 
-import { readFromDisk, writeToDisk } from '../../utils/diskStorage'
-import { firestoreGetAllDocs, firestoreSetDoc } from '../../utils/firestoreHelper'
-import { timestamp } from '../../utils/timestamp'
+import { readFromDisk, writeToDisk } from '@/utils/diskStorage'
+import { firestoreGetAllDocs, firestoreSetDoc } from '@/utils/firestoreHelper'
+import { timestamp } from '@/utils/timestamp'
 
 const STATUS_COLLECTION = 'status'
 
@@ -67,16 +67,14 @@ export async function saveStatus(fingerprint, newStatus) {
   }
 }
 
-export async function GET(req) {
+export const GET = async (req, res) => {
   try {
-    const url = new URL(req.url)
+    const url = new URL(req.url, `http://${req.headers.host}`)
     const fingerprints = url.searchParams.get('fingerprints')?.split(',') || []
 
     if (fingerprints.length === 0) {
-      return new Response(JSON.stringify({ error: 'Fingerprints parameter is required' }), {
-        status: 400,
-        headers: { 'Content-Type': 'application/json' },
-      })
+      res.status(400).json({ error: 'Fingerprints parameter is required' })
+      return
     }
 
     const allStatuses = await loadStatuses()
@@ -85,45 +83,30 @@ export async function GET(req) {
       return acc
     }, {})
 
-    return new Response(JSON.stringify(statuses), {
-      headers: { 'Content-Type': 'application/json' },
-    })
+    res.status(200).json(statuses)
   } catch (error) {
     console.error(`${timestamp()} Error fetching statuses:`, error.message)
-    return new Response(JSON.stringify({ error: 'Failed to fetch statuses' }), {
-      status: 500,
-      headers: { 'Content-Type': 'application/json' },
-    })
+    res.status(500).json({ error: 'Failed to fetch statuses' })
   }
 }
 
-export async function PATCH(req) {
+export const PATCH = async (req, res) => {
   try {
     const { fingerprint, status } = await req.json()
 
     if (!fingerprint || !status) {
-      return new Response(JSON.stringify({ error: 'Fingerprint and status are required' }), {
-        status: 400,
-        headers: { 'Content-Type': 'application/json' },
-      })
+      res.status(400).json({ error: 'Fingerprint and status are required' })
+      return
     }
 
     const updatedStatus = await saveStatus(fingerprint, status)
 
-    return new Response(
-      JSON.stringify({
-        message: 'Status updated successfully',
-        status: updatedStatus,
-      }),
-      {
-        headers: { 'Content-Type': 'application/json' },
-      },
-    )
+    res.status(200).json({
+      message: 'Status updated successfully',
+      status: updatedStatus,
+    })
   } catch (error) {
     console.error(`${timestamp()} Error updating status:`, error.message)
-    return new Response(JSON.stringify({ error: 'Failed to update status' }), {
-      status: 500,
-      headers: { 'Content-Type': 'application/json' },
-    })
+    res.status(500).json({ error: 'Failed to update status' })
   }
 }

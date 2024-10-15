@@ -4,7 +4,7 @@ import { readFile, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
 import { getDoc, setDoc, doc } from 'firebase/firestore'
 import { firestore } from '@/firebase.js'
-import promptsDefault from './prompts-default.js'
+import promptsDefault from '@/utils/prompts-default.js'
 
 const promptsCurrent = join(process.cwd(), 'data', 'prompts-current.json')
 
@@ -94,25 +94,19 @@ export async function getPrompts() {
   return mergedPrompts
 }
 
-export default {
-  async GET() {
-    const prompts = await getPrompts()
-    return new Response(JSON.stringify(prompts), {
-      headers: { 'Content-Type': 'application/json' },
-    })
-  },
+export const GET = async (req, res) => {
+  const prompts = await getPrompts()
+  res.status(200).json(prompts)
+}
 
-  async PATCH(req) {
-    const updatedPrompts = await req.json()
-    console.log('Updated prompts:', updatedPrompts)
-    const toSave = {
-      email: { current: updatedPrompts.email.current },
-      system: { current: updatedPrompts.system.current },
-    }
-    await savePrompts(toSave)
-    const newPrompts = await getPrompts()
-    return new Response(JSON.stringify(newPrompts), {
-      headers: { 'Content-Type': 'application/json' },
-    })
-  },
+export const PATCH = async (req, res) => {
+  const updatedPrompts = await req.json()
+  console.log('Updated prompts:', updatedPrompts)
+  const toSave = {
+    email: { current: updatedPrompts.email.current },
+    system: { current: updatedPrompts.system.current },
+  }
+  await savePrompts(toSave)
+  const newPrompts = await getPrompts()
+  res.status(200).json(newPrompts)
 }

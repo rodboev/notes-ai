@@ -9,9 +9,9 @@
 # testing
 /coverage
 
-# next.js
-/.next/
-/out/
+# vite
+/.vite/
+/dist/
 
 # production
 /build
@@ -31,16 +31,23 @@ yarn-error.log*
 
 # vercel
 .vercel
+.next
 
 # typescript
 *.tsbuildinfo
 next-env.d.ts
 
 # TinyMCE local files
-/src/app/tinymce
+public/tinymce
 
 certificates
 
 tunnel.log
 ssh_tunnel.pid
 tunnel_manager.pid
+
+# vite-plugin-api-routes
+/.api
+
+# data
+/data

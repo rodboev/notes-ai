@@ -115,7 +115,12 @@ async function fetchWithErrorHandling(searchParams) {
   }
 }
 
-export default async function handler(req, res) {
+export const GET = async (req, res) => {
+  if (req.method !== 'GET') {
+    res.status(405).json({ error: 'Method not allowed' })
+    return
+  }
+
   const { searchParams } = new URL(req.url, `http://${req.headers.host}`)
   const startDate = searchParams.get('startDate')
   const endDate = searchParams.get('endDate')
@@ -133,178 +138,170 @@ export default async function handler(req, res) {
     return acc
   }, {})
 
-  const encoder = new TextEncoder()
-  const readableStream = new ReadableStream({
-    async start(controller) {
-      let responseComplete = false
-      let dataSent = false
-      const sentFingerprints = new Set()
+  // Set up SSE headers
+  res.writeHead(200, {
+    'Content-Type': 'text/event-stream',
+    'Cache-Control': 'no-cache',
+    Connection: 'keep-alive',
+  })
 
-      function sendData(data, status) {
-        const payload = {
-          chunk:
-            status === 'stored' || status === 'streaming'
-              ? typeof data === 'string'
-                ? data
-                : JSON.stringify(data)
-              : data,
-          status,
+  let responseComplete = false
+  let dataSent = false
+  const sentFingerprints = new Set()
+
+  function sendData(data, status) {
+    const payload = {
+      chunk:
+        status === 'stored' || status === 'streaming'
+          ? typeof data === 'string'
+            ? data
+            : JSON.stringify(data)
+          : data,
+      status,
+    }
+    res.write(`data: ${JSON.stringify(payload)}\n\n`)
+    dataSent = true
+  }
+
+  async function streamResponse(chunk) {
+    const prompts = await getPrompts()
+    if (!prompts.system || !prompts.user) throw new Error('Required prompts not found')
+
+    const systemContent = expand(prompts.system.current || prompts.system.default, prompts)
+    const chunkWithoutAddress = chunk.map(({ address, ...rest }) => rest)
+    const userContent = `${prompts.user}\n\n${JSON.stringify(chunkWithoutAddress)}`
+    const messages = [
+      { role: 'system', content: systemContent },
+      { role: 'user', content: userContent },
+    ]
+
+    let stream
+    try {
+      stream = await openai.chat.completions.create({
+        model: 'gpt-4-0613',
+        stream: true,
+        response_format: { type: 'json_object' },
+        messages,
+        seed: 0,
+      })
+    } catch (error) {
+      console.warn(`${timestamp()} OpenAI API error in streamResponse:`, String(error))
+      throw error
+    }
+
+    let emailsJson = ''
+    for await (const data of stream) {
+      const chunk = data.choices[0].delta.content
+      const status = data.choices[0].finish_reason
+      if (!status) {
+        // Streaming response
+        emailsJson += chunk
+        sendData(chunk, 'streaming')
+      } else if (status === 'stop') {
+        // Full response end of this streaming chunk
+        // The status here tells the front-end to stop concatenating emailsJson, so it can parse streaming objects separately
+        sendData('', 'streaming-object-complete')
+        const emails = parse(emailsJson.trim()).emails || []
+        const uniqueNewEmails = emails.filter((email) => !sentFingerprints.has(email.fingerprint))
+        for (const email of uniqueNewEmails) sentFingerprints.add(email.fingerprint)
+        return emails
+      }
+    }
+  }
+
+  try {
+    if (fingerprint) {
+      // Handle single note refresh (always stream)
+      console.log(`${timestamp()} Fetching note for fingerprint: ${fingerprint}`)
+      const note = await fetchWithErrorHandling(`fingerprint=${fingerprint}`)
+      if (!note || note.length === 0)
+        throw new Error(`Note not found for fingerprint: ${fingerprint}`)
+
+      // Force refresh the email
+      const [generatedEmail] = await streamResponse([note[0]])
+      if (!generatedEmail)
+        throw new Error(`Failed to generate email for fingerprint: ${fingerprint}`)
+
+      // Update stored emails and cache
+      storedEmails = storedEmails.filter((e) => e.fingerprint !== fingerprint)
+      storedEmails.push(generatedEmail)
+      emailCache[fingerprint] = generatedEmail
+      await saveEmails(storedEmails)
+    } else if (requestedFingerprints.length > 0) {
+      // Filter out empty strings from requestedFingerprints
+      const validRequestedFingerprints = requestedFingerprints.filter((fp) => fp.trim() !== '')
+
+      // Send stored emails that match the request
+      const storedEmailsToSend = storedEmails.filter((email) =>
+        validRequestedFingerprints.includes(email.fingerprint),
+      )
+
+      if (storedEmailsToSend.length > 0) {
+        const uniqueStoredEmails = storedEmailsToSend.filter(
+          (email) => !sentFingerprints.has(email.fingerprint),
+        )
+        if (uniqueStoredEmails.length > 0) {
+          sendData({ emails: uniqueStoredEmails }, 'stored')
+          for (const email of uniqueStoredEmails) sentFingerprints.add(email.fingerprint)
         }
-        controller.enqueue(encoder.encode(`data: ${JSON.stringify(payload)}\n\n`))
-        dataSent = true
       }
 
-      async function streamResponse(chunk) {
-        const prompts = await getPrompts()
-        if (!prompts.system || !prompts.user) throw new Error('Required prompts not found')
+      const fingerprintsToFetch = validRequestedFingerprints.filter((fp) => !emailCache[fp])
 
-        const systemContent = expand(prompts.system.current || prompts.system.default, prompts)
-        const chunkWithoutAddress = chunk.map(({ address, ...rest }) => rest)
-        const userContent = `${prompts.user}\n\n${JSON.stringify(chunkWithoutAddress)}`
-        const messages = [
-          { role: 'system', content: systemContent },
-          { role: 'user', content: userContent },
-        ]
+      if (fingerprintsToFetch.length > 0) {
+        console.log(
+          `${timestamp()} Fetching notes for fingerprints: ${fingerprintsToFetch.join(',')}`,
+        )
+        const notesToProcess = await fetchWithErrorHandling(
+          `fingerprints=${fingerprintsToFetch.join(',')}`,
+        )
+        console.log(`${timestamp()} Fetched ${notesToProcess.length} notes to process`)
 
-        let stream
-        try {
-          stream = await openai.chat.completions.create({
-            model: 'gpt-4o-2024-08-06',
-            stream: true,
-            response_format: { type: 'json_object' },
-            messages,
-            seed: 0,
-          })
-        } catch (error) {
-          console.warn(`${timestamp()} OpenAI API error in streamResponse:`, String(error))
-          throw error
-        }
+        // Process notes in groups of 10 or less at a time
+        const noteGroups = chunkArray(notesToProcess, NOTES_PER_GROUP)
+        console.log(
+          `${timestamp()} Created ${noteGroups.length} note groups (${NOTES_PER_GROUP} notes each)`,
+        )
 
-        let emailsJson = ''
-        for await (const data of stream) {
-          const chunk = data.choices[0].delta.content
-          const status = data.choices[0].finish_reason
-          if (!status) {
-            // Streaming response
-            emailsJson += chunk
-            sendData(chunk, 'streaming')
-          } else if (status === 'stop') {
-            // Full response end of this streaming chunk
-            // The status here tells the front-end to stop concatenating emailsJson, so it can parse streaming objects separately
-            sendData('', 'streaming-object-complete')
-            const emails = parse(emailsJson.trim()).emails || []
-            const uniqueNewEmails = emails.filter(
-              (email) => !sentFingerprints.has(email.fingerprint),
-            )
-            for (const email of uniqueNewEmails) sentFingerprints.add(email.fingerprint)
-            return emails
+        for (const [index, noteGroup] of noteGroups.entries()) {
+          console.log(`${timestamp()} Processing group ${index + 1} of ${noteGroups.length}`)
+          const newEmailGroup = await streamResponse(noteGroup)
+          storedEmails = [...storedEmails, ...newEmailGroup]
+          for (const email of newEmailGroup) {
+            emailCache[email.fingerprint] = email
           }
-        }
-      }
-
-      try {
-        if (fingerprint) {
-          // Handle single note refresh (always stream)
-          console.log(`${timestamp()} Fetching note for fingerprint: ${fingerprint}`)
-          const note = await fetchWithErrorHandling(`fingerprint=${fingerprint}`)
-          if (!note || note.length === 0)
-            throw new Error(`Note not found for fingerprint: ${fingerprint}`)
-
-          // Force refresh the email
-          const [generatedEmail] = await streamResponse([note[0]])
-          if (!generatedEmail)
-            throw new Error(`Failed to generate email for fingerprint: ${fingerprint}`)
-
-          // Update stored emails and cache
-          storedEmails = storedEmails.filter((e) => e.fingerprint !== fingerprint)
-          storedEmails.push(generatedEmail)
-          emailCache[fingerprint] = generatedEmail
-          await saveEmails(storedEmails)
-        } else if (requestedFingerprints.length > 0) {
-          // Filter out empty strings from requestedFingerprints
-          const validRequestedFingerprints = requestedFingerprints.filter((fp) => fp.trim() !== '')
-
-          // Send stored emails that match the request
-          const storedEmailsToSend = storedEmails.filter((email) =>
-            validRequestedFingerprints.includes(email.fingerprint),
+          console.log(
+            `${timestamp()} Generated ${newEmailGroup.length} new emails in group ${index + 1}`,
           )
-
-          if (storedEmailsToSend.length > 0) {
-            const uniqueStoredEmails = storedEmailsToSend.filter(
-              (email) => !sentFingerprints.has(email.fingerprint),
-            )
-            if (uniqueStoredEmails.length > 0) {
-              sendData({ emails: uniqueStoredEmails }, 'stored')
-              for (const email of uniqueStoredEmails) sentFingerprints.add(email.fingerprint)
-            }
-          }
-
-          const fingerprintsToFetch = validRequestedFingerprints.filter((fp) => !emailCache[fp])
-
-          if (fingerprintsToFetch.length > 0) {
-            console.log(
-              `${timestamp()} Fetching notes for fingerprints: ${fingerprintsToFetch.join(',')}`,
-            )
-            const notesToProcess = await fetchWithErrorHandling(
-              `fingerprints=${fingerprintsToFetch.join(',')}`,
-            )
-            console.log(`${timestamp()} Fetched ${notesToProcess.length} notes to process`)
-
-            // Process notes in groups of 10 or less at a time
-            const noteGroups = chunkArray(notesToProcess, NOTES_PER_GROUP)
-            console.log(
-              `${timestamp()} Created ${noteGroups.length} note groups (${NOTES_PER_GROUP} notes each)`,
-            )
-
-            for (const [index, noteGroup] of noteGroups.entries()) {
-              console.log(`${timestamp()} Processing group ${index + 1} of ${noteGroups.length}`)
-              const newEmailGroup = await streamResponse(noteGroup)
-              storedEmails = [...storedEmails, ...newEmailGroup]
-              for (const email of newEmailGroup) {
-                emailCache[email.fingerprint] = email
-              }
-              console.log(
-                `${timestamp()} Generated ${newEmailGroup.length} new emails in group ${index + 1}`,
-              )
-              await saveEmails(newEmailGroup)
-            }
-
-            // Force save any remaining emails
-            await saveEmails([], true)
-          } else {
-            console.log(`${timestamp()} No new emails to generate`)
-          }
-        } else {
-          console.log(`${timestamp()} All requested emails are already cached`)
+          await saveEmails(newEmailGroup)
         }
 
-        console.log(`${timestamp()} responseComplete = true`)
-        responseComplete = true
-        sendData({}, 'complete')
-      } catch (error) {
-        console.error(`${timestamp()} Error processing emails:`, error)
-        const errorDetails = {
-          message: error.message,
-          cause: error.cause?.message,
-          code: error.cause?.code,
-          stack: error.stack,
-          name: error.name,
-        }
-        sendData({ error: errorDetails }, 'error')
-      } finally {
-        // Force save any remaining emails before closing the stream
+        // Force save any remaining emails
         await saveEmails([], true)
-        if (!dataSent) sendData({}, 'complete')
-        controller.close()
+      } else {
+        console.log(`${timestamp()} No new emails to generate`)
       }
-    },
-  })
+    } else {
+      console.log(`${timestamp()} All requested emails are already cached`)
+    }
 
-  return new Response(readableStream, {
-    headers: {
-      'Content-Type': 'text/event-stream',
-      'Cache-Control': 'no-cache',
-      Connection: 'keep-alive',
-    },
-  })
+    console.log(`${timestamp()} responseComplete = true`)
+    responseComplete = true
+    sendData({}, 'complete')
+  } catch (error) {
+    console.error(`${timestamp()} Error processing emails:`, error)
+    const errorDetails = {
+      message: error.message,
+      cause: error.cause?.message,
+      code: error.cause?.code,
+      stack: error.stack,
+      name: error.name,
+    }
+    sendData({ error: errorDetails }, 'error')
+  } finally {
+    // Force save any remaining emails before closing the stream
+    await saveEmails([], true)
+    if (!dataSent) sendData({}, 'complete')
+    res.end()
+  }
 }

@@ -31,8 +31,8 @@ const config = {
   options: {
     trustedConnection: false,
     enableArithAbort: true,
-    encrypt: true, // Changed to true to enable encryption
-    trustServerCertificate: true, // Added to bypass certificate validation
+    encrypt: true,
+    trustServerCertificate: true,
     driver: 'FreeTDS',
   },
   connectionString: `Driver={FreeTDS};Server=${process.env.SQL_SERVER || '127.0.0.1'},${process.env.SQL_PORT || 1433};Database=${process.env.SQL_DATABASE};Uid=${process.env.SQL_USERNAME};Pwd=${process.env.SQL_PASSWORD};TDS_Version=7.4;`,
@@ -193,41 +193,39 @@ async function getNotesByFingerprints(fingerprints) {
   return foundNotes
 }
 
-export async function getNotes({ query }) {
-  const searchParams = new URLSearchParams(query)
-  let startDate = searchParams.get('startDate')
-  let endDate = searchParams.get('endDate')
+export const GET = async (req, res) => {
+  const { searchParams } = new URL(req.url, `http://${req.headers.host}`)
+  const startDate = searchParams.get('startDate')
+  const endDate = searchParams.get('endDate')
   const fingerprint = searchParams.get('fingerprint')
   const fingerprints = searchParams.get('fingerprints')
 
   if (fingerprint || fingerprints) {
     const fingerprintsToFetch = fingerprints ? fingerprints.split(',') : [fingerprint]
     const notes = await getNotesByFingerprints(fingerprintsToFetch)
-    if (notes.length === 0)
-      return new Response(JSON.stringify([]), {
-        headers: { 'Content-Type': 'application/json' },
-      })
-    return new Response(JSON.stringify(notes), {
-      headers: { 'Content-Type': 'application/json' },
-    })
+    if (notes.length === 0) {
+      res.status(200).json([])
+      return
+    }
+    res.status(200).json(notes)
+    return
   }
 
   // Set default dates if not provided
-  if (!startDate || startDate === 'null' || !endDate || endDate === 'null') {
-    const today = new Date()
-    const yesterday = new Date(today)
-    yesterday.setDate(yesterday.getDate() - 1)
+  const today = new Date()
+  const yesterday = new Date(today)
+  yesterday.setDate(yesterday.getDate() - 1)
 
-    startDate =
-      startDate && startDate !== 'null' ? startDate : yesterday.toISOString().split('T')[0]
-    endDate = endDate && endDate !== 'null' ? endDate : today.toISOString().split('T')[0]
-    console.log(`Using default dates: startDate=${startDate}, endDate=${endDate}`)
-  }
+  const effectiveStartDate =
+    startDate && startDate !== 'null' ? startDate : yesterday.toISOString().split('T')[0]
+  const effectiveEndDate =
+    endDate && endDate !== 'null' ? endDate : today.toISOString().split('T')[0]
+  console.log(`Using dates: startDate=${effectiveStartDate}, endDate=${effectiveEndDate}`)
 
-  console.log(`Fetching notes for date range: ${startDate} to ${endDate}`)
+  console.log(`Fetching notes for date range: ${effectiveStartDate} to ${effectiveEndDate}`)
 
   // Ensure endDate is exclusive
-  const queryEndDate = new Date(endDate)
+  const queryEndDate = new Date(effectiveEndDate)
   queryEndDate.setDate(queryEndDate.getDate() + 1)
   const formattedQueryEndDate = queryEndDate.toISOString().split('T')[0]
 
@@ -235,14 +233,15 @@ export async function getNotes({ query }) {
   let allNotes = await loadNotes()
   let notes = allNotes.filter(
     (note) =>
-      note.date >= startDate && note.date < formattedQueryEndDate && note.code === '911 EMER',
+      note.date >= effectiveStartDate &&
+      note.date < formattedQueryEndDate &&
+      note.code === '911 EMER',
   )
 
   if (notes.length > 0) {
     console.log(`Returning ${notes.length} notes from cache`)
-    return new Response(JSON.stringify(notes), {
-      headers: { 'Content-Type': 'application/json' },
-    })
+    res.status(200).json(notes)
+    return
   }
 
   // If not in cache, fetch from database
@@ -251,7 +250,7 @@ export async function getNotes({ query }) {
     console.log('Fetching notes from database...')
     pool = await sql.connect(config)
 
-    notes = await getJoinedNotes(pool, startDate, formattedQueryEndDate)
+    notes = await getJoinedNotes(pool, effectiveStartDate, formattedQueryEndDate)
 
     notes = transformNotes(notes)
       .filter((note) => note.code === '911 EMER')
@@ -268,15 +267,10 @@ export async function getNotes({ query }) {
     await saveNotes(allNotes)
 
     console.log(`Returning ${notes.length} notes from database`)
-    return new Response(JSON.stringify(notes), {
-      headers: { 'Content-Type': 'application/json' },
-    })
+    res.status(200).json(notes)
   } catch (error) {
     console.error('Error fetching from database:', error)
-    return new Response(JSON.stringify({ error: `Internal Server Error: ${error.message}` }), {
-      status: 500,
-      headers: { 'Content-Type': 'application/json' },
-    })
+    res.status(500).json({ error: `Internal Server Error: ${error.message}` })
   } finally {
     if (pool) {
       try {
@@ -287,8 +281,4 @@ export async function getNotes({ query }) {
       }
     }
   }
-}
-
-export default {
-  getNotes,
 }

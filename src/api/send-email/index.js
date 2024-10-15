@@ -1,11 +1,16 @@
 import nodemailer from 'nodemailer'
 import { google } from 'googleapis'
 import dotenv from 'dotenv'
-import { loadStatuses, saveStatus } from './status'
+import { loadStatuses, saveStatus } from '@/api/status'
 
 dotenv.config()
 
-export async function POST(req) {
+export const POST = async (req, res) => {
+  if (req.method !== 'POST') {
+    res.status(405).json({ error: 'Method not allowed' })
+    return
+  }
+
   const {
     GMAIL_USER,
     SERVICE_ACCOUNT_CLIENT_EMAIL,
@@ -21,7 +26,8 @@ export async function POST(req) {
     ;({ email, subject, content, fingerprint } = body)
   } catch (error) {
     console.error('Error parsing request body:', error)
-    return JSON.stringify({ error: 'Invalid request body' })
+    res.status(400).json({ error: 'Invalid request body' })
+    return
   }
 
   console.log('Received parameters:', {
@@ -36,7 +42,8 @@ export async function POST(req) {
       (field) => !eval(field),
     )
     console.error('Missing fields:', missingFields.join(', '))
-    return JSON.stringify({ error: 'Missing field', details: missingFields })
+    res.status(400).json({ error: 'Missing field', details: missingFields })
+    return
   }
 
   try {
@@ -82,7 +89,7 @@ export async function POST(req) {
     // Update status using saveStatus function
     await saveStatus(fingerprint, emailData)
 
-    return JSON.stringify({ message: 'Email sent successfully', status: emailData })
+    res.status(200).json({ message: 'Email sent successfully', status: emailData })
   } catch (error) {
     console.error('Error sending email:', error)
 
@@ -97,10 +104,8 @@ export async function POST(req) {
     }
     await saveStatus(fingerprint, errorStatus)
 
-    return JSON.stringify({
-      error: 'Error sending email',
-      details: error.message,
-      status: errorStatus,
-    })
+    res
+      .status(500)
+      .json({ error: 'Error sending email', details: error.message, status: errorStatus })
   }
 }
