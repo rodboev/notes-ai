@@ -1,7 +1,7 @@
 /** @type {import('vite').UserConfig} */
 
-import react from '@vitejs/plugin-react-swc'
-import { pluginAPIRoutes as apiRoutes } from 'vite-plugin-api-routes'
+import pluginReact from '@vitejs/plugin-react-swc'
+import { pluginAPIRoutes } from 'vite-plugin-api-routes'
 import { defineConfig } from 'vite'
 import path from 'node:path'
 import dotenv from 'dotenv'
@@ -11,7 +11,7 @@ dotenv.config({ path: '.env.local' })
 export default defineConfig(() => {
   return {
     plugins: [
-      react({
+      pluginReact({
         jsc: {
           transform: {
             react: {
@@ -20,7 +20,10 @@ export default defineConfig(() => {
           },
         },
       }),
-      apiRoutes(),
+      pluginAPIRoutes({
+        minify: false,
+        server: 'server.js',
+      }),
     ],
     resolve: {
       alias: {
@@ -33,6 +36,9 @@ export default defineConfig(() => {
         port: 24678, // Default HMR port
       },
     },
+    preview: {
+      port: 3000,
+    },
     css: {
       postcss: './postcss.config.js',
     },
@@ -44,7 +50,7 @@ export default defineConfig(() => {
       commonjsOptions: {
         exclude: ['msnodesqlv8'],
       },
-      minify: process.env.NODE_ENV === 'production',
+      minify: false, // process.env.NODE_ENV === 'production',
       outDir: path.resolve(__dirname, 'dist'),
     },
     ssr: {
