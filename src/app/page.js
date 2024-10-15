@@ -143,37 +143,35 @@ export default function Home() {
         <div className="flex items-center justify-center text-sm text-neutral-700 sm:text-base">
           No notes found for the selected date range.
         </div>
-      ) : (
-        pairs.map(({ note, email }, index) => (
-          <div
-            key={note.fingerprint}
-            ref={(el) => {
-              pairRefs.current[index] = el
-            }}
-            className="flex snap-start flex-col items-center justify-center"
-          >
-            <div className="container flex max-w-screen-2xl md:flex-row">
-              <Note note={note} index={index} total={pairs.length} />
-              <Email
-                initialEmail={email}
-                noteFingerprint={note.fingerprint}
-                note={note}
-                index={index}
-                total={pairs.length}
-                scrollToNextPair={scrollToNextPair}
-                emailStatus={emailStatuses?.[note.fingerprint]}
-                updateStatus={updateStatus}
-                activeCallFingerprint={activeCallFingerprint}
-                isPending={isPending}
-                isResponding={isResponding}
-                connectConversation={connectConversation}
-                disconnectConversation={disconnectConversation}
-                cancelResponse={cancelResponse}
-              />
-            </div>
-          </div>
-        ))
-      )}
+      ) : null}
+
+      {pairs.map(({ note, email }, index) => (
+        <div
+          key={note.fingerprint}
+          ref={(el) => {
+            pairRefs.current[index] = el
+          }}
+          className="pair -!mx-[10px] container -m-4 flex max-w-screen-2xl snap-center snap-always p-4 pb-0"
+        >
+          <Note note={note} index={index} total={pairs.length} />
+          <Email
+            initialEmail={email}
+            noteFingerprint={note.fingerprint}
+            note={note}
+            index={index}
+            total={pairs.length}
+            scrollToNextPair={scrollToNextPair}
+            emailStatus={emailStatuses?.[note.fingerprint]}
+            updateStatus={updateStatus}
+            activeCallFingerprint={activeCallFingerprint}
+            isPending={isPending}
+            isResponding={isResponding}
+            connectConversation={connectConversation}
+            disconnectConversation={disconnectConversation}
+            cancelResponse={cancelResponse}
+          />
+        </div>
+      ))}
     </div>
   )
 }
