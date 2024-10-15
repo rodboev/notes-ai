@@ -4,7 +4,7 @@ import React, { useRef } from 'react'
 import Editor from './Editor'
 import { ExclamationTriangleIcon } from '@heroicons/react/24/solid'
 import SpinnerIcon from './Icons/SpinnerIcon'
-import SendEmailButton from './SendEmailButton'
+// import SendEmailButton from './SendEmailButton2'
 import FeedbackButton from './FeedbackButton'
 import RefreshButton from './RefreshButton'
 import { useSingleEmail } from '../hooks/useEmails'
@@ -95,14 +95,14 @@ const Email = ({
             )}
             <div className="buttons mt-3 flex flex-col items-start justify-between sm:flex-row sm:items-center">
               <div className="mb-2 flex items-center space-x-2 sm:mb-0 sm:space-x-3">
-                <SendEmailButton
+                {/* <SendEmailButton
                   fingerprint={noteFingerprint}
                   subject={email.subject}
                   getEmailContent={() => editorRef.current?.getContent()}
                   onEmailSent={handleEmailSent}
                   updateStatus={updateStatus}
                   emailStatus={emailStatus}
-                />
+                /> */}
                 <CallButton
                   note={note}
                   activeCallFingerprint={activeCallFingerprint}

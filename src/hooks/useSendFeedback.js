@@ -2,11 +2,9 @@
 
 import { useMutation } from '@tanstack/react-query'
 import api from '../utils/api'
-import dotenv from 'dotenv'
-dotenv.config()
 
 const sendFeedback = async ({ feedback, note, subject, email }) => {
-  const isProduction = process.env.NEXT_PUBLIC_NODE_ENV === 'production'
+  const isProduction = import.meta.env.VITE_NODE_ENV === 'production'
 
   if (isProduction) {
     const response = await api.post('/send-feedback', { feedback, note, subject, email })
