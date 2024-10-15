@@ -11,7 +11,7 @@ import { createServer as createViteServer } from 'vite'
 import chalk from 'chalk'
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
-dotenv.config({ path: path.resolve(process.cwd(), '.env') })
+dotenv.config()
 
 const hostname = 'localhost'
 const port = process.env.PORT || 3000

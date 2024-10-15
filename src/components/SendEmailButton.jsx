@@ -5,6 +5,7 @@ import SpinnerIcon from './Icons/SpinnerIcon'
 import { useSendEmail } from '../hooks/useSendEmail'
 import { useState, useEffect } from 'react'
 import dotenv from 'dotenv'
+
 dotenv.config()
 
 const SendEmailButton = ({
@@ -16,10 +17,11 @@ const SendEmailButton = ({
   updateStatus,
 }) => {
   const [isSending, setIsSending] = useState(false)
-  const isProduction = process.env.NEXT_PUBLIC_NODE_ENV === 'production'
-  const to = isProduction
-    ? 'a.dallas@libertypestnyc.com, r.boev@libertypestnyc.com'
-    : 'r.boev@libertypestnyc.com'
+  // const isProduction = process.env.NEXT_PUBLIC_NODE_ENV === 'production'
+  // const to = isProduction
+  //   ? 'a.dallas@libertypestnyc.com, r.boev@libertypestnyc.com'
+  //   : 'r.boev@libertypestnyc.com'
+  const to = 'r.boev@libertypestnyc.com'
 
   const sendEmailMutation = useSendEmail(fingerprint)
 

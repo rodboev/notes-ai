@@ -7,6 +7,9 @@ import {
   firestoreGetAllDocs,
 } from '@/utils/firestoreHelper'
 import { timestamp } from '@/utils/timestamp'
+import dotenv from 'dotenv'
+
+dotenv.config()
 
 sql.driver = 'FreeTDS'
 

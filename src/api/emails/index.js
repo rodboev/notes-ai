@@ -7,6 +7,9 @@ import { timestamp } from '@/utils/timestamp'
 import { getPrompts } from '@/api/prompts'
 import { firestoreBatchWrite, firestoreGetAllDocs } from '@/utils/firestoreHelper'
 import { getNotes } from '../notes'
+import dotenv from 'dotenv'
+
+dotenv.config()
 
 const isProduction = process.env.NODE_ENV === 'production'
 const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY })

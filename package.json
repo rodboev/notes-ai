@@ -3,7 +3,7 @@
   "version": "1.1.0",
   "type": "module",
   "scripts": {
-    "dev": "vite",
+    "dev": "node scripts/copyTinyMCE.js && vite",
     "start": "vite preview",
     "build": "vite build",
     "postinstall": "node scripts/copyTinyMCE.js"

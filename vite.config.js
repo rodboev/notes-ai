@@ -5,6 +5,9 @@ import swc from 'unplugin-swc'
 import { pluginAPIRoutes as apiRoutes } from 'vite-plugin-api-routes'
 import { defineConfig } from 'vite'
 import path from 'node:path'
+import dotenv from 'dotenv'
+
+dotenv.config()
 
 export default defineConfig(() => {
   return {
@@ -24,7 +27,6 @@ export default defineConfig(() => {
     resolve: {
       alias: {
         '@': path.resolve(__dirname, './src'),
-        '@public': '',
       },
     },
     server: {
@@ -50,8 +52,8 @@ export default defineConfig(() => {
     ssr: {
       noExternal: ['msnodesqlv8'],
     },
-    root: 'src',
-    // publicDir: path.resolve(__dirname, 'public'), // Explicitly set the public directory
+    root: path.resolve(__dirname, 'src'), // Set the root to the src directory
+    publicDir: path.resolve(__dirname, 'public'), // Explicitly set the public directory
     clearScreen: false,
     logLevel: 'info',
     customLogger: {
