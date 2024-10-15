@@ -9,7 +9,7 @@
   "scripts": {
     "dev": "concurrently -n \"Tunnel,Express\" -c \"greenBright,redBright\" \"bash scripts/setupTunnel.sh\" \"nodemon src/server.js\"",
     "build": "bash scripts/setupTunnel.sh > tunnel.log 2>&1 & next build",
-    "start": "cross-env NODE_ENV=production node src/server.js",
+    "start": "npx cross-env NODE_ENV=production node src/server.js",
     "lint": "next lint",
     "postinstall": "node scripts/copyTinyMCE.js"
   },
