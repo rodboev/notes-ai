@@ -63,7 +63,7 @@ const Editor = ({ email, emailStatus, editorRef, children, onRefresh }) => {
   return (
     <div className="relative mb-4 mt-2.5 flex flex-col">
       <TinyMCE
-        tinymceScriptSrc="/api/tinymce/tinymce.min.js"
+        tinymceScriptSrc="/tinymce/tinymce.min.js"
         onInit={(evt, editor) => {
           editorRef.current = editor
           setTimeout(() => {
@@ -83,7 +83,7 @@ const Editor = ({ email, emailStatus, editorRef, children, onRefresh }) => {
           autoresize_min_height: 300,
           content_style:
             'body { font-family: sans-serif; font-size: 10pt; } @media (min-width: 480px) { body { font-size: initial; } }',
-          base_url: '/api/tinymce',
+          base_url: '/tinymce',
           suffix: '.min',
           license_key: 'gpl',
         }}

@@ -1,19 +1,17 @@
 /** @type {import('tailwindcss').Config} */
 module.exports = {
   content: [
-    './src/pages/**/*.{js,ts,jsx,tsx,mdx}',
-    './src/components/**/*.{js,ts,jsx,tsx,mdx}',
-    './src/app/**/*.{js,ts,jsx,tsx,mdx}',
-    './node_modules/react-tailwindcss-datepicker/dist/index.esm.js'
+    './src/**/*.{js,ts,jsx,tsx,mdx}',
+    './node_modules/react-tailwindcss-datepicker/dist/index.esm.js',
   ],
   theme: {
     fontFamily: {
-      inter: ['Inter', 'sans-serif']
+      sans: 'Helvetica, Arial, sans-serif',
     },
     extend: {
       spacing: { full: '100%' },
       flex: {
-        1.4: '1.4 1.4 0%'
+        1.4: '1.4 1.4 0%',
       },
       colors: {
         teal: 'rgb(23,72, 77)',
@@ -24,12 +22,12 @@ module.exports = {
         'teal-70': 'rgba(23, 72, 77, 0.7)',
         'teal-60': 'rgba(23, 72, 77, 0.6)',
         'teal-50': 'rgba(23, 72, 77, 0.5)',
-        'light-teal': '#D3E4EC'
-      }
-    }
+        'light-teal': '#D3E4EC',
+      },
+    },
   },
   corePlugins: {
-    divideStyle: true
+    divideStyle: true,
   },
-  plugins: [require('tailwindcss-safe-area')]
+  plugins: [require('tailwindcss-safe-area')],
 }
