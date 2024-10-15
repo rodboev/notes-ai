@@ -5,7 +5,9 @@ import Providers from '@/components/Providers'
 import '@/globals.css'
 
 ReactDOM.createRoot(document.body).render(
-  <Providers>
-    <Home />
-  </Providers>,
+  <React.StrictMode>
+    <Providers>
+      <Home />
+    </Providers>
+  </React.StrictMode>,
 )
