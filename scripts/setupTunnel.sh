@@ -166,7 +166,6 @@ kill_existing_tunnels() {
 }
 
 kill_existing_tunnels_windows() {
-    echo "Searching for processes using port 1433..."
     port_1433_pids=($(netstat -ano | findstr :1433 | findstr LISTENING | awk '{print $NF}' | sort -u))
 
     if [ ${#port_1433_pids[@]} -gt 0 ]; then

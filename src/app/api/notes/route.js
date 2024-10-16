@@ -170,7 +170,6 @@ async function saveNotes(notes) {
 }
 
 async function getNotesByFingerprints(fingerprints) {
-  console.log(`Searching for fingerprints: ${fingerprints}`)
   // Ensure fingerprints is always an array
   const fingerprintArray = Array.isArray(fingerprints) ? fingerprints : [fingerprints]
 

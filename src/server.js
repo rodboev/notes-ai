@@ -127,6 +127,7 @@ const startServer = (port) => {
   httpServer
     .on('request', async (req, res) => {
       const parsedUrl = parse(req.url, true)
+
       if (parsedUrl.pathname === '/_next/webpack-hmr') {
         console.log('Webpack HMR request received')
         console.log(req)
@@ -141,6 +142,12 @@ const startServer = (port) => {
         log('Sending response for /api/ws:', responseData)
         res.end(responseData)
       } else {
+        // Handle fingerprint for other routes
+        if (parsedUrl.query.fingerprints) {
+          const truncatedFingerprint = `${parsedUrl.query.fingerprints.substring(0, 60)}...`
+          req.headers['x-fingerprint'] = truncatedFingerprint
+        }
+
         // For all other routes, let Next.js handle the request
         await handle(req, res, parsedUrl)
       }
