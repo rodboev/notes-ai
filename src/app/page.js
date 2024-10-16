@@ -82,14 +82,8 @@ export default function Home() {
   }, [])
 
   return (
-    <div className="relative flex h-screen snap-y snap-mandatory snap-end flex-col items-center overflow-y-scroll">
-      {!(isLoadingNotes || isLoadingEmails) && (
-        <div className="absolute top-20 flex h-20 w-full">
-          <div className="left flex flex-1 bg-neutral-200" />
-          <div className="right flex flex-1" />
-        </div>
-      )}
-      <div className="sticky top-0 z-50 w-full bg-white/50 backdrop-blur-md">
+    <div className="relative flex h-screen snap-y snap-proximity flex-col items-center overflow-y-scroll md:snap-mandatory md:snap-end">
+      <div className="sticky top-0 z-50 -mt-16 w-full bg-white/50 backdrop-blur-md">
         <Nav>
           <Datepicker
             useRange={false}
@@ -115,7 +109,7 @@ export default function Home() {
       </div>
 
       {isLoadingNotes || isLoadingEmails ? (
-        <div className="flex h-[calc(100vh-80px)] items-center justify-center text-neutral-500">
+        <div className="flex h-screen items-center justify-center text-neutral-500">
           <SpinnerIcon className="scale-150" />
         </div>
       ) : notesError || emailsError ? (
@@ -151,12 +145,12 @@ export default function Home() {
           ref={(el) => {
             pairRefs.current[index] = el
           }}
-          className="pair -!mx-[10px] container -m-4 flex max-w-screen-2xl snap-center snap-always px-4"
+          className="pair -!mx-[10px] container -m-4 flex max-w-screen-2xl snap-center snap-always px-4 pb-0"
         >
-          <div className="left -ml-full flex min-h-screen flex-1 flex-col justify-center border-s bg-neutral-200 p-10 pl-full pt-20">
+          <div className="left -ml-full flex min-h-screen flex-1 flex-col justify-center border-s bg-neutral-200 p-10 pl-full pt-20 lg:pt-32">
             <Note note={note} index={index} total={pairs.length} />
           </div>
-          <div className="right flex w-1/2 flex-col justify-center px-4 pt-20 sm:px-6 md:px-8 lg:px-10">
+          <div className="right flex w-1/2 flex-col justify-center px-4 pt-16 sm:px-6 md:px-8 lg:px-10">
             <Email
               initialEmail={email}
               noteFingerprint={note.fingerprint}
