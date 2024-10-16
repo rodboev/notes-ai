@@ -115,7 +115,7 @@ const Email = ({
     if (email?.emailAddress && email?.subject && email?.body) {
       return (
         <>
-          <div className="email flex flex-col">
+          <div className="email relative flex flex-col">
             <h2 className="mb-1 text-lg font-bold !leading-[1.2] tracking-tighter text-teal md:text-xl lg:text-2xl lg:tracking-tight xl:tracking-normal">
               {email.subject}
             </h2>
@@ -173,10 +173,10 @@ const Email = ({
   }
 
   return (
-    <div className="right flex w-1/2 flex-col justify-center px-4 pt-20 sm:px-6 md:px-8 lg:px-10">
+    <>
       {showTranscription ? <Transcription items={items} /> : renderEmailContent()}
       {renderButtons()}
-    </div>
+    </>
   )
 }
 

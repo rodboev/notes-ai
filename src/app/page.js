@@ -82,7 +82,7 @@ export default function Home() {
   }, [])
 
   return (
-    <div className="flex h-screen snap-y snap-mandatory flex-col items-center overflow-y-scroll">
+    <div className="relative flex h-screen snap-y snap-mandatory snap-end flex-col items-center overflow-y-scroll">
       <div className="sticky top-0 z-50 -mt-16 w-full bg-white/50 backdrop-blur-md">
         <Nav>
           <Datepicker
@@ -145,19 +145,23 @@ export default function Home() {
           ref={(el) => {
             pairRefs.current[index] = el
           }}
-          className="pair -!mx-[10px] container -m-4 flex max-w-screen-2xl snap-center snap-always p-4 pb-0"
+          className="pair -!mx-[10px] container -m-4 flex max-w-screen-2xl snap-center snap-always px-4 pb-0"
         >
-          <Note note={note} index={index} total={pairs.length} />
-          <Email
-            initialEmail={email}
-            noteFingerprint={note.fingerprint}
-            note={note}
-            index={index}
-            total={pairs.length}
-            scrollToNextPair={scrollToNextPair}
-            emailStatus={emailStatuses?.[note.fingerprint]}
-            updateStatus={updateStatus}
-          />
+          <div className="left -ml-full flex min-h-screen flex-1 flex-col justify-center border-s bg-neutral-200 p-10 pl-full pt-20 lg:pt-32">
+            <Note note={note} index={index} total={pairs.length} />
+          </div>
+          <div className="right flex w-1/2 flex-col justify-center px-4 pt-16 sm:px-6 md:px-8 lg:px-10">
+            <Email
+              initialEmail={email}
+              noteFingerprint={note.fingerprint}
+              note={note}
+              index={index}
+              total={pairs.length}
+              scrollToNextPair={scrollToNextPair}
+              emailStatus={emailStatuses?.[note.fingerprint]}
+              updateStatus={updateStatus}
+            />
+          </div>
         </div>
       ))}
     </div>

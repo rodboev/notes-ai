@@ -217,7 +217,12 @@ export default function VoiceChat() {
             </div>
           ))
         ) : (
-          <em>Waiting for customer to start speaking...</em>
+          <>
+            <div class="space-y-2">
+              <p className="italic text-neutral-500">Waiting for customer to start speaking...</p>
+              <SpinnerIcon className="text-neutral-500" />
+            </div>
+          </>
         )}
       </div>
       <CallButton
