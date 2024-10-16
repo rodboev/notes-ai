@@ -1,19 +1,25 @@
 import React from 'react'
-import { Phone, PhoneOff } from 'lucide-react'
+import { Phone, PhoneOff, X } from 'lucide-react'
 import SpinnerIcon from './Icons/SpinnerIcon'
 
 export default function CallButton({
   note,
   activeCallFingerprint,
   isPending,
+  isResponding,
   connectConversation,
   disconnectConversation,
+  cancelResponse,
 }) {
   const isThisCallActive = activeCallFingerprint === note.fingerprint
 
   const handleClick = () => {
     if (isThisCallActive) {
-      disconnectConversation()
+      if (isResponding) {
+        cancelResponse()
+      } else {
+        disconnectConversation()
+      }
     } else {
       connectConversation(note)
     }
@@ -37,6 +43,11 @@ export default function CallButton({
         <>
           <Phone className="mr-3 h-4 w-4" />
           <span>Start call</span>
+        </>
+      ) : isResponding ? (
+        <>
+          <X className="mr-2 h-4 w-4" />
+          <span>Interrupt</span>
         </>
       ) : (
         <>

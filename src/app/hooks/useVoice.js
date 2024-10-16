@@ -41,6 +41,7 @@ export const useVoice = () => {
         event_id: `cancel_${Date.now()}`,
       })
       setIsResponding(false)
+      wavStreamPlayerRef.current.interrupt()
     }
   }, [isResponding])
 
@@ -62,13 +63,15 @@ export const useVoice = () => {
         await client.updateSession({ instructions })
         await client.updateSession({ voice: 'shimmer' })
         await client.updateSession({ input_audio_transcription: { model: 'whisper-1' } })
+        await client.updateSession({
+          turn_detection: {
+            type: 'server_vad',
+            threshold: 0.6,
+          },
+        })
 
         await wavRecorderRef.current.begin()
         await wavStreamPlayerRef.current.connect()
-
-        client.updateSession({
-          turn_detection: { type: 'server_vad' },
-        })
 
         client.on('conversation.updated', async ({ item, delta }) => {
           if (delta?.audio) {

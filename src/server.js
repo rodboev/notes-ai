@@ -127,7 +127,10 @@ const startServer = (port) => {
   httpServer
     .on('request', async (req, res) => {
       const parsedUrl = parse(req.url, true)
-      if (parsedUrl.pathname === '/api/ws' /* || parsedUrl.pathname === '/_next/webpack-hmr' */) {
+      if (parsedUrl.pathname === '/_next/webpack-hmr') {
+        console.log('Webpack HMR request received')
+        console.log(req)
+      } else if (parsedUrl.pathname === '/api/ws') {
         // Handle the /api/ws request directly
         res.writeHead(200, { 'Content-Type': 'application/json' })
         const responseData = JSON.stringify({
@@ -145,7 +148,7 @@ const startServer = (port) => {
     .on('upgrade', (req, socket, head) => {
       const { pathname } = parse(req.url)
 
-      if (pathname === '/api/ws' || pathname === '/_next/webpack-hmr') {
+      if (pathname === '/api/ws') {
         webSocketServer.handleUpgrade(req, socket, head, (ws) => {
           webSocketServer.emit('connection', ws, req)
         })
@@ -163,8 +166,13 @@ const startServer = (port) => {
           rejectUnauthorized: false,
         })
 
+        const truncatedFingerprint = req.url.includes('?fingerprints')
+          ? `${req.url.split('?fingerprints=')[1].substring(0, 60)}...`
+          : undefined
+
         const response = await fetch(`${protocol}://${hostname}:${port}/`, {
           agent: protocol === 'https' ? agent : undefined,
+          headers: { 'X-Fingerprint': truncatedFingerprint },
         })
 
         if (!response.ok)
