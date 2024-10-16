@@ -66,8 +66,6 @@ export const useVoice = () => {
         await wavRecorderRef.current.begin()
         await wavStreamPlayerRef.current.connect()
 
-        client.sendUserMessageContent([{ type: 'input_text', text: 'Hello!' }])
-
         client.updateSession({
           turn_detection: { type: 'server_vad' },
         })

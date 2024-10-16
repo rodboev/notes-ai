@@ -8,7 +8,7 @@ function Transcription({ items }) {
           key={item.id}
           className={`mb-2 ${item.role === 'assistant' ? 'text-black' : 'text-neutral-600'}`}
         >
-          <strong>{item.role === 'assistant' ? 'Jerry: ' : 'Alex: '}</strong>
+          <strong>{item.role === 'assistant' ? 'Emily: ' : 'Alex: '}</strong>
           {item.formatted?.transcript || item.formatted?.text || ''}
         </div>
       ))}
