@@ -10,6 +10,7 @@ import RefreshButton from './RefreshButton'
 import { useSingleEmail } from '../hooks/useEmails'
 import CallButton from './CallButton'
 import { useVoice } from '../hooks/useVoice'
+import Transcription from './Transcription'
 
 const Email = ({
   initialEmail,
@@ -138,7 +139,7 @@ const Email = ({
 
   const renderButtons = () => {
     return (
-      <div className="buttons flex flex-col items-start sm:flex-row sm:items-center sm:justify-between">
+      <div className="buttons mt-4 flex flex-col items-start sm:flex-row sm:items-center sm:justify-between">
         <div className="mb-2 flex items-center space-x-2 sm:mb-0 sm:space-x-3">
           {showTranscription ? (
             <CallButton
@@ -188,22 +189,7 @@ const Email = ({
 
   return (
     <div className="right flex w-1/2 flex-col justify-center px-4 pt-20 sm:px-6 md:px-8 lg:px-10">
-      {children}
-      {showTranscription ? (
-        <div className="transcription h-[600px] w-full overflow-y-auto rounded-lg border-2 p-4">
-          {items.map((item) => (
-            <div
-              key={item.id}
-              className={`mb-2 ${item.role === 'assistant' ? 'text-blue-600' : 'text-green-600'}`}
-            >
-              <strong>{item.role === 'assistant' ? 'Jerry: ' : 'Alex: '}</strong>
-              {item.formatted?.transcript || item.formatted?.text || ''}
-            </div>
-          ))}
-        </div>
-      ) : (
-        renderEmailContent()
-      )}
+      {showTranscription ? <Transcription items={items} /> : renderEmailContent()}
       {renderButtons()}
     </div>
   )
