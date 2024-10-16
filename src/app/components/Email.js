@@ -33,7 +33,6 @@ const Email = ({
     isResponding,
     connectConversation,
     disconnectConversation,
-    cancelResponse,
     getActiveClient,
   } = useVoice()
 
@@ -141,17 +140,7 @@ const Email = ({
     return (
       <div className="buttons mt-4 flex flex-col items-start sm:flex-row sm:items-center sm:justify-between">
         <div className="mb-2 flex items-center space-x-2 sm:mb-0 sm:space-x-3">
-          {showTranscription ? (
-            <CallButton
-              note={note}
-              activeCallFingerprint={activeCallFingerprint}
-              isPending={isPending}
-              isResponding={isResponding}
-              connectConversation={connectConversation}
-              disconnectConversation={disconnectConversation}
-              cancelResponse={cancelResponse}
-            />
-          ) : !email?.error ? (
+          {!email?.error ? (
             <>
               <SendEmailButton
                 fingerprint={noteFingerprint}
@@ -168,13 +157,11 @@ const Email = ({
                 isResponding={isResponding}
                 connectConversation={connectConversation}
                 disconnectConversation={disconnectConversation}
-                cancelResponse={cancelResponse}
               />
             </>
           ) : null}
         </div>
-        {!showTranscription &&
-          !email?.error &&
+        {!email?.error &&
           (!emailStatus ||
             (emailStatus?.status !== 'sending' && emailStatus?.status !== 'success')) && (
             <FeedbackButton

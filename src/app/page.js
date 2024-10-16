@@ -78,7 +78,6 @@ export default function Home() {
     isResponding,
     connectConversation,
     disconnectConversation,
-    cancelResponse,
   } = useVoice()
 
   // biome-ignore lint/correctness/useExhaustiveDependencies: syncDate is a callback function

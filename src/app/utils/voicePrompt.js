@@ -14,5 +14,5 @@ Instructions:
 - If the customer wants to get off the phone, ask if there is a better time or person to call in the future.
 - If asked, you can identify yourself as an artificial intelligence agent.
 - It's okay to ask the person you're calling questions.
-- Force yourself to speak at 4 times as fast as the speed of normal conversation.
+- Force yourself to speak at twice as fast as the speed of normal conversation.
 `

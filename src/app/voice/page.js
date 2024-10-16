@@ -204,11 +204,10 @@ export default function VoiceChat() {
 
   return (
     <>
-      <Nav />
-      <div className="flex h-dvh max-w-full snap-y snap-mandatory flex-col items-center justify-center overflow-y-scroll pb-8 pt-20">
-        <ConnectionIndicator className="indicator" url={relayServerUrl} wsStatus={wsStatus} />
-        <div className="transcription m-4 h-full w-1/2 min-w-96 overflow-y-auto border p-4">
-          {items.map((item) => (
+      <ConnectionIndicator className="indicator" url={relayServerUrl} wsStatus={wsStatus} />
+      <div className="transcription m-4 h-full w-1/2 min-w-96 overflow-y-auto border p-4">
+        {items.length > 0 ? (
+          items.map((item) => (
             <div
               key={item.id}
               className={`mb-2 ${item.role === 'assistant' ? 'text-blue-600' : 'text-green-600'}`}
@@ -216,18 +215,20 @@ export default function VoiceChat() {
               <strong>{item.role === 'assistant' ? 'Jerry: ' : 'Alex: '}</strong>
               {item.formatted?.transcript || item.formatted?.text || ''}
             </div>
-          ))}
-        </div>
-        <CallButton
-          note={{ fingerprint: 'default' }}
-          activeCallFingerprint={activeCallFingerprint}
-          isPending={isPending}
-          isResponding={false}
-          connectConversation={handleConnectConversation}
-          disconnectConversation={handleDisconnectConversation}
-          cancelResponse={() => {}}
-        />
+          ))
+        ) : (
+          <em>Waiting for customer to start speaking...</em>
+        )}
       </div>
+      <CallButton
+        note={{ fingerprint: 'default' }}
+        activeCallFingerprint={activeCallFingerprint}
+        isPending={isPending}
+        isResponding={false}
+        connectConversation={handleConnectConversation}
+        disconnectConversation={handleDisconnectConversation}
+        cancelResponse={() => {}}
+      />
     </>
   )
 }

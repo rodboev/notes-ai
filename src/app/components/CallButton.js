@@ -9,17 +9,12 @@ export default function CallButton({
   isResponding,
   connectConversation,
   disconnectConversation,
-  cancelResponse,
 }) {
   const isThisCallActive = activeCallFingerprint === note.fingerprint
 
   const handleClick = () => {
     if (isThisCallActive) {
-      if (isResponding) {
-        cancelResponse()
-      } else {
-        disconnectConversation()
-      }
+      disconnectConversation()
     } else {
       connectConversation(note)
     }
