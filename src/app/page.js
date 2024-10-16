@@ -72,13 +72,8 @@ export default function Home() {
     pairRefs.current[index]?.scrollIntoView({ behavior: 'smooth' })
   }
 
-  const {
-    activeCallFingerprint,
-    isPending,
-    isResponding,
-    connectConversation,
-    disconnectConversation,
-  } = useVoice()
+  const { activeCallFingerprint, isPending, connectConversation, disconnectConversation } =
+    useVoice()
 
   // biome-ignore lint/correctness/useExhaustiveDependencies: syncDate is a callback function
   useEffect(() => {

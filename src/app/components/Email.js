@@ -30,7 +30,6 @@ const Email = ({
   const {
     activeCallFingerprint,
     isPending,
-    isResponding,
     connectConversation,
     disconnectConversation,
     getActiveClient,
@@ -154,7 +153,6 @@ const Email = ({
                 note={note}
                 activeCallFingerprint={activeCallFingerprint}
                 isPending={isPending}
-                isResponding={isResponding}
                 connectConversation={connectConversation}
                 disconnectConversation={disconnectConversation}
               />
