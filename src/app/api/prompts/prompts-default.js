@@ -5,7 +5,7 @@ const promptsDefault = {
         {
           fingerprint: "{sha1 hash}"
           customer: "Company Name",
-          error: "Email not generated. Location gets serviced weekly.",
+          error: "Email not generated. Location serviced too frequently.",
         }, {}, ...
       ]
     }`,
@@ -17,7 +17,7 @@ const promptsDefault = {
             fingerprint: "{sha1 hash from input object}",
             emailAddress: "customer@example.com",
             customer: "Company Name",
-            subject: "Follow-up on Recent Pest Control Service",
+            subject: "Recent Pest Control Service at Company Name",
             body: {{email.current}}
           }, {}, ...
         ]

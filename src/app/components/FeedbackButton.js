@@ -86,16 +86,18 @@ const FeedbackButton = ({ note, email, subject }) => {
         </button>
       )}
 
-      {feedbackFieldVisible && !isSubmitting && sendFeedbackMutation.isIdle && (
-        <button
-          onClick={handleFeedbackClick}
-          className="btn inline-block w-fit bg-neutral-500 text-white"
-          type="button"
-        >
-          <SendIcon className="mr-3 h-5 w-5" />
-          <span>Send</span>
-        </button>
-      )}
+      {feedbackFieldVisible &&
+        !isSubmitting &&
+        (sendFeedbackMutation.isIdle || sendFeedbackMutation.isError) && (
+          <button
+            onClick={handleFeedbackClick}
+            className="btn inline-block w-fit bg-neutral-500 text-white"
+            type="button"
+          >
+            <SendIcon className="mr-3 h-5 w-5" />
+            <span>Send</span>
+          </button>
+        )}
 
       {(isSubmitting || sendFeedbackMutation.isLoading) && (
         <button
@@ -116,17 +118,6 @@ const FeedbackButton = ({ note, email, subject }) => {
         >
           <CheckIcon className="-ml-2 mr-1.5 h-8 w-8 text-green-600" />
           <span>Sent</span>
-        </button>
-      )}
-
-      {sendFeedbackMutation.isError && (
-        <button
-          onClick={handleFeedbackClick}
-          className="btn inline-block w-fit border-2 border-red-600"
-          type="button"
-        >
-          <ExclamationTriangleIcon className="-ml-0.5 mr-2.5 h-6 w-6 text-red-600" />
-          <span>Try again</span>
         </button>
       )}
     </div>

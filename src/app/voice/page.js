@@ -7,6 +7,7 @@ import Nav from '../components/Nav'
 import { Phone, PhoneOff, Check, X } from 'lucide-react'
 import SpinnerIcon from '../components/Icons/SpinnerIcon'
 import { RealtimeClient } from '@openai/realtime-api-beta'
+import CallButton from '../components/CallButton'
 
 const ConnectionIndicator = ({ url, wsStatus }) => {
   const isAvailable = !wsStatus.includes('Unable') && !wsStatus.includes('Error')
@@ -36,6 +37,7 @@ export default function VoiceChat() {
   const [items, setItems] = useState([])
   const [isPending, setIsPending] = useState(false)
   const [wsStatus, setWsStatus] = useState('Initializing...')
+  const [activeCallFingerprint, setActiveCallFingerprint] = useState(null)
 
   const clientRef = useRef(null)
   const wavRecorderRef = useRef(new WavRecorder({ sampleRate: 24000 }))
@@ -114,7 +116,7 @@ export default function VoiceChat() {
     }
   }, [relayServerUrl])
 
-  const connectConversation = useCallback(async () => {
+  const handleConnectConversation = useCallback(async (note = null) => {
     if (!clientRef.current) {
       console.error('RealtimeClient is not initialized')
       setWsStatus('Error: RealtimeClient is not initialized')
@@ -147,6 +149,7 @@ export default function VoiceChat() {
       await changeTurnEndType('server_vad')
       console.log('Conversation connected successfully')
       setWsStatus('Connected')
+      setActiveCallFingerprint(note ? note.fingerprint : 'default')
     } catch (error) {
       console.error('Error connecting conversation:', error)
       setWsStatus(`Error: ${error.message}`)
@@ -155,7 +158,7 @@ export default function VoiceChat() {
     }
   }, [])
 
-  const disconnectConversation = useCallback(async () => {
+  const handleDisconnectConversation = useCallback(async () => {
     if (!clientRef.current) return
 
     setIsPending(true)
@@ -176,6 +179,7 @@ export default function VoiceChat() {
       setItems([])
       console.log('Conversation disconnected successfully')
       setWsStatus('Disconnected')
+      setActiveCallFingerprint(null)
     } catch (error) {
       console.error('Error disconnecting conversation:', error)
       setWsStatus(`Error: ${error.message}`)
@@ -202,8 +206,8 @@ export default function VoiceChat() {
     <>
       <Nav />
       <div className="flex h-dvh max-w-full snap-y snap-mandatory flex-col items-center justify-center overflow-y-scroll pb-8 pt-20">
-        <ConnectionIndicator url={relayServerUrl} wsStatus={wsStatus} />
-        <div className="m-4 h-full w-1/2 min-w-96 overflow-y-auto border p-4">
+        <ConnectionIndicator className="indicator" url={relayServerUrl} wsStatus={wsStatus} />
+        <div className="transcription m-4 h-full w-1/2 min-w-96 overflow-y-auto border p-4">
           {items.map((item) => (
             <div
               key={item.id}
@@ -214,43 +218,16 @@ export default function VoiceChat() {
             </div>
           ))}
         </div>
-        <ConnectButton
-          onClick={clientRef.current?.isConnected() ? disconnectConversation : connectConversation}
-          isConnected={clientRef.current?.isConnected() || false}
-          disabled={!isServerAvailable || isPending}
+        <CallButton
+          note={{ fingerprint: 'default' }}
+          activeCallFingerprint={activeCallFingerprint}
           isPending={isPending}
+          isResponding={false}
+          connectConversation={handleConnectConversation}
+          disconnectConversation={handleDisconnectConversation}
+          cancelResponse={() => {}}
         />
       </div>
     </>
-  )
-}
-
-const ConnectButton = ({ onClick, isConnected, disabled, isPending }) => {
-  return (
-    <button
-      onClick={onClick}
-      disabled={disabled || isPending}
-      className={`rounded px-4 py-2 pr-5 ${
-        isConnected ? 'bg-neutral-500 hover:bg-neutral-600' : 'hover:bg-teal-600 bg-teal-500'
-      } flex items-center font-bold text-white ${disabled || isPending ? 'cursor-not-allowed opacity-50' : ''}`}
-      type="button"
-    >
-      {isPending ? (
-        <>
-          <SpinnerIcon className="-m-1 mr-2 h-4 w-4" />
-          <span>Starting...</span>
-        </>
-      ) : !isConnected ? (
-        <>
-          <Phone className="mr-3 h-4 w-4" />
-          <span>Start call</span>
-        </>
-      ) : (
-        <>
-          <PhoneOff className="mr-2 h-4 w-4" />
-          <span>End call</span>
-        </>
-      )}
-    </button>
   )
 }
