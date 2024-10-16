@@ -83,10 +83,12 @@ export default function Home() {
 
   return (
     <div className="relative flex h-screen snap-y snap-mandatory snap-end flex-col items-center overflow-y-scroll">
-      <div className="absolute top-20 flex h-20 w-full">
-        <div className="left flex flex-1 bg-neutral-200" />
-        <div className="right flex flex-1" />
-      </div>
+      {!(isLoadingNotes || isLoadingEmails) && (
+        <div className="absolute top-20 flex h-20 w-full">
+          <div className="left flex flex-1 bg-neutral-200" />
+          <div className="right flex flex-1" />
+        </div>
+      )}
       <div className="sticky top-0 z-50 w-full bg-white/50 backdrop-blur-md">
         <Nav>
           <Datepicker
@@ -113,7 +115,7 @@ export default function Home() {
       </div>
 
       {isLoadingNotes || isLoadingEmails ? (
-        <div className="flex items-center justify-center text-neutral-500">
+        <div className="flex h-[calc(100vh-80px)] items-center justify-center text-neutral-500">
           <SpinnerIcon className="scale-150" />
         </div>
       ) : notesError || emailsError ? (
