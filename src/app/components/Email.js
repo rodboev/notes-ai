@@ -115,21 +115,53 @@ const Email = ({
 
     if (email?.emailAddress && email?.body) {
       return (
-        <div className="email flex flex-col">
-          {email.subject && (
-            <h2 className="mb-1 text-lg font-bold !leading-[1.2] tracking-tighter text-teal md:text-xl lg:text-2xl lg:tracking-tight xl:tracking-normal">
-              {email.subject}
-            </h2>
-          )}
-          <p className="text-xs text-gray-600 sm:text-sm md:text-base lg:mb-1 xl:mb-2">
-            To: {email.emailAddress.toLowerCase().replace(/,/g, ', ')}
-          </p>
-          <Editor email={email} emailStatus={emailStatus} editorRef={editorRef}>
-            {!(emailStatus?.status === 'sending' || emailStatus?.status === 'success') && (
-              <RefreshButton onClick={refreshEmail} />
+        <>
+          <div className="email flex flex-col">
+            {email.subject && (
+              <h2 className="mb-1 text-lg font-bold !leading-[1.2] tracking-tighter text-teal md:text-xl lg:text-2xl lg:tracking-tight xl:tracking-normal">
+                {email.subject}
+              </h2>
             )}
-          </Editor>
-        </div>
+            <p className="text-xs text-gray-600 sm:text-sm md:text-base">
+              To: {email.emailAddress.toLowerCase().replace(/,/g, ', ')}
+            </p>
+            <Editor email={email} emailStatus={emailStatus} editorRef={editorRef}>
+              {!(emailStatus?.status === 'sending' || emailStatus?.status === 'success') && (
+                <RefreshButton onClick={refreshEmail} />
+              )}
+            </Editor>
+          </div>
+
+          <div className="buttons flex flex-col items-start justify-between sm:flex-row sm:items-center">
+            <div className="mb-2 flex items-center space-x-2 sm:mb-0 sm:space-x-3">
+              <SendEmailButton
+                fingerprint={noteFingerprint}
+                subject={email?.subject}
+                getEmailContent={() => editorRef.current?.getContent()}
+                onEmailSent={handleEmailSent}
+                updateStatus={updateStatus}
+                emailStatus={emailStatus}
+              />
+              <CallButton
+                note={note}
+                activeCallFingerprint={activeCallFingerprint}
+                isPending={isPending}
+                isResponding={isResponding}
+                connectConversation={connectConversation}
+                disconnectConversation={disconnectConversation}
+                cancelResponse={cancelResponse}
+              />
+            </div>
+            {(!emailStatus ||
+              (emailStatus.status !== 'sending' && emailStatus.status !== 'success')) && (
+              <FeedbackButton
+                note={email?.noteContent}
+                subject={email?.subject}
+                email={() => editorRef.current?.getContent()}
+              />
+            )}
+          </div>
+        </>
       )
     }
 
@@ -154,35 +186,6 @@ const Email = ({
       ) : (
         renderEmailContent()
       )}
-      <div className="buttons mt-3 flex flex-col items-start justify-between sm:flex-row sm:items-center">
-        <div className="mb-2 flex items-center space-x-2 sm:mb-0 sm:space-x-3">
-          <SendEmailButton
-            fingerprint={noteFingerprint}
-            subject={email?.subject}
-            getEmailContent={() => editorRef.current?.getContent()}
-            onEmailSent={handleEmailSent}
-            updateStatus={updateStatus}
-            emailStatus={emailStatus}
-          />
-          <CallButton
-            note={note}
-            activeCallFingerprint={activeCallFingerprint}
-            isPending={isPending}
-            isResponding={isResponding}
-            connectConversation={connectConversation}
-            disconnectConversation={disconnectConversation}
-            cancelResponse={cancelResponse}
-          />
-        </div>
-        {(!emailStatus ||
-          (emailStatus.status !== 'sending' && emailStatus.status !== 'success')) && (
-          <FeedbackButton
-            note={email?.noteContent}
-            subject={email?.subject}
-            email={() => editorRef.current?.getContent()}
-          />
-        )}
-      </div>
     </div>
   )
 }
