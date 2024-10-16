@@ -131,6 +131,8 @@ export const useVoice = () => {
     }
   }, [disconnectCurrentCall])
 
+  const getActiveClient = useCallback(() => activeClientRef, [])
+
   return {
     activeCallFingerprint,
     isPending,
@@ -138,5 +140,6 @@ export const useVoice = () => {
     connectConversation,
     disconnectConversation,
     cancelResponse,
+    getActiveClient,
   }
 }

@@ -163,12 +163,6 @@ export default function Home() {
             scrollToNextPair={scrollToNextPair}
             emailStatus={emailStatuses?.[note.fingerprint]}
             updateStatus={updateStatus}
-            activeCallFingerprint={activeCallFingerprint}
-            isPending={isPending}
-            isResponding={isResponding}
-            connectConversation={connectConversation}
-            disconnectConversation={disconnectConversation}
-            cancelResponse={cancelResponse}
           />
         </div>
       ))}
