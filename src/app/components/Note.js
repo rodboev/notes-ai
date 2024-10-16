@@ -35,7 +35,7 @@ const Note = ({ note, index, total, children }) => {
         <div className="content my-3 text-sm sm:my-4 md:my-5 lg:text-base">{note.content}</div>
         <div className="text-sm font-semibold sm:text-lg">{note.tech}</div>
       </div>
-      <div className="p-4 pb-0 text-sm sm:p-6 sm:text-base md:p-8 md:text-lg lg:p-10">
+      <div className="flex h-10 items-center p-4 pb-0 text-sm sm:p-6 sm:text-base">
         Note <span className="font-bold">{index + 1}</span> of{' '}
         <span className="font-bold">{total}</span>
       </div>
