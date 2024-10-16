@@ -18,7 +18,10 @@ export async function POST(req) {
 
   console.log('GMAIL_USER:', GMAIL_USER)
 
-  let email, subject, content, fingerprint
+  let email
+  let subject
+  let content
+  let fingerprint
   try {
     const body = await req.json()
     ;({ email, subject, content, fingerprint } = body)
