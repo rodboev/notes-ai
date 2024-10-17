@@ -20,8 +20,8 @@ let httpServer
 let isHttps = false
 
 if (dev) {
-  const keyPath = 'certificates/localhost-key.pem'
-  const certPath = 'certificates/localhost.pem'
+  const keyPath = 'certificates/core-key.pem'
+  const certPath = 'certificates/core.pem'
 
   if (fs.existsSync(keyPath) && fs.existsSync(certPath)) {
     const httpsOptions = {
@@ -127,21 +127,13 @@ const startServer = (port) => {
   httpServer
     .on('request', async (req, res) => {
       const { pathname, query } = parse(req.url, true)
-      const { fingerprints } = query
 
-      // Prepare truncated fingerprints for logging only
-      const truncatedFingerprints =
-        fingerprints && fingerprints.length > 60
-          ? `${fingerprints.substring(0, 60)}...`
-          : fingerprints || ''
+      // Prepare the log message
+      let logMessage = `${req.method} ${req.url}`
 
-      // Log the truncated query string, but keep the original URL intact
-      let logUrl = req.url
-      if (fingerprints) {
-        logUrl = logUrl.replace(
-          /(\?|, )fingerprints=[^&]+/,
-          `$1fingerprints=${truncatedFingerprints}`,
-        )
+      // Truncate fingerprints query string
+      if (logMessage.includes('?fingerprints=')) {
+        logMessage = logMessage.substring(0, 60) + '...'
       }
 
       // Skip logging for specific routes
@@ -149,7 +141,7 @@ const startServer = (port) => {
         pathname !== '/_next/webpack-hmr' &&
         !(pathname === '/api/tinymce/' && req.method === 'GET')
       ) {
-        console.log(`${req.method} ${logUrl}`)
+        console.log(logMessage)
       }
 
       if (pathname === '/_next/webpack-hmr') {
@@ -167,9 +159,9 @@ const startServer = (port) => {
         res.end(responseData)
       } else {
         // Handle fingerprint for other routes
-        if (fingerprints) {
+        if (query.fingerprints) {
           // Keep the original fingerprint in the request header
-          req.headers['x-fingerprint'] = fingerprints
+          req.headers['x-fingerprint'] = query.fingerprints
         }
 
         // For all other routes, let Next.js handle the request
