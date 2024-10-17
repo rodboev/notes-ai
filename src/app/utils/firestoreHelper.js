@@ -122,7 +122,7 @@ export async function firestoreSetDoc(collectionName, data, options = {}) {
       return handleArrayData(collectionName, data, options)
     }
 
-    if (typeof data === 'object' && data !== null) {
+    if (typeof data === 'object' && data !== null && data.fingerprint) {
       return handleSingleDocument(collectionName, data, options)
     }
 

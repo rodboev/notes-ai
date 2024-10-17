@@ -54,7 +54,8 @@ export async function saveStatus(fingerprint, newStatus) {
       console.log(`${timestamp()} Email status saved to disk`)
 
       console.log(`${timestamp()} Changes detected in statuses. Triggering Firestore write`)
-      await firestoreSetDoc(STATUS_COLLECTION, fingerprint, updatedStatus)
+      // Pass the updatedStatus object directly to firestoreSetDoc
+      await firestoreSetDoc(STATUS_COLLECTION, updatedStatus)
       console.log(`${timestamp()} Email status saved to Firestore`)
     } else {
       console.log(`${timestamp()} No changes detected, skipping save operation`)
