@@ -37,7 +37,7 @@ export async function POST(req) {
         <hr />
         <p><strong>Note used for the email:</strong></p>
         <p>
-          <strong>Code: ${note.code}</strong><br>
+          Code: ${note.code}<br>
           Company: ${note.company} - <a href="https://app.pestpac.com/location/detail.asp?LocationID=${note.locationID}">${note.locationCode}</a>
         </p>
         <p>${note.content}</p>

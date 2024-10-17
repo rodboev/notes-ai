@@ -119,8 +119,7 @@ const FeedbackButton = ({ note, email }) => {
           className="btn inline-block w-fit cursor-not-allowed bg-neutral-500 text-white"
           type="button"
         >
-          <SpinnerIcon className="mr-3 h-6 w-6" />
-          <span>Sending</span>
+          <SpinnerIcon className="mr-1 h-6 w-6" />
         </button>
       )}
 
