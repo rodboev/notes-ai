@@ -159,15 +159,7 @@ const Email = ({
             </>
           ) : null}
         </div>
-        {!email?.error &&
-          (!emailStatus ||
-            (emailStatus?.status !== 'sending' && emailStatus?.status !== 'success')) && (
-            <FeedbackButton
-              note={email?.noteContent}
-              subject={email?.subject}
-              email={() => editorRef.current?.getContent()}
-            />
-          )}
+        {!email?.error && <FeedbackButton note={note} email={email} />}
       </div>
     )
   }

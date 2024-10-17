@@ -1,4 +1,12 @@
 {
-  "watch": ["**/*.sh", "package.json", "src/server.js", "nodemon.json", "next.config.js"],
+  "watch": [
+    "**/*.sh",
+    "package.json",
+    "src/server.js",
+    "nodemon.json",
+    "next.config.js",
+    ".env",
+    ".env.local"
+  ],
   "ext": "js, css, sh"
 }

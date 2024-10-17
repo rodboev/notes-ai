@@ -11,9 +11,11 @@ export async function createTransporter(env) {
     ['https://mail.google.com/'],
     env.GMAIL_USER,
   )
+  console.log('Created transporter.')
 
   await oAuth2Client.authorize()
   const accessToken = await (await oAuth2Client.getAccessToken()).token
+  console.log('OAuth2 client authorized.')
 
   return nodemailer.createTransport({
     service: 'gmail',
@@ -27,5 +29,7 @@ export async function createTransporter(env) {
 }
 
 export async function sendEmail(transporter, mailOptions) {
-  return transporter.sendMail(mailOptions)
+  const result = await transporter.sendMail(mailOptions)
+  console.log('Email sent.')
+  return result
 }

@@ -7,12 +7,17 @@ import { createTransporter, sendEmail } from '../../utils/emailUtils'
 dotenv.config()
 
 export async function POST(req) {
-  const { feedback, note, email, subject } = await req.json()
+  console.log('Received feedback request')
+  const { feedback, note, email } = await req.json()
+  console.log('Feedback data:', { feedback, note, email })
   const { GMAIL_USER, FEEDBACK_RECIPIENT_EMAIL } = process.env
 
-  if (!feedback) {
-    console.error('Missing field: feedback')
-    return NextResponse.json({ error: 'Missing field', details: ['feedback'] }, { status: 400 })
+  const requiredFields = ['feedback', 'note', 'email']
+  const missingFields = requiredFields.filter((field) => !eval(field))
+
+  if (missingFields.length > 0) {
+    console.error(`Missing fields: ${missingFields.join(', ')}`)
+    return NextResponse.json({ error: 'Missing fields', details: missingFields }, { status: 400 })
   }
 
   try {
@@ -23,16 +28,24 @@ export async function POST(req) {
       to: FEEDBACK_RECIPIENT_EMAIL,
       subject: 'New Feedback Received',
       html: `
-        <p><strong>Feedback:</strong> ${feedback}</p>
-				<hr />
-        <p><strong>Email:</strong><p>
-				<p>Subject: ${subject || ''}<p>
-				<p>${email || ''}</p>
-				<hr />
-        <p><strong>Note:</strong> ${note || ''}</p>
+        <p><strong>Feedback for the following email:</strong></p>
+        
+        <p>${feedback}</p>
+        <hr />
+        <p>Subject: ${email.subject || ''}</p>
+        <p>${email.body || ''}</p>
+        <hr />
+        <p><strong>Note used for the email:</strong></p>
+        <p>
+          <strong>Code: ${note.code}</strong><br>
+          Company: ${note.company} - <a href="https://app.pestpac.com/location/detail.asp?LocationID=${note.locationID}">${note.locationCode}</a>
+        </p>
+        <p>${note.content}</p>
+        <p>Tech: ${note.tech}</p>
       `,
     }
 
+    console.log('Sending email with options:', mailOptions)
     await sendEmail(transporter, mailOptions)
     console.log('Feedback email sent successfully')
 

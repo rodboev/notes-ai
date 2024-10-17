@@ -23,24 +23,24 @@ export default function CallButton({
     <button
       onClick={handleClick}
       disabled={isPending}
-      className={`btn-teal flex ${
+      className={`btn-teal flex space-x-2 pr-3 ${
         isThisCallActive ? 'bg-neutral-500 hover:bg-neutral-600' : 'hover:bg-teal-600 bg-teal-500'
       } ${isPending ? 'cursor-not-allowed opacity-50' : ''}`}
       type="button"
     >
       {isPending ? (
         <>
-          <SpinnerIcon className="-m-1 -mb-2 mr-2 h-4 w-4" />
-          <span>Starting...</span>
+          <SpinnerIcon className="-m-1 -mb-2 h-5 w-5" />
+          <span>Starting</span>
         </>
       ) : !isThisCallActive ? (
         <>
-          <Phone className="mr-3 h-4 w-4" />
+          <Phone className="-ml-0.5 mr-0.5 h-5 w-5" />
           <span>Start call</span>
         </>
       ) : (
         <>
-          <PhoneOff className="mr-2 h-4 w-4" />
+          <PhoneOff className="-ml-0.5 mr-0.5 h-5 w-5" />
           <span>End call</span>
         </>
       )}

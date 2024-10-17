@@ -14,10 +14,7 @@ const SendEmailButton = ({
   updateStatus,
 }) => {
   const [isSending, setIsSending] = useState(false)
-  const isProduction = process.env.NEXT_PUBLIC_NODE_ENV === 'production'
-  const to = isProduction
-    ? 'a.dallas@libertypestnyc.com, r.boev@libertypestnyc.com'
-    : 'r.boev@libertypestnyc.com'
+  const to = 'a.dallas@libertypestnyc.com, r.boev@libertypestnyc.com'
 
   const sendEmailMutation = useSendEmail(fingerprint)
 
@@ -67,7 +64,7 @@ const SendEmailButton = ({
         className="btn flex cursor-not-allowed border-2 border-green-600 bg-white !py-0"
         type="button"
       >
-        <CheckIcon className="-m-2 mr-1.5 h-8 w-8 text-green-600" />
+        <CheckIcon className="-m-2.5 mr-1 h-8 w-8 text-green-600" />
         <span>Email sent</span>
       </button>
     )
