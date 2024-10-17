@@ -126,30 +126,41 @@ webSocketServer.on('connection', handleWebSocketConnection)
 const startServer = (port) => {
   httpServer
     .on('request', async (req, res) => {
-      const parsedUrl = parse(req.url, true)
+      const { pathname, query } = parse(req.url, true)
+      const { fingerprints } = query
 
-      if (parsedUrl.pathname === '/_next/webpack-hmr') {
-        console.log('Webpack HMR request received')
+      // Prepare truncated fingerprints for logging only
+      const truncatedFingerprints =
+        fingerprints && fingerprints.length > 60
+          ? `${fingerprints.substring(0, 60)}...`
+          : fingerprints || ''
+
+      // Log the truncated URL, but keep the original URL intact
+      const logUrl = fingerprints ? `${pathname}?fingerprints=${truncatedFingerprints}` : req.url
+      console.log(`[Express] ${req.method} ${logUrl}`)
+
+      if (pathname === '/_next/webpack-hmr') {
+        console.log('[Express] Webpack HMR request received')
         console.log(req)
-      } else if (parsedUrl.pathname === '/api/ws') {
+      } else if (pathname === '/api/ws') {
         // Handle the /api/ws request directly
         res.writeHead(200, { 'Content-Type': 'application/json' })
         const responseData = JSON.stringify({
           status: 'available',
           count: connectedClients,
-          port: port,
+          port,
         })
-        log('Sending response for /api/ws:', responseData)
+        console.log('[Express] Sending response for /api/ws:', responseData)
         res.end(responseData)
       } else {
         // Handle fingerprint for other routes
-        if (parsedUrl.query.fingerprints) {
-          const truncatedFingerprint = `${parsedUrl.query.fingerprints.substring(0, 60)}...`
-          req.headers['x-fingerprint'] = truncatedFingerprint
+        if (fingerprints) {
+          // Keep the original fingerprint in the request header
+          req.headers['x-fingerprint'] = fingerprints
         }
 
         // For all other routes, let Next.js handle the request
-        await handle(req, res, parsedUrl)
+        await handle(req, res, { pathname, query })
       }
     })
     .on('upgrade', (req, socket, head) => {
@@ -163,38 +174,43 @@ const startServer = (port) => {
         socket.destroy()
       }
     })
-    .listen(port, async () => {
+    .listen(port, () => {
       const protocol = isHttps ? 'https' : 'http'
-      log(` ▲ Ready on ${protocol}://${hostname}:${port}`)
-
-      // Preload the root path after the server starts
-      if (dev) {
-        const agent = new https.Agent({
-          rejectUnauthorized: false,
-        })
-
-        const truncatedFingerprint = req.url.includes('?fingerprints')
-          ? `${req.url.split('?fingerprints=')[1].substring(0, 60)}...`
-          : undefined
-
-        const response = await fetch(`${protocol}://${hostname}:${port}/`, {
-          agent: protocol === 'https' ? agent : undefined,
-          headers: { 'X-Fingerprint': truncatedFingerprint },
-        })
-
-        if (!response.ok)
-          console.warn('Failed to preload root path:', response.status, response.statusText)
-      }
+      console.log(`[Express] ▲ Ready on ${protocol}://${hostname}:${port}`)
     })
     .on('error', (err) => {
       if (err.code === 'EADDRINUSE') {
-        log(`Port ${port} is in use, trying ${port + 1}...`)
+        console.log(`[Express] Port ${port} is in use, trying ${port + 1}...`)
         startServer(port + 1)
       } else {
-        console.error('Failed to start server:', err)
+        console.error('[Express] Failed to start server:', err)
         process.exit(1)
       }
     })
+
+  // Preload the root path after the server starts
+  if (dev) {
+    const protocol = isHttps ? 'https' : 'http'
+    const agent = new https.Agent({
+      rejectUnauthorized: false,
+    })
+
+    fetch(`${protocol}://${hostname}:${port}/`, {
+      agent: protocol === 'https' ? agent : undefined,
+    })
+      .then((response) => {
+        if (!response.ok) {
+          console.warn(
+            '[Express] Failed to preload root path:',
+            response.status,
+            response.statusText,
+          )
+        }
+      })
+      .catch((error) => {
+        console.error('[Express] Error preloading root path:', error)
+      })
+  }
 }
 
 ;(async () => {
