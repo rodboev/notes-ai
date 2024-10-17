@@ -14,6 +14,12 @@ const resetQuotaExceededLog = () => {
 
 setInterval(resetQuotaExceededLog, QUOTA_RESET_INTERVAL)
 
+const writeQueue = {
+  notes: [],
+  emails: [],
+}
+const BATCH_SIZE = 20 // Process 20 pairs at a time
+
 export const safeDocRef = (firestore, collectionName, document) => {
   if (!document || typeof document !== 'object' || Array.isArray(document)) {
     console.warn('Invalid document:', document)
@@ -177,4 +183,87 @@ const handleFirestoreError = (error) => {
     quotaExceededLogged = true
   }
   throw error
+}
+
+export function queueWrite(collectionName, documents) {
+  if (collectionName !== 'notes' && collectionName !== 'emails') {
+    console.warn(`Invalid collection name: ${collectionName}`)
+    return
+  }
+  if (documents.length === 0) {
+    return // Silently return if there's nothing to queue
+  }
+  writeQueue[collectionName].push(...documents)
+
+  // Only log if documents were actually added to the queue
+  console.log(`Queued ${documents.length} ${collectionName}. Current queue:`, {
+    notes: writeQueue.notes.length,
+    emails: writeQueue.emails.length,
+  })
+
+  // Only process if we have at least BATCH_SIZE pairs
+  if (writeQueue.notes.length >= BATCH_SIZE && writeQueue.emails.length >= BATCH_SIZE) {
+    processWriteQueue()
+  }
+}
+
+async function processWriteQueue() {
+  if (writeQueue.notes.length !== writeQueue.emails.length) {
+    console.warn(`Firestore queue is unbalanced: ${notes.length} notes, ${emails.length} emails.`)
+  }
+  if (writeQueue.notes.length === 0 || writeQueue.emails.length === 0) {
+    return // Silently return if either queue is empty
+  }
+
+  const pairedDocuments = writeQueue.notes.filter((note) =>
+    writeQueue.emails.some((email) => email.fingerprint === note.fingerprint),
+  )
+
+  if (pairedDocuments.length === 0) {
+    return // Silently return if there are no matching pairs
+  }
+
+  const matchingEmails = writeQueue.emails.filter((email) =>
+    pairedDocuments.some((note) => note.fingerprint === email.fingerprint),
+  )
+
+  try {
+    const batch = writeBatch(firestore)
+    let operationCount = 0
+    const MAX_BATCH_SIZE = 500 // Firestore's limit
+
+    for (let i = 0; i < pairedDocuments.length && operationCount < MAX_BATCH_SIZE; i++) {
+      const noteRef = safeDocRef(firestore, 'notes', pairedDocuments[i])
+      const emailRef = safeDocRef(firestore, 'emails', matchingEmails[i])
+
+      if (noteRef && emailRef) {
+        batch.set(noteRef, pairedDocuments[i])
+        batch.set(emailRef, matchingEmails[i])
+        operationCount += 2
+      }
+    }
+
+    if (operationCount === 0) {
+      return // Silently return if there are no valid operations
+    }
+
+    await batch.commit()
+    console.log(`Successfully wrote ${operationCount} documents to Firestore`)
+
+    // Remove processed items from the queue
+    writeQueue.notes = writeQueue.notes.slice(pairedDocuments.length)
+    writeQueue.emails = writeQueue.emails.slice(matchingEmails.length)
+
+    console.log(
+      `Remaining in queue: ${writeQueue.notes.length} notes, ${writeQueue.emails.length} emails`,
+    )
+
+    // If there are still items in the queue, process again
+    if (writeQueue.notes.length >= BATCH_SIZE && writeQueue.emails.length >= BATCH_SIZE) {
+      processWriteQueue()
+    }
+  } catch (error) {
+    console.error('Error processing write queue:', error)
+    handleFirestoreError(error)
+  }
 }

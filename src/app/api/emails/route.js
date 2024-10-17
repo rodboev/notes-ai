@@ -5,7 +5,7 @@ import { parse } from 'best-effort-json-parser'
 import { readFromDisk, writeToDisk } from '@/app/utils/diskStorage'
 import { timestamp } from '@/app/utils/timestamp'
 import { getPrompts } from '@/app/api/prompts/route'
-import { firestoreBatchWrite, firestoreGetAllDocs } from '@/app/utils/firestoreHelper'
+import { firestoreBatchWrite, firestoreGetAllDocs, queueWrite } from '@/app/utils/firestoreHelper'
 import { headers } from 'next/headers'
 import { GET as getNotes } from '../notes/route'
 
@@ -24,41 +24,30 @@ const chunkArray = (array, chunkSize) => {
 // Add a simple in-memory cache
 const emailCache = new Map()
 
-const BATCH_SIZE = 32
-let emailBatch = []
-
 async function saveEmails(emails, forceSave = false) {
-  // Update the cache and batch
-  for (const email of emails) {
+  // Update the cache and queue
+  const newEmails = emails.filter((email) => !emailCache.has(email.fingerprint))
+
+  for (const email of newEmails) {
     emailCache.set(email.fingerprint, email)
-    emailBatch.push(email)
   }
 
-  // If we've reached the batch size or forceSave is true, trigger the save
-  if (emailBatch.length >= BATCH_SIZE || forceSave) {
-    console.warn(`${timestamp()} Saving ${emailBatch.length} emails to disk and Firestore`)
+  if (newEmails.length > 0 || forceSave) {
+    console.warn(
+      `${timestamp()} Saving ${newEmails.length} emails to disk and queueing for Firestore`,
+    )
 
     // Save to disk
     await writeToDisk('emails.json', Array.from(emailCache.values()))
     console.log(`${timestamp()} Saved ${emailCache.size} emails to disk`)
 
-    // Save to Firestore
-    console.log(`${timestamp()} Triggering Firestore write`)
-    const { validOperations, skippedOperations, error } = await firestoreBatchWrite(
-      'emails',
-      emailBatch,
-    )
-
-    if (error) {
-      console.error('Error during batch write:', error)
+    // Queue for Firestore write only if there are new emails
+    if (newEmails.length > 0) {
+      console.log(`${timestamp()} Queueing ${newEmails.length} emails for Firestore write`)
+      queueWrite('emails', newEmails)
     } else {
-      console.log(
-        `${timestamp()} Saved ${validOperations} emails to Firestore, skipped ${skippedOperations}`,
-      )
+      console.log(`${timestamp()} No new emails to queue for Firestore write`)
     }
-
-    // Clear the batch
-    emailBatch = []
   }
 }
 
@@ -117,18 +106,14 @@ async function fetchWithErrorHandling(searchParams) {
   }
 }
 
-export async function GET(req) {
+export async function GET(request) {
   const headersList = headers()
-  const { searchParams } = new URL(req.url)
+  const { searchParams } = new URL(request.url)
   const startDate = searchParams.get('startDate')
   const endDate = searchParams.get('endDate')
   const fingerprint = searchParams.get('fingerprint')
   const fingerprints = searchParams.get('fingerprints')
   const requestedFingerprints = fingerprints?.split(',') || []
-
-  console.log(
-    `${timestamp()} GET /api/emails request params: startDate=${startDate}, endDate=${endDate}, fingerprint=${fingerprint}, fingerprints=${fingerprints}`,
-  )
 
   let storedEmails = await loadEmails()
   const emailCache = storedEmails.reduce((acc, email) => {
@@ -295,8 +280,6 @@ export async function GET(req) {
         }
         sendData({ error: errorDetails }, 'error')
       } finally {
-        // Force save any remaining emails before closing the stream
-        await saveEmails([], true)
         if (!dataSent) sendData({}, 'complete')
         controller.close()
       }

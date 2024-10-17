@@ -10,6 +10,7 @@ import {
   firestoreBatchGet,
   firestoreBatchWrite,
   firestoreGetAllDocs,
+  queueWrite,
 } from '../../utils/firestoreHelper'
 import { timestamp } from '../../utils/timestamp'
 
@@ -145,27 +146,21 @@ async function loadNotes() {
 }
 
 async function saveNotes(notes) {
-  console.warn(`${timestamp()} Saving notes to disk and Firestore`)
+  console.warn(`${timestamp()} Saving notes to disk and queueing for Firestore`)
 
   const diskNotes = await readFromDisk('notes.json')
-  const hasChanges = !diskNotes || JSON.stringify(diskNotes) !== JSON.stringify(notes)
+  const newNotes = notes.filter(
+    (note) => !diskNotes.some((diskNote) => diskNote.fingerprint === note.fingerprint),
+  )
 
-  if (hasChanges) {
-    await writeToDisk('notes.json', notes)
-    console.log(`${timestamp()} Saved ${notes.length} notes to disk`)
+  if (newNotes.length > 0) {
+    await writeToDisk('notes.json', [...diskNotes, ...newNotes])
+    console.log(`${timestamp()} Saved ${newNotes.length} new notes to disk`)
 
-    console.log(`${timestamp()} Saving notes to Firestore`)
-    const { validOperations, skippedOperations, error } = await firestoreBatchWrite('notes', notes)
-
-    if (error) {
-      console.error('Error during batch write:', error)
-    } else {
-      console.log(
-        `${timestamp()} Saved ${validOperations} notes to Firestore, skipped ${skippedOperations}`,
-      )
-    }
+    console.log(`${timestamp()} Queueing ${newNotes.length} notes for Firestore write`)
+    queueWrite('notes', newNotes)
   } else {
-    console.log(`${timestamp()} No changes detected, skipping save operation`)
+    console.log(`${timestamp()} No new notes to save`)
   }
 }
 
@@ -231,8 +226,8 @@ export async function GET(request) {
   const formattedQueryEndDate = queryEndDate.toISOString().split('T')[0]
 
   // Try to get stored notes first
-  let allNotes = await loadNotes()
-  let notes = allNotes.filter(
+  const allNotes = await loadNotes()
+  const notes = allNotes.filter(
     (note) =>
       note.date >= startDate && note.date < formattedQueryEndDate && note.code === '911 EMER',
   )
@@ -248,24 +243,23 @@ export async function GET(request) {
     console.log('Fetching notes from database...')
     pool = await sql.connect(config)
 
-    notes = await getJoinedNotes(pool, startDate, formattedQueryEndDate)
+    const fetchedNotes = await getJoinedNotes(pool, startDate, formattedQueryEndDate)
 
-    notes = transformNotes(notes)
+    const transformedNotes = transformNotes(fetchedNotes)
       .filter((note) => note.code === '911 EMER')
       .sort((a, b) => new Date(a.date) - new Date(b.date))
 
     // Add fingerprint to each note
-    notes = notes.map((note) => ({
+    const notesWithFingerprints = transformedNotes.map((note) => ({
       ...note,
       fingerprint: hash(note),
     }))
 
     // Update the cache with new notes
-    allNotes = [...allNotes, ...notes]
-    await saveNotes(allNotes)
+    await saveNotes(notesWithFingerprints)
 
-    console.log(`Returning ${notes.length} notes from database`)
-    return NextResponse.json(notes)
+    console.log(`Returning ${notesWithFingerprints.length} notes from database`)
+    return NextResponse.json(notesWithFingerprints)
   } catch (error) {
     console.error('Error fetching from database:', error)
     return NextResponse.json(

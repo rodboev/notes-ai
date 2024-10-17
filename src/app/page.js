@@ -113,7 +113,7 @@ export default function Home() {
           <SpinnerIcon className="scale-150" />
         </div>
       ) : notesError || emailsError ? (
-        <div className="flex items-center justify-center text-neutral-700">
+        <div className="flex h-screen items-center justify-center text-neutral-700">
           <div className="max-w-screen-md px-4 sm:px-6">
             {notesError && (
               <div className="space-y-4 sm:space-y-6">
@@ -134,7 +134,7 @@ export default function Home() {
           </div>
         </div>
       ) : pairs.length === 0 ? (
-        <div className="flex items-center justify-center text-sm text-neutral-700 sm:text-base">
+        <div className="flex h-screen items-center justify-center text-sm text-neutral-700 sm:text-base">
           No notes found for the selected date range.
         </div>
       ) : null}

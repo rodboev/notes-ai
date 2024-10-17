@@ -135,12 +135,25 @@ const startServer = (port) => {
           ? `${fingerprints.substring(0, 60)}...`
           : fingerprints || ''
 
-      // Log the truncated URL, but keep the original URL intact
-      const logUrl = fingerprints ? `${pathname}?fingerprints=${truncatedFingerprints}` : req.url
-      console.log(`[Express] ${req.method} ${logUrl}`)
+      // Log the truncated query string, but keep the original URL intact
+      let logUrl = req.url
+      if (fingerprints) {
+        logUrl = logUrl.replace(
+          /(\?|, )fingerprints=[^&]+/,
+          `$1fingerprints=${truncatedFingerprints}`,
+        )
+      }
+
+      // Skip logging for specific routes
+      if (
+        pathname !== '/_next/webpack-hmr' &&
+        !(pathname === '/api/tinymce/' && req.method === 'GET')
+      ) {
+        console.log(`${req.method} ${logUrl}`)
+      }
 
       if (pathname === '/_next/webpack-hmr') {
-        console.log('[Express] Webpack HMR request received')
+        console.log('Webpack HMR request received')
         console.log(req)
       } else if (pathname === '/api/ws') {
         // Handle the /api/ws request directly
@@ -150,7 +163,7 @@ const startServer = (port) => {
           count: connectedClients,
           port,
         })
-        console.log('[Express] Sending response for /api/ws:', responseData)
+        console.log('Sending response for /api/ws:', responseData)
         res.end(responseData)
       } else {
         // Handle fingerprint for other routes
@@ -176,14 +189,14 @@ const startServer = (port) => {
     })
     .listen(port, () => {
       const protocol = isHttps ? 'https' : 'http'
-      console.log(`[Express] ▲ Ready on ${protocol}://${hostname}:${port}`)
+      console.log(`▲ Ready on ${protocol}://${hostname}:${port}`)
     })
     .on('error', (err) => {
       if (err.code === 'EADDRINUSE') {
-        console.log(`[Express] Port ${port} is in use, trying ${port + 1}...`)
+        console.log(`Port ${port} is in use, trying ${port + 1}...`)
         startServer(port + 1)
       } else {
-        console.error('[Express] Failed to start server:', err)
+        console.error('Failed to start server:', err)
         process.exit(1)
       }
     })
@@ -200,15 +213,11 @@ const startServer = (port) => {
     })
       .then((response) => {
         if (!response.ok) {
-          console.warn(
-            '[Express] Failed to preload root path:',
-            response.status,
-            response.statusText,
-          )
+          console.warn('Failed to preload root path:', response.status, response.statusText)
         }
       })
       .catch((error) => {
-        console.error('[Express] Error preloading root path:', error)
+        console.error('Error preloading root path:', error)
       })
   }
 }
