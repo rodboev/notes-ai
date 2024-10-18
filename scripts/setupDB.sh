@@ -1,3 +1,7 @@
+#!/bin/bash
+echo "Starting setupDB.sh script"
+set -e  # Exit immediately if a command exits with a non-zero status
+
 # Determine the script's directory and project root
 SCRIPT_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" &> /dev/null && pwd )"
 PROJECT_ROOT="$(dirname "$SCRIPT_DIR")"
@@ -23,7 +27,7 @@ load_env_file() {
     # Use a while loop to read the file line by line
     while IFS= read -r line || [[ -n "$line" ]]; do
         # Skip comments and empty lines
-        if [[ $line =~ ^#.*$ ]] || [[ -z $line ]]; then
+        if [[ $line =/app ^#.*$ ]] || [[ -z $line ]]; then
             continue
         fi
         # Extract variable name and value
@@ -73,27 +77,65 @@ check_and_print_variable() {
 }
 
 # ODBC and FreeTDS Setup
-export ODBCSYSINI=~/.apt/etc
-export ODBCINI=~/.apt/etc/odbc.ini
-export FREETDSCONF=~/.apt/etc/freetds/freetds.conf
-export LD_LIBRARY_PATH=~/.apt/usr/lib/x86_64-linux-gnu:~/.apt/usr/lib/x86_64-linux-gnu/odbc:$LD_LIBRARY_PATH
+export ODBCSYSINI=/app/.apt/etc
+export ODBCINI=/app/.apt/etc/odbc.ini
+export FREETDSCONF=/app/.apt/etc/freetds/freetds.conf
+export LD_LIBRARY_PATH=/app/.apt/usr/lib/x86_64-linux-gnu:/app/.apt/usr/lib/x86_64-linux-gnu/odbc:$LD_LIBRARY_PATH
+
+
+echo "Checking if variables exist exist:"
 
 check_and_print_variable "ODBCSYSINI"
 check_and_print_variable "ODBCINI"
 check_and_print_variable "FREETDSCONF"
 check_and_print_variable "LD_LIBRARY_PATH"
 
-mkdir -p ~/.apt/etc/freetds
+check_and_print_variable "SQL_DATABASE"
+check_and_print_variable "SQL_USERNAME"
+check_and_print_variable "SQL_PASSWORD"
+check_and_print_variable "SQL_DATABASE"
+
+# Check if folders and files exist
+echo "Checking if required folders and files exist:"
+
+folders_to_check=(
+    "/app/.apt/etc/freetds"
+    "$ODBCSYSINI"
+)
+
+files_to_check=(
+    "/app/.apt/etc/freetds/freetds.conf"
+    "$ODBCSYSINI/odbcinst.ini"
+    "$ODBCINI"
+)
+
+for folder in "${folders_to_check[@]}"; do
+    if [ -d "$folder" ]; then
+        echo "✅ Folder exists: $folder"
+    else
+        echo "❌ Folder does not exist: $folder"
+    fi
+done
+
+for file in "${files_to_check[@]}"; do
+    if [ -f "$file" ]; then
+        echo "✅ File exists: $file"
+    else
+        echo "❌ File does not exist: $file"
+    fi
+done
+
+mkdir -p /app/.apt/etc/freetds
 echo "[global]
 tds version = 7.4
-" > ~/.apt/etc/freetds/freetds.conf
+" > /app/.apt/etc/freetds/freetds.conf
 
 mkdir -p $ODBCSYSINI
 cat > "$ODBCSYSINI/odbcinst.ini" << EOL
 [FreeTDS]
 Description = FreeTDS Driver
-Driver = ~/.apt/usr/lib/x86_64-linux-gnu/odbc/libtdsodbc.so
-Setup = ~/.apt/usr/lib/x86_64-linux-gnu/odbc/libtdsS.so
+Driver = /app/.apt/usr/lib/x86_64-linux-gnu/odbc/libtdsodbc.so
+Setup = /app/.apt/usr/lib/x86_64-linux-gnu/odbc/libtdsS.so
 EOL
 
 cat > "$ODBCINI" << EOL
@@ -105,4 +147,7 @@ Database = ${SQL_DATABASE}
 EOL
 
 # Add FreeTDS bin to PATH
-export PATH=$PATH:~/.apt/usr/bin
+export PATH=$PATH:/app/.apt/usr/bin
+
+echo "Finished setupDB.sh script"
+ecgh 0

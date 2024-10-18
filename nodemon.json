@@ -1,6 +1,6 @@
 {
   "watch": [
-    "**/*.sh",
+    "scripts/*.sh",
     "package.json",
     "src/server.js",
     "nodemon.json",

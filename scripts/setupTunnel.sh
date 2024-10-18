@@ -1,4 +1,5 @@
 #!/bin/bash
+echo "Starting setupTunnel.sh script"
 set -e  # Exit immediately if a command exits with a non-zero status
 # set -x  # Print commands and their arguments as they are executed
 
@@ -92,7 +93,6 @@ check_and_print_variable "SSH_TUNNEL_FORWARD"
 check_and_print_variable "SSH_TUNNEL_PORT"
 check_and_print_variable "SSH_TUNNEL_TARGET"
 check_and_print_variable "PRIVATE_SSH_KEY"
-check_and_print_variable "SQL_DATABASE"
 
 mkdir -p ~/.ssh
 chmod 700 ~/.ssh
@@ -265,4 +265,5 @@ echo $! > ~/tunnel_manager.pid
 echo "Tunnel setup and restart mechanism initiated in background. Manager PID: $(cat ~/tunnel_manager.pid)"
 
 # Exit immediately for all systems
+echo "Finished setupTunnel.sh script"
 exit 0
