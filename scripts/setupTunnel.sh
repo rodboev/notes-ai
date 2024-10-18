@@ -85,49 +85,15 @@ check_and_print_variable() {
     fi
 }
 
-# ODBC and FreeTDS Setup
-export ODBCSYSINI=~/.apt/etc
-export ODBCINI=~/.apt/etc/odbc.ini
-export FREETDSCONF=~/.apt/etc/freetds/freetds.conf
-export LD_LIBRARY_PATH=~/.apt/usr/lib/x86_64-linux-gnu:~/.apt/usr/lib/x86_64-linux-gnu/odbc:$LD_LIBRARY_PATH
+# SSH Tunnel Setup
+echo "Setting up SSH tunnel..."
 
-# Check and print all required variables
 check_and_print_variable "SSH_TUNNEL_FORWARD"
 check_and_print_variable "SSH_TUNNEL_PORT"
 check_and_print_variable "SSH_TUNNEL_TARGET"
 check_and_print_variable "PRIVATE_SSH_KEY"
 check_and_print_variable "SQL_DATABASE"
-check_and_print_variable "ODBCSYSINI"
-check_and_print_variable "ODBCINI"
-check_and_print_variable "FREETDSCONF"
-check_and_print_variable "LD_LIBRARY_PATH"
 
-mkdir -p ~/.apt/etc/freetds
-echo "[global]
-tds version = 7.4
-" > ~/.apt/etc/freetds/freetds.conf
-
-mkdir -p $ODBCSYSINI
-cat > "$ODBCSYSINI/odbcinst.ini" << EOL
-[FreeTDS]
-Description = FreeTDS Driver
-Driver = ~/.apt/usr/lib/x86_64-linux-gnu/odbc/libtdsodbc.so
-Setup = ~/.apt/usr/lib/x86_64-linux-gnu/odbc/libtdsS.so
-EOL
-
-cat > "$ODBCINI" << EOL
-[MSSQL]
-Driver = FreeTDS
-Server = 127.0.0.1
-Port = 1433
-Database = ${SQL_DATABASE}
-EOL
-
-# Add FreeTDS bin to PATH
-export PATH=$PATH:~/.apt/usr/bin
-
-# SSH Tunnel Setup
-echo "Setting up SSH tunnel..."
 mkdir -p ~/.ssh
 chmod 700 ~/.ssh
 
