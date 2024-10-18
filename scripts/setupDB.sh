@@ -27,7 +27,7 @@ load_env_file() {
     # Use a while loop to read the file line by line
     while IFS= read -r line || [[ -n "$line" ]]; do
         # Skip comments and empty lines
-        if [[ $line =/app ^#.*$ ]] || [[ -z $line ]]; then
+        if [[ $line =~ ^#.*$ ]] || [[ -z $line ]]; then
             continue
         fi
         # Extract variable name and value
