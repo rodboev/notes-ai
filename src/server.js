@@ -12,7 +12,7 @@ import https from 'node:https'
 dotenv.config({ path: path.resolve(process.cwd(), '.env') })
 dotenv.config({ path: path.resolve(process.cwd(), '.env.local'), override: true })
 
-const hostname = 'localhost'
+const hostname = process.env.HOSTNAME || 'localhost'
 const port = process.env.PORT || 3000
 const dev = process.env.NODE_ENV !== 'production'
 
@@ -133,7 +133,7 @@ const startServer = (port) => {
 
       // Truncate fingerprints query string
       if (logMessage.includes('?fingerprints=')) {
-        logMessage = logMessage.substring(0, 60) + '...'
+        logMessage = `${logMessage.substring(0, 60)}...`
       }
 
       // Skip logging for specific routes

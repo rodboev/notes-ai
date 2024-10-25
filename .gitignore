@@ -40,6 +40,9 @@ next-env.d.ts
 # TinyMCE local files
 /src/app/tinymce
 
+# certificates
+certificates/
+
 tunnel.log
 ssh_tunnel.pid
 tunnel_manager.pid
