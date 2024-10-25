@@ -47,28 +47,19 @@ const connectionString = `Driver={FreeTDS};
   Connect Timeout=60;`.replace(/\s+/g, ' ')
 
 const config = {
-  server: process.env.SQL_SERVER || '127.0.0.1',
-  port: Number.parseInt(process.env.SQL_PORT) || 1433,
-  database: process.env.SQL_DATABASE,
-  user: process.env.SQL_USERNAME,
-  password: process.env.SQL_PASSWORD,
+  server: '127.0.0.1',
+  port: 1433,
+  database: 'PestPac6681',
+  user: '116386_u002',
+  password: 'dzyttd7U633z',
   options: {
     enableArithAbort: true,
-    encrypt: false, // Changed from true to false
+    encrypt: true,
     trustServerCertificate: true,
-    driver: 'FreeTDS',
-    tdsVersion: '7.4',
-    connectTimeout: 60000,
-    requestTimeout: 60000,
-    keepAlive: true,
-    keepAliveInterval: 30000,
+    cryptoCredentialsDetails: {
+      minVersion: 'TLSv1',
+    },
   },
-  pool: {
-    max: 10,
-    min: 0,
-    idleTimeoutMillis: 30000,
-  },
-  connectionString,
 }
 
 // Add new connection management

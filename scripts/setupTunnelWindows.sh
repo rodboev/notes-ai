@@ -68,10 +68,10 @@ check_and_print_variable "SSH_TUNNEL_PORT"
 check_and_print_variable "SSH_TUNNEL_TARGET"
 check_and_print_variable "PRIVATE_SSH_KEY"
 
-mkdir -p ~/.ssh && chmod 700 ~/.ssh
-echo "$PRIVATE_SSH_KEY" > ~/.ssh/id_rsa && chmod 600 ~/.ssh/id_rsa
-echo "First 3 lines of ~/.ssh/id_rsa:"
-head -n 3 ~/.ssh/id_rsa
+mkdir -p /c/Users/Rod/.ssh && chmod 700 /c/Users/Rod/.ssh
+echo "$PRIVATE_SSH_KEY" > /c/Users/Rod/.ssh/id_rsa && chmod 600 /c/Users/Rod/.ssh/id_rsa
+echo "First 3 lines of /c/Users/Rod/.ssh/id_rsa:"
+head -n 3 /c/Users/Rod/.ssh/id_rsa
 
 # Function to check if the tunnel is running
 is_tunnel_running() {
@@ -92,7 +92,8 @@ kill_existing_tunnels() {
         fi
     done
 
-    ssh_pids=($(tasklist //FI "IMAGENAME eq ssh.exe" //FO CSV //NH | findstr /I "ssh.exe" | awk -F'","' '{print $2}' 2> /dev/null))
+    # Redirect both stdout and stderr to null for the findstr command
+    ssh_pids=($(tasklist //FI "IMAGENAME eq ssh.exe" //FO CSV //NH | findstr /I "ssh.exe" 2>/dev/null | awk -F'","' '{print $2}' 2>/dev/null))
     for pid in "${ssh_pids[@]}"; do
         taskkill //F //PID $pid > /dev/null 2>&1
     done
@@ -101,37 +102,31 @@ kill_existing_tunnels() {
 
 # Function to start the SSH tunnel
 start_tunnel() {
-    local attempt=1
-    local max_attempts=3
-
     kill_existing_tunnels
 
-    while [ $attempt -le $max_attempts ]; do
-        echo "Attempt $attempt to start SSH tunnel..."
-        
-        ssh -v -N -L $SSH_TUNNEL_FORWARD -i ~/.ssh/id_rsa -o StrictHostKeyChecking=no -p $SSH_TUNNEL_PORT $SSH_TUNNEL_TARGET > ~/ssh_tunnel.log 2>&1 &
-        local tunnel_pid=$!
-        echo $tunnel_pid > ~/ssh_tunnel.pid
-        
-        sleep 5
-        
-        if netstat -ano | findstr :1433 | findstr LISTENING > /dev/null; then
-            echo "Tunnel successfully established. PID: $tunnel_pid"
-            echo "SSH tunnel log:"
-            cat ~/ssh_tunnel.log
-            return 0
-        fi
+    echo "Starting SSH tunnel..."
+    
+    # Added ServerAliveInterval and ServerAliveCountMax for connection stability
+    ssh -N -L "$SSH_TUNNEL_FORWARD" \
+        -i /c/Users/Rod/.ssh/id_rsa \
+        -o StrictHostKeyChecking=no \
+        -o ServerAliveInterval=60 \
+        -o ServerAliveCountMax=3 \
+        -o TCPKeepAlive=yes \
+        -p "$SSH_TUNNEL_PORT" \
+        "$SSH_TUNNEL_TARGET" > /dev/null 2>&1 &
+    
+    local tunnel_pid=$!
+    echo $tunnel_pid > ~/ssh_tunnel.pid
+    
+    sleep 5
+    
+    if netstat -ano | findstr :1433 | findstr LISTENING > /dev/null; then
+        echo "Tunnel successfully established. PID: $tunnel_pid"
+        return 0
+    fi
 
-        echo "Failed to establish tunnel. Retrying..."
-        echo "SSH tunnel log:"
-        cat ~/ssh_tunnel.log
-        kill_existing_tunnels
-        ((attempt++))
-    done
-
-    echo "Failed to establish tunnel after $max_attempts attempts."
-    echo "Final SSH tunnel log:"
-    cat ~/ssh_tunnel.log
+    echo "Failed to establish tunnel."
     return 1
 }
 
@@ -159,5 +154,3 @@ restart_tunnel() {
 # Save the PID of the background process
 echo $! > ~/tunnel_manager.pid
 echo "Tunnel setup and restart mechanism initiated in background. Manager PID: $(cat ~/tunnel_manager.pid)"
-
-echo "Finished setupTunnelWindows.sh script"
