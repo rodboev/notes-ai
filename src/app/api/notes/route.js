@@ -1,7 +1,8 @@
 // src/app/api/notes/route.js
 
 import { NextResponse } from 'next/server'
-import sql from 'mssql/msnodesqlv8.js'
+// import sql from 'mssql/msnodesqlv8.js
+import sql from 'mssql'
 import hash from 'object-hash'
 import { readFromDisk, writeToDisk } from '../../utils/diskStorage'
 import { firestore } from '../../../firebase'
@@ -275,5 +276,36 @@ export async function GET(request) {
         console.error('Error closing database connection:', closeErr)
       }
     }
+  }
+}
+
+async function fetchNotesFromDatabase(startDate, endDate) {
+  try {
+    console.log('Attempting to connect to the database...')
+    await sql.connect({
+      server: '127.0.0.1',
+      port: 1433,
+      user: process.env.SQL_USERNAME,
+      password: process.env.SQL_PASSWORD,
+      database: process.env.SQL_DATABASE,
+      options: {
+        encrypt: false,
+        trustServerCertificate: true,
+      },
+    })
+    console.log('Successfully connected to the database')
+
+    // ... (rest of the function)
+  } catch (error) {
+    console.error('Detailed database connection error:', error)
+    console.error('SQL connection config:', {
+      server: '127.0.0.1',
+      port: 1433,
+      user: process.env.SQL_USERNAME,
+      password: '******', // Don't log the actual password
+      database: process.env.SQL_DATABASE,
+    })
+    console.error('Error stack:', error.stack)
+    throw error
   }
 }
