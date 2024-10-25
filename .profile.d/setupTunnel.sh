@@ -4,58 +4,69 @@ echo "Starting setup.sh script"
 # SSH Tunnel Setup
 echo "Setting up SSH tunnel..."
 
+# Quick environment variable check
+echo "Verifying environment variables:"
+for var in SSH_TUNNEL_FORWARD SSH_TUNNEL_PORT SSH_TUNNEL_TARGET PRIVATE_SSH_KEY; do
+    if [ -z "${!var}" ]; then
+        echo "❌ Error: $var is not set in Heroku config"
+        exit 1
+    else
+        if [[ "$var" == *"KEY"* ]]; then
+            echo "✅ $var is set (value hidden)"
+        else
+            echo "✅ $var=${!var}"
+        fi
+    fi
+done
+
 # Create SSH directory and set permissions
 mkdir -p /app/.ssh
 chmod 700 /app/.ssh
 
-# Write SSH key without quotes and with proper newlines
+# Write SSH key with proper newlines and verify
 printf "%s" "$PRIVATE_SSH_KEY" | sed 's/\\n/\n/g' > /app/.ssh/id_rsa
 chmod 600 /app/.ssh/id_rsa
 
-# Verify SSH key was written correctly
-if [ ! -s /app/.ssh/id_rsa ]; then
-    echo "Error: SSH key file is empty"
-    cat /app/.ssh/id_rsa
+# Verify SSH key format
+echo "Verifying SSH key format:"
+if ! grep -q "BEGIN OPENSSH PRIVATE KEY" /app/.ssh/id_rsa; then
+    echo "❌ SSH key missing BEGIN marker"
     exit 1
 fi
+if ! grep -q "END OPENSSH PRIVATE KEY" /app/.ssh/id_rsa; then
+    echo "❌ SSH key missing END marker"
+    exit 1
+fi
+echo "✅ SSH key format verified"
 
-# Create a tunnel script with explicit SSH options
+# Test SSH connection before starting tunnel
+echo "Testing SSH connection..."
+ssh -v -i /app/.ssh/id_rsa \
+    -o StrictHostKeyChecking=no \
+    -p $SSH_TUNNEL_PORT \
+    $SSH_TUNNEL_TARGET echo "Test connection" > /tmp/ssh_test.log 2>&1
+
+if [ $? -ne 0 ]; then
+    echo "❌ SSH test connection failed:"
+    cat /tmp/ssh_test.log
+    exit 1
+fi
+echo "✅ SSH test connection successful"
+
+# Create tunnel script
 cat << 'EOF' > /app/ssh_tunnel.sh
 #!/bin/bash
 
 function start_tunnel() {
     echo "$(date): Starting SSH tunnel..."
     
-    # Test SSH connection first with verbose output
-    ssh -v -i /app/.ssh/id_rsa \
-        -o StrictHostKeyChecking=no \
-        -o ServerAliveInterval=30 \
-        -o ServerAliveCountMax=3 \
-        -o KexAlgorithms=curve25519-sha256@libssh.org,ecdh-sha2-nistp256,ecdh-sha2-nistp384,ecdh-sha2-nistp521,diffie-hellman-group14-sha1 \
-        -o Ciphers=chacha20-poly1305@openssh.com,aes256-gcm@openssh.com,aes128-gcm@openssh.com,aes256-ctr,aes192-ctr,aes128-ctr \
-        -o MACs=hmac-sha2-256-etm@openssh.com,hmac-sha2-512-etm@openssh.com,umac-128-etm@openssh.com \
-        -o Protocol=2 \
-        -o ConnectTimeout=10 \
-        -p $SSH_TUNNEL_PORT \
-        $SSH_TUNNEL_TARGET echo "Test connection" > /tmp/ssh_test.log 2>&1
-
-    if [ $? -ne 0 ]; then
-        echo "SSH test connection failed:"
-        cat /tmp/ssh_test.log
-        return 1
-    fi
-
-    # Start the actual tunnel with the same options
+    # Start tunnel with verbose logging
     ssh -v -N -L $SSH_TUNNEL_FORWARD \
         -i /app/.ssh/id_rsa \
         -o StrictHostKeyChecking=no \
         -o ServerAliveInterval=30 \
         -o ServerAliveCountMax=3 \
-        -o KexAlgorithms=curve25519-sha256@libssh.org,ecdh-sha2-nistp256,ecdh-sha2-nistp384,ecdh-sha2-nistp521,diffie-hellman-group14-sha1 \
-        -o Ciphers=chacha20-poly1305@openssh.com,aes256-gcm@openssh.com,aes128-gcm@openssh.com,aes256-ctr,aes192-ctr,aes128-ctr \
-        -o MACs=hmac-sha2-256-etm@openssh.com,hmac-sha2-512-etm@openssh.com,umac-128-etm@openssh.com \
-        -o Protocol=2 \
-        -o ConnectTimeout=10 \
+        -o ExitOnForwardFailure=yes \
         -p $SSH_TUNNEL_PORT \
         $SSH_TUNNEL_TARGET > /tmp/ssh_tunnel.log 2>&1 &
     
@@ -65,11 +76,12 @@ function start_tunnel() {
     # Wait for tunnel to establish
     sleep 5
     
-    if kill -0 $TUNNEL_PID 2>/dev/null; then
-        echo "$(date): Tunnel established successfully (PID: $TUNNEL_PID)"
+    # Verify tunnel is listening
+    if netstat -an | grep "LISTEN" | grep -q ":1433 "; then
+        echo "✅ Port 1433 is listening"
         return 0
     else
-        echo "$(date): Tunnel failed to establish"
+        echo "❌ Port 1433 is not listening"
         cat /tmp/ssh_tunnel.log
         return 1
     fi
@@ -80,7 +92,7 @@ if [ -f /tmp/tunnel.pid ]; then
     kill $(cat /tmp/tunnel.pid) 2>/dev/null || true
 fi
 
-# Start the tunnel with retries
+# Start tunnel with retries
 max_retries=3
 retry_count=0
 
@@ -94,10 +106,14 @@ while [ $retry_count -lt $max_retries ]; do
     sleep 5
 done
 
-# Sleep for 30 minutes then exit (PM2 will restart the script)
-sleep 1800
-echo "$(date): 30-minute timeout reached, exiting for restart"
-kill $(cat /tmp/tunnel.pid) 2>/dev/null || true
+# Monitor tunnel and restart if it fails
+while true; do
+    if ! netstat -an | grep "LISTEN" | grep -q ":1433 "; then
+        echo "$(date): Tunnel down, restarting..."
+        start_tunnel
+    fi
+    sleep 30
+done
 EOF
 
 chmod +x /app/ssh_tunnel.sh
@@ -108,7 +124,6 @@ pm2 delete ssh-tunnel 2>/dev/null || true
 pm2 start /app/ssh_tunnel.sh \
     --name "ssh-tunnel" \
     --time \
-    --cron "*/30 * * * *" \
     --no-autorestart \
     --max-restarts 1000
 
@@ -118,12 +133,15 @@ pm2 save
 echo "Waiting for tunnel to establish..."
 sleep 10
 
-# Verify tunnel is running
-if pm2 show ssh-tunnel | grep -q "online"; then
-    echo "Tunnel setup successful"
+# Final verification
+echo "Verifying tunnel status:"
+if netstat -an | grep "LISTEN" | grep -q ":1433 "; then
+    echo "✅ Port 1433 is listening"
 else
-    echo "Tunnel setup failed. Check logs with: pm2 logs ssh-tunnel"
+    echo "❌ Port 1433 is not listening"
+    echo "PM2 logs:"
     pm2 logs ssh-tunnel --lines 50
+    exit 1
 fi
 
 echo "setup.sh script completed"
