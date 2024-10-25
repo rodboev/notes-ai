@@ -1,12 +1,19 @@
 import { NextResponse } from 'next/server'
-import { readFile } from 'fs/promises'
-import { join } from 'path'
+import { readFile } from 'node:fs/promises'
+import { join } from 'node:path'
 
-export async function GET(request, { params }) {
-  const filePath = join(process.cwd(), 'src', 'app', 'tinymce', ...params.path)
-  // console.log('Requested TinyMCE file:', filePath)
-
+export async function GET(request) {
   try {
+    const url = new URL(request.url)
+    const path = url.pathname.replace('/api/tinymce/', '').split('/')
+
+    if (!Array.isArray(path) || path.length === 0) {
+      throw new Error('Invalid path')
+    }
+
+    const filePath = join(process.cwd(), 'src', 'app', 'tinymce', ...path)
+    // console.log('Requested TinyMCE file:', filePath)
+
     const fileContent = await readFile(filePath)
     const contentType = getContentType(filePath)
 

@@ -1,7 +1,7 @@
 // src/app/api/notes/route.js
 
 import { NextResponse } from 'next/server'
-import sql from 'mssql'
+import sql from 'mssql/msnodesqlv8.js'
 import hash from 'object-hash'
 import { readFromDisk, writeToDisk } from '../../utils/diskStorage'
 import { firestore } from '../../../firebase'
@@ -13,6 +13,8 @@ import {
   queueWrite,
 } from '../../utils/firestoreHelper'
 import { timestamp } from '../../utils/timestamp'
+
+sql.driver = 'FreeTDS'
 
 const DESIRED_NOTE_CODES = ['911 EMER', 'SERVICE', 'KEY ISSUE', 'ALERT', 'HHALERT']
 const isProduction = process.env.NEXT_PUBLIC_NODE_ENV === 'production'
@@ -26,147 +28,30 @@ function formatDate(dateString) {
   return date.toISOString().split('T')[0]
 }
 
-// Add this logging before creating connection
-console.log('Attempting to connect with:', {
-  server: process.env.SQL_SERVER,
-  port: process.env.SQL_PORT,
-  database: process.env.SQL_DATABASE,
-  // Don't log credentials
-})
-
-// Update the connectionString to be more explicit
-const connectionString = `Driver={FreeTDS};
-  Server=${process.env.SQL_SERVER};
-  Port=${process.env.SQL_PORT};
-  Database=${process.env.SQL_DATABASE};
-  Uid=${process.env.SQL_USERNAME};
-  Pwd=${process.env.SQL_PASSWORD};
-  TDS_Version=7.4;
-  Encrypt=yes;
-  TrustServerCertificate=yes;
-  Connect Timeout=60;`.replace(/\s+/g, ' ')
-
 const config = {
-  server: '127.0.0.1',
-  port: 1433,
-  database: 'PestPac6681',
-  user: '116386_u002',
-  password: 'dzyttd7U633z',
+  server: process.env.SQL_SERVER || '127.0.0.1',
+  port: Number.parseInt(process.env.SQL_PORT) || 1433,
+  database: process.env.SQL_DATABASE,
+  user: process.env.SQL_USERNAME,
+  password: process.env.SQL_PASSWORD,
   options: {
+    trustedConnection: false,
     enableArithAbort: true,
-    encrypt: true,
-    trustServerCertificate: true,
-    cryptoCredentialsDetails: {
-      minVersion: 'TLSv1',
-    },
+    encrypt: true, // Changed to true to enable encryption
+    trustServerCertificate: true, // Added to bypass certificate validation
+    driver: 'FreeTDS',
   },
+  connectionString: `Driver={FreeTDS};Server=${process.env.SQL_SERVER || '127.0.0.1'},${process.env.SQL_PORT || 1433};Database=${process.env.SQL_DATABASE};Uid=${process.env.SQL_USERNAME};Pwd=${process.env.SQL_PASSWORD};TDS_Version=7.4;`,
 }
 
-// Add new connection management
-let globalPool = null
-
-// Add this function to get detailed connection info
-function getConnectionInfo() {
-  return {
-    server: process.env.SQL_SERVER || '127.0.0.1',
-    port: Number.parseInt(process.env.SQL_PORT) || 1433,
-    database: process.env.SQL_DATABASE,
-    user: process.env.SQL_USERNAME,
-    // Don't include password for security reasons
-    options: {
-      enableArithAbort: true,
-      encrypt: true,
-      trustServerCertificate: true,
-      driver: 'FreeTDS',
-      tdsVersion: '7.4',
-      connectTimeout: 60000,
-      requestTimeout: 60000,
-    },
-  }
-}
-
-// Add this function at the beginning of the file
-function logError(error, context) {
-  console.error(`Error in ${context}:`, {
-    message: error.message,
-    name: error.name,
-    code: error.code,
-    stack: error.stack,
-  })
-}
-
-// Update the getConnection function
-async function getConnection() {
-  try {
-    console.log('getConnection: Starting connection attempt')
-    if (globalPool) {
-      try {
-        console.log('getConnection: Testing existing connection pool')
-        await globalPool.request().query('SELECT 1')
-        console.log('getConnection: Using existing connection pool')
-        return globalPool
-      } catch (err) {
-        logError(err, 'getConnection: Existing pool test')
-        console.log('getConnection: Existing connection failed, creating new one')
-        await globalPool.close()
-        globalPool = null
-      }
-    }
-
-    console.log(
-      'getConnection: Attempting to create new connection with config:',
-      getConnectionInfo(),
-    )
-    globalPool = await sql.connect(config)
-    console.log('getConnection: New connection pool created successfully')
-
-    // Test the new connection
-    await globalPool.request().query('SELECT 1')
-    console.log('getConnection: New connection tested successfully')
-
-    return globalPool
-  } catch (err) {
-    logError(err, 'getConnection')
-    throw err
-  }
-}
-
-// Update runQuery with more detailed logging
 async function runQuery(pool, query) {
-  const maxRetries = 3
-  let attempt = 0
-
-  while (attempt < maxRetries) {
-    try {
-      console.log(`runQuery: Attempt ${attempt + 1} - Starting query execution`)
-      const connection = await getConnection()
-      console.log(`runQuery: Attempt ${attempt + 1} - Connection obtained, executing query`)
-      const result = await connection.request().query(query)
-      console.log(`runQuery: Attempt ${attempt + 1} - Query executed successfully`)
-      return result.recordset
-    } catch (err) {
-      attempt++
-      console.error(`runQuery: Attempt ${attempt} failed:`, err)
-
-      if (attempt === maxRetries) {
-        console.error('runQuery: All retry attempts failed')
-        throw err
-      }
-
-      const delay = Math.min(1000 * 2 ** attempt, 10000)
-      console.log(`runQuery: Waiting ${delay}ms before retry`)
-      await new Promise((resolve) => setTimeout(resolve, delay))
-
-      if (globalPool) {
-        try {
-          console.log('runQuery: Closing existing pool before retry')
-          await globalPool.close()
-        } catch (closeErr) {
-          console.warn('runQuery: Error closing pool:', closeErr)
-        }
-        globalPool = null
-      }
-    }
+  try {
+    const result = await pool.request().query(query)
+    console.log('Query successful')
+    return result.recordset
+  } catch (err) {
+    console.error(`Error executing query "${query}":`, err)
+    throw err
   }
 }
 
@@ -307,7 +192,6 @@ async function getNotesByFingerprints(fingerprints) {
   return foundNotes
 }
 
-// Update the GET function with more logging
 export async function GET(request) {
   const { searchParams } = new URL(request.url)
   let startDate = searchParams.get('startDate')
@@ -354,15 +238,12 @@ export async function GET(request) {
   }
 
   // If not in cache, fetch from database
-  let connection
+  let pool
   try {
-    console.log('GET: Fetching notes from database...')
-    connection = await getConnection()
-    console.log('GET: Connection established successfully')
+    console.log('Fetching notes from database...')
+    pool = await sql.connect(config)
 
-    console.log('GET: Executing getJoinedNotes query')
-    const fetchedNotes = await getJoinedNotes(connection, startDate, formattedQueryEndDate)
-    console.log(`GET: Fetched ${fetchedNotes.length} notes from database`)
+    const fetchedNotes = await getJoinedNotes(pool, startDate, formattedQueryEndDate)
 
     const transformedNotes = transformNotes(fetchedNotes)
       .filter((note) => note.code === '911 EMER')
@@ -377,25 +258,22 @@ export async function GET(request) {
     // Update the cache with new notes
     await saveNotes(notesWithFingerprints)
 
-    console.log(`GET: Returning ${notesWithFingerprints.length} notes from database`)
-    return NextResponse.json({
-      notes: notesWithFingerprints,
-      connectionInfo: getConnectionInfo(),
-      databaseFetchTime: new Date().toISOString(),
-    })
+    console.log(`Returning ${notesWithFingerprints.length} notes from database`)
+    return NextResponse.json(notesWithFingerprints)
   } catch (error) {
-    logError(error, 'GET')
+    console.error('Error fetching from database:', error)
     return NextResponse.json(
-      {
-        error: 'Internal Server Error',
-        details: error.message,
-        stack: error.stack,
-        connectionInfo: getConnectionInfo(),
-        errorTime: new Date().toISOString(),
-      },
+      { error: 'Internal Server Error', details: error.message },
       { status: 500 },
     )
   } finally {
-    console.log('GET: Request processing completed')
+    if (pool) {
+      try {
+        await pool.close()
+        console.log('Database connection closed')
+      } catch (closeErr) {
+        console.error('Error closing database connection:', closeErr)
+      }
+    }
   }
 }

@@ -132,14 +132,17 @@ const startServer = (port) => {
       let logMessage = `${req.method} ${req.url}`
 
       // Truncate fingerprints query string
-      if ((logMessage = logMessage.substring(0, 60) + '...'))
-        if (
-          pathname !== '/_next/webpack-hmr' &&
-          !(pathname === '/api/tinymce/' && req.method === 'GET')
-        ) {
-          // Skip logging for specific routes
-          console.log(logMessage)
-        }
+      if (logMessage.includes('?fingerprints=')) {
+        logMessage = logMessage.substring(0, 60) + '...'
+      }
+
+      // Skip logging for specific routes
+      if (
+        pathname !== '/_next/webpack-hmr' &&
+        !(pathname === '/api/tinymce/' && req.method === 'GET')
+      ) {
+        console.log(logMessage)
+      }
 
       if (pathname === '/_next/webpack-hmr') {
         console.log('Webpack HMR request received')

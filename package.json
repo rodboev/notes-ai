@@ -7,9 +7,9 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "dev": "concurrently -n \"Tunnel,Express,DB\" -c \"greenBright,redBright,blueBright\" \"bash scripts/setupTunnelWindows.sh\" \"nodemon src/server.js\" \"bash scripts/setupDB.sh\"",
-    "build": "next build && bash scripts/setupTunnel.sh > tunnel.log 2>&1 && bash scripts/setupDB.sh",
-    "start": "node src/server.js",
+    "dev": "concurrently -n \"Tunnel,Server\" -c \"blue,red\" \"bash scripts/setupTunnelWindows.sh\" \"nodemon src/server.js\"",
+    "build": "next build",
+    "start": "npx cross-env NODE_ENV=production node src/server.js",
     "lint": "next lint",
     "postinstall": "node scripts/copyTinyMCE.js"
   },

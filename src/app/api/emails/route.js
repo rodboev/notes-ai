@@ -230,9 +230,6 @@ export async function GET(request) {
           const fingerprintsToFetch = validRequestedFingerprints.filter((fp) => !emailCache[fp])
 
           if (fingerprintsToFetch.length > 0) {
-            console.log(
-              `${timestamp()} Fetching notes for fingerprints: ${fingerprintsToFetch.join(',')}`,
-            )
             const notesToProcess = await fetchWithErrorHandling(
               `fingerprints=${fingerprintsToFetch.join(',')}`,
             )
