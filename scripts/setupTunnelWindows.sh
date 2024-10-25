@@ -109,23 +109,29 @@ start_tunnel() {
     while [ $attempt -le $max_attempts ]; do
         echo "Attempt $attempt to start SSH tunnel..."
         
-        ssh -N -L $SSH_TUNNEL_FORWARD -i ~/.ssh/id_rsa -o StrictHostKeyChecking=no -p $SSH_TUNNEL_PORT $SSH_TUNNEL_TARGET > ~/ssh_tunnel.log 2>&1 &
+        ssh -v -N -L $SSH_TUNNEL_FORWARD -i ~/.ssh/id_rsa -o StrictHostKeyChecking=no -p $SSH_TUNNEL_PORT $SSH_TUNNEL_TARGET > ~/ssh_tunnel.log 2>&1 &
         local tunnel_pid=$!
         echo $tunnel_pid > ~/ssh_tunnel.pid
         
-        sleep 1
+        sleep 5
         
         if netstat -ano | findstr :1433 | findstr LISTENING > /dev/null; then
             echo "Tunnel successfully established. PID: $tunnel_pid"
+            echo "SSH tunnel log:"
+            cat ~/ssh_tunnel.log
             return 0
         fi
 
         echo "Failed to establish tunnel. Retrying..."
+        echo "SSH tunnel log:"
+        cat ~/ssh_tunnel.log
         kill_existing_tunnels
         ((attempt++))
     done
 
     echo "Failed to establish tunnel after $max_attempts attempts."
+    echo "Final SSH tunnel log:"
+    cat ~/ssh_tunnel.log
     return 1
 }
 
