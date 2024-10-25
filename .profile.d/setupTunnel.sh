@@ -18,7 +18,9 @@ head -n 3 /app/.ssh/id_rsa
 # Function to start tunnel
 start_tunnel() {
     echo "Starting SSH tunnel..."
-    ssh -N -L "$SSH_TUNNEL_FORWARD" -p "$SSH_TUNNEL_PORT" "$SSH_TUNNEL_TARGET" > /app/tunnel.log 2>&1 &
+    ssh -N -L "$SSH_TUNNEL_FORWARD" -p "$SSH_TUNNEL_PORT" "$SSH_TUNNEL_TARGET" \
+        -o StrictHostKeyChecking=no \
+        -o UserKnownHostsFile=/dev/null > /app/tunnel.log 2>&1 &
     TUNNEL_PID=$!
     
     # Wait briefly for tunnel to establish
