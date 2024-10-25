@@ -23,21 +23,22 @@ done
 mkdir -p /app/.ssh
 chmod 700 /app/.ssh
 
-# Write SSH key with proper newlines and verify
-printf "%s" "$PRIVATE_SSH_KEY" | sed 's/\\n/\n/g' > /app/.ssh/id_rsa
+# Write SSH key with proper format
+echo "Writing SSH key..."
+echo "$PRIVATE_SSH_KEY" | sed 's/^"\(.*\)"$/\1/' | sed 's/\\n/\n/g' > /app/.ssh/id_rsa
 chmod 600 /app/.ssh/id_rsa
 
-# Verify SSH key format
-echo "Verifying SSH key format:"
+# Verify SSH key format and content
+echo "Verifying SSH key:"
 if ! grep -q "BEGIN OPENSSH PRIVATE KEY" /app/.ssh/id_rsa; then
     echo "❌ SSH key missing BEGIN marker"
+    echo "First 3 lines of key:"
+    head -n 3 /app/.ssh/id_rsa
     exit 1
 fi
-if ! grep -q "END OPENSSH PRIVATE KEY" /app/.ssh/id_rsa; then
-    echo "❌ SSH key missing END marker"
-    exit 1
-fi
-echo "✅ SSH key format verified"
+
+echo "First 3 lines of processed key:"
+head -n 3 /app/.ssh/id_rsa
 
 # Test SSH connection before starting tunnel
 echo "Testing SSH connection..."

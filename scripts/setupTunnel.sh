@@ -22,19 +22,20 @@ chmod 700 ~/.ssh
 
 # Write SSH key
 echo "Writing SSH key..."
-echo "$PRIVATE_SSH_KEY" > ~/.ssh/id_rsa_b64
-base64 -d ~/.ssh/id_rsa_b64 > ~/.ssh/id_rsa
+echo "$PRIVATE_SSH_KEY" | sed 's/^"\(.*\)"$/\1/' | sed 's/\\n/\n/g' > ~/.ssh/id_rsa
 chmod 600 ~/.ssh/id_rsa
-rm ~/.ssh/id_rsa_b64
 
-# Verify SSH key format
-echo "Verifying SSH key format:"
+# Verify SSH key format and content
+echo "Verifying SSH key:"
 if ! grep -q "BEGIN OPENSSH PRIVATE KEY" ~/.ssh/id_rsa; then
     echo "❌ SSH key missing BEGIN marker"
-    echo "Key content (first line):"
-    head -n 1 ~/.ssh/id_rsa
+    echo "First 3 lines of key:"
+    head -n 3 ~/.ssh/id_rsa
     exit 1
 fi
+
+echo "First 3 lines of processed key:"
+head -n 3 ~/.ssh/id_rsa
 
 # Create tunnel script
 cat << 'EOF' > ~/tunnel.sh
