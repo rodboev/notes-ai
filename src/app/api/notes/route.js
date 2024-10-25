@@ -1,8 +1,7 @@
 // src/app/api/notes/route.js
 
 import { NextResponse } from 'next/server'
-// import sql from 'mssql/msnodesqlv8.js
-import sql from 'mssql'
+import sql from 'mssql/msnodesqlv8.js'
 import hash from 'object-hash'
 import { readFromDisk, writeToDisk } from '../../utils/diskStorage'
 import { firestore } from '../../../firebase'
@@ -11,7 +10,6 @@ import {
   firestoreBatchGet,
   firestoreBatchWrite,
   firestoreGetAllDocs,
-  queueWrite,
 } from '../../utils/firestoreHelper'
 import { timestamp } from '../../utils/timestamp'
 
@@ -147,21 +145,27 @@ async function loadNotes() {
 }
 
 async function saveNotes(notes) {
-  console.warn(`${timestamp()} Saving notes to disk and queueing for Firestore`)
+  console.warn(`${timestamp()} Saving notes to disk and Firestore`)
 
   const diskNotes = await readFromDisk('notes.json')
-  const newNotes = notes.filter(
-    (note) => !diskNotes.some((diskNote) => diskNote.fingerprint === note.fingerprint),
-  )
+  const hasChanges = !diskNotes || JSON.stringify(diskNotes) !== JSON.stringify(notes)
 
-  if (newNotes.length > 0) {
-    await writeToDisk('notes.json', [...diskNotes, ...newNotes])
-    console.log(`${timestamp()} Saved ${newNotes.length} new notes to disk`)
+  if (hasChanges) {
+    await writeToDisk('notes.json', notes)
+    console.log(`${timestamp()} Saved ${notes.length} notes to disk`)
 
-    console.log(`${timestamp()} Queueing ${newNotes.length} notes for Firestore write`)
-    queueWrite('notes', newNotes)
+    console.log(`${timestamp()} Saving notes to Firestore`)
+    const { validOperations, skippedOperations, error } = await firestoreBatchWrite('notes', notes)
+
+    if (error) {
+      console.error('Error during batch write:', error)
+    } else {
+      console.log(
+        `${timestamp()} Saved ${validOperations} notes to Firestore, skipped ${skippedOperations}`,
+      )
+    }
   } else {
-    console.log(`${timestamp()} No new notes to save`)
+    console.log(`${timestamp()} No changes detected, skipping save operation`)
   }
 }
 
@@ -227,8 +231,8 @@ export async function GET(request) {
   const formattedQueryEndDate = queryEndDate.toISOString().split('T')[0]
 
   // Try to get stored notes first
-  const allNotes = await loadNotes()
-  const notes = allNotes.filter(
+  let allNotes = await loadNotes()
+  let notes = allNotes.filter(
     (note) =>
       note.date >= startDate && note.date < formattedQueryEndDate && note.code === '911 EMER',
   )
@@ -244,23 +248,24 @@ export async function GET(request) {
     console.log('Fetching notes from database...')
     pool = await sql.connect(config)
 
-    const fetchedNotes = await getJoinedNotes(pool, startDate, formattedQueryEndDate)
+    notes = await getJoinedNotes(pool, startDate, formattedQueryEndDate)
 
-    const transformedNotes = transformNotes(fetchedNotes)
+    notes = transformNotes(notes)
       .filter((note) => note.code === '911 EMER')
       .sort((a, b) => new Date(a.date) - new Date(b.date))
 
     // Add fingerprint to each note
-    const notesWithFingerprints = transformedNotes.map((note) => ({
+    notes = notes.map((note) => ({
       ...note,
       fingerprint: hash(note),
     }))
 
     // Update the cache with new notes
-    await saveNotes(notesWithFingerprints)
+    allNotes = [...allNotes, ...notes]
+    await saveNotes(allNotes)
 
-    console.log(`Returning ${notesWithFingerprints.length} notes from database`)
-    return NextResponse.json(notesWithFingerprints)
+    console.log(`Returning ${notes.length} notes from database`)
+    return NextResponse.json(notes)
   } catch (error) {
     console.error('Error fetching from database:', error)
     return NextResponse.json(
@@ -276,36 +281,5 @@ export async function GET(request) {
         console.error('Error closing database connection:', closeErr)
       }
     }
-  }
-}
-
-async function fetchNotesFromDatabase(startDate, endDate) {
-  try {
-    console.log('Attempting to connect to the database...')
-    await sql.connect({
-      server: '127.0.0.1',
-      port: 1433,
-      user: process.env.SQL_USERNAME,
-      password: process.env.SQL_PASSWORD,
-      database: process.env.SQL_DATABASE,
-      options: {
-        encrypt: false,
-        trustServerCertificate: true,
-      },
-    })
-    console.log('Successfully connected to the database')
-
-    // ... (rest of the function)
-  } catch (error) {
-    console.error('Detailed database connection error:', error)
-    console.error('SQL connection config:', {
-      server: '127.0.0.1',
-      port: 1433,
-      user: process.env.SQL_USERNAME,
-      password: '******', // Don't log the actual password
-      database: process.env.SQL_DATABASE,
-    })
-    console.error('Error stack:', error.stack)
-    throw error
   }
 }
