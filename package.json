@@ -8,7 +8,8 @@
   "type": "module",
   "scripts": {
     "dev": "concurrently -n \"Tunnel,Express\" -c \"greenBright,redBright\" \"bash scripts/setupTunnel.sh\" \"nodemon src/server.js\"",
-    "build": "next build && bash scripts/setupTunnel.sh > tunnel.log 2>&1 && bash scripts/setupDB.sh",
+    "clean": "rimraf .next",
+    "build": "yarn clean && next build && bash scripts/setupTunnel.sh",
     "start": "node src/server.js",
     "lint": "next lint",
     "postinstall": "node scripts/copyTinyMCE.js"
@@ -39,6 +40,7 @@
     "react-dom": "^19.0.0-rc-09111202-20241011",
     "react-tailwindcss-datepicker": "^1.6.6",
     "react-textarea-autosize": "^8.5.3",
+    "rimraf": "^6.0.1",
     "tiktoken": "^1.0.15",
     "tinymce": "^7.3.0",
     "ws": "^8.18.0"
