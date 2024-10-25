@@ -38,18 +38,18 @@ echo "First 3 lines of processed key:"
 head -n 3 ~/.ssh/id_rsa
 
 # Create tunnel script
-cat << 'EOF' > ~/tunnel.sh
+cat << EOF > ~/tunnel.sh
 #!/bin/bash
 
 # Start tunnel
-ssh -vvv -N -L $SSH_TUNNEL_FORWARD \
-    -i ~/.ssh/id_rsa \
-    -o StrictHostKeyChecking=no \
-    -o ServerAliveInterval=30 \
-    -o ServerAliveCountMax=3 \
-    -o ExitOnForwardFailure=yes \
-    -p $SSH_TUNNEL_PORT \
-    $SSH_TUNNEL_TARGET
+ssh -vvv -N -L ${SSH_TUNNEL_FORWARD} \\
+    -i ~/.ssh/id_rsa \\
+    -o StrictHostKeyChecking=no \\
+    -o ServerAliveInterval=30 \\
+    -o ServerAliveCountMax=3 \\
+    -o ExitOnForwardFailure=yes \\
+    -p ${SSH_TUNNEL_PORT} \\
+    ${SSH_TUNNEL_TARGET}
 EOF
 
 chmod +x ~/tunnel.sh

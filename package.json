@@ -17,9 +17,12 @@
   "dependencies": {
     "@heroicons/react": "^2.1.5",
     "@openai/realtime-api-beta": "openai/openai-realtime-api-beta",
+    "@radix-ui/react-slot": "^1.1.0",
     "@tanstack/react-query": "^5.51.23",
     "@tinymce/tinymce-react": "^5.1.1",
     "axios": "^1.7.4",
+    "class-variance-authority": "^0.7.0",
+    "clsx": "^2.1.1",
     "cross-env": "^7.0.3",
     "dayjs": "^1.11.12",
     "dotenv": "^16.4.5",
@@ -41,6 +44,7 @@
     "react-tailwindcss-datepicker": "^1.6.6",
     "react-textarea-autosize": "^8.5.3",
     "rimraf": "^6.0.1",
+    "tailwind-merge": "^2.5.4",
     "tiktoken": "^1.0.15",
     "tinymce": "^7.3.0",
     "ws": "^8.18.0"

@@ -30,7 +30,7 @@ export default function CallButton({
     >
       {isPending ? (
         <>
-          <SpinnerIcon className="-m-1 -mb-2 h-5 w-5" />
+          <SpinnerIcon className="m-2 h-5 w-5" />
           <span>Starting</span>
         </>
       ) : !isThisCallActive ? (

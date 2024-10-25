@@ -11,6 +11,7 @@ import { useSingleEmail } from '../hooks/useEmails'
 import CallButton from './CallButton'
 import { useVoice } from '../hooks/useVoice'
 import Transcription from './Transcription'
+import { Fragment } from 'react'
 
 const Email = ({
   initialEmail,
@@ -75,7 +76,7 @@ const Email = ({
 
   const showTranscription = activeCallFingerprint === note.fingerprint
 
-  const renderEmailContent = () => {
+  const renderEmailAndButtons = () => {
     if (isLoading) {
       return (
         <div className="flex h-64 items-center justify-center text-neutral-500">
@@ -128,19 +129,8 @@ const Email = ({
               )}
             </Editor>
           </div>
-        </>
-      )
-    }
-
-    return null
-  }
-
-  const renderButtons = () => {
-    return (
-      <div className="buttons mt-4 flex flex-col items-start sm:flex-row sm:items-center sm:justify-between">
-        <div className="mb-2 flex items-center space-x-2 sm:mb-0 sm:space-x-3">
-          {!email?.error ? (
-            <>
+          <div className="buttons mt-4 flex flex-col items-start sm:flex-row sm:items-center sm:justify-between">
+            <div className="mb-2 flex items-center space-x-2 sm:mb-0 sm:space-x-3">
               <SendEmailButton
                 fingerprint={noteFingerprint}
                 subject={email?.subject}
@@ -156,18 +146,32 @@ const Email = ({
                 connectConversation={connectConversation}
                 disconnectConversation={disconnectConversation}
               />
-            </>
-          ) : null}
-        </div>
-        {!email?.error && <FeedbackButton note={note} email={email} />}
-      </div>
-    )
+            </div>
+            {!email?.error && <FeedbackButton note={note} email={email} />}
+          </div>
+        </>
+      )
+    }
+
+    return null
   }
 
   return (
     <>
-      {showTranscription ? <Transcription items={items} /> : renderEmailContent()}
-      {renderButtons()}
+      {showTranscription ? (
+        <div className="space-y-4">
+          <Transcription items={items} />
+          <CallButton
+            note={note}
+            activeCallFingerprint={activeCallFingerprint}
+            isPending={isPending}
+            connectConversation={connectConversation}
+            disconnectConversation={disconnectConversation}
+          />
+        </div>
+      ) : (
+        renderEmailAndButtons()
+      )}
     </>
   )
 }
