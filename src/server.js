@@ -8,8 +8,7 @@ import dotenv from 'dotenv'
 import path from 'node:path'
 import fetch from 'node-fetch'
 import https from 'node:https'
-import net from 'node:net'
-import sql from 'mssql/msnodesqlv8.js'
+import { connectDB } from './lib/db.js'
 
 dotenv.config({ path: path.resolve(process.cwd(), '.env') })
 dotenv.config({ path: path.resolve(process.cwd(), '.env.local'), override: true })
@@ -125,38 +124,7 @@ const handleWebSocketConnection = async (ws) => {
 
 webSocketServer.on('connection', handleWebSocketConnection)
 
-function checkSshTunnel() {
-  return new Promise((resolve) => {
-    const client = new net.Socket()
-    client.setTimeout(5000) // 5 second timeout
-
-    client.connect(1433, '127.0.0.1', () => {
-      console.log('SSH tunnel is active')
-      client.destroy()
-      resolve(true)
-    })
-
-    client.on('error', (error) => {
-      console.error('SSH tunnel check failed:', error.message)
-      resolve(false)
-    })
-
-    client.on('timeout', () => {
-      console.error('SSH tunnel check timed out')
-      client.destroy()
-      resolve(false)
-    })
-  })
-}
-
 const startServer = async (port) => {
-  const isTunnelActive = await checkSshTunnel()
-  if (!isTunnelActive) {
-    console.error(
-      'SSH tunnel is not active. The server will start, but database connections may fail.',
-    )
-  }
-
   httpServer
     .on('request', async (req, res) => {
       const { pathname, query } = parse(req.url, true)
@@ -250,32 +218,6 @@ const startServer = async (port) => {
       .catch((error) => {
         console.error('Error preloading root path:', error)
       })
-  }
-}
-
-const config = {
-  server: process.env.SQL_SERVER,
-  port: process.env.SQL_PORT,
-  database: process.env.SQL_DATABASE,
-  user: process.env.SQL_USERNAME,
-  password: process.env.SQL_PASSWORD,
-  driver: 'msnodesqlv8',
-  options: {
-    trustedConnection: false,
-    enableArithAbort: true,
-    encrypt: false,
-    trustServerCertificate: true,
-  },
-}
-
-async function connectDB() {
-  try {
-    const pool = await sql.connect(config)
-    console.log('Connected to SQL Server')
-    return pool
-  } catch (err) {
-    console.error('Database connection error:', err)
-    throw err
   }
 }
 

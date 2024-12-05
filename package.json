@@ -2,14 +2,14 @@
   "name": "notes-ai",
   "version": "1.0.0",
   "engines": {
-    "node": "20.x"
+    "node": "22.x"
   },
   "private": true,
   "type": "module",
   "scripts": {
-    "dev": "concurrently -n \"Tunnel,Express\" -c \"greenBright,redBright\" \"bash scripts/setupTunnel.sh\" \"nodemon src/server.js\"",
+    "dev": "concurrently -n \"DB,Server\" -c \"cyan,green\" \"bash scripts/setupDB.sh\" \"nodemon src/server.js\"",
     "clean": "rimraf .next",
-    "build": "yarn clean && next build && bash scripts/setupTunnel.sh",
+    "build": "yarn clean && next build",
     "start": "node src/server.js",
     "lint": "next lint",
     "postinstall": "node scripts/copyTinyMCE.js"
