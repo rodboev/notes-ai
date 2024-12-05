@@ -1,7 +1,7 @@
 // src/app/api/notes/route.js
 
 import { NextResponse } from 'next/server'
-import sql from 'mssql/msnodesqlv8.js'
+import { connectDB } from '@/lib/db'
 import hash from 'object-hash'
 import { readFromDisk, writeToDisk } from '../../utils/diskStorage'
 import { firestore } from '../../../firebase'
@@ -12,8 +12,6 @@ import {
   firestoreGetAllDocs,
 } from '../../utils/firestoreHelper'
 import { timestamp } from '../../utils/timestamp'
-
-sql.driver = 'FreeTDS'
 
 const DESIRED_NOTE_CODES = ['911 EMER', 'SERVICE', 'KEY ISSUE', 'ALERT', 'HHALERT']
 const isProduction = process.env.NEXT_PUBLIC_NODE_ENV === 'production'
@@ -27,24 +25,15 @@ function formatDate(dateString) {
   return date.toISOString().split('T')[0]
 }
 
-const config = {
-  server: process.env.SQL_SERVER || '127.0.0.1',
-  port: Number.parseInt(process.env.SQL_PORT) || 1433,
-  database: process.env.SQL_DATABASE,
-  user: process.env.SQL_USERNAME,
-  password: process.env.SQL_PASSWORD,
-  options: {
-    trustedConnection: false,
-    enableArithAbort: true,
-    encrypt: true, // Changed to true to enable encryption
-    trustServerCertificate: true, // Added to bypass certificate validation
-    driver: 'FreeTDS',
-  },
-  connectionString: `Driver={FreeTDS};Server=${process.env.SQL_SERVER || '127.0.0.1'},${process.env.SQL_PORT || 1433};Database=${process.env.SQL_DATABASE};Uid=${process.env.SQL_USERNAME};Pwd=${process.env.SQL_PASSWORD};TDS_Version=7.4;`,
-}
-
 async function runQuery(pool, query) {
   try {
+    console.log('Executing query with connection:', {
+      server: '70.19.53.6',
+      port: 1022,
+      database: process.env.SQL_DATABASE,
+      user: process.env.SQL_USERNAME,
+    })
+
     const result = await pool.request().query(query)
     console.log('Query successful')
     return result.recordset
@@ -58,6 +47,8 @@ async function getJoinedNotes(pool, startDate, endDate, limit = 500) {
   const formattedStartDate = formatDate(startDate)
   const formattedEndDate = formatDate(endDate)
   const noteCodesString = DESIRED_NOTE_CODES.map((code) => `'${code}'`).join(', ')
+
+  console.log(`Fetching notes from ${formattedStartDate} to ${formattedEndDate}`)
 
   const query = `
     SELECT TOP ${limit}
@@ -246,7 +237,7 @@ export async function GET(request) {
   let pool
   try {
     console.log('Fetching notes from database...')
-    pool = await sql.connect(config)
+    pool = await connectDB()
 
     notes = await getJoinedNotes(pool, startDate, formattedQueryEndDate)
 

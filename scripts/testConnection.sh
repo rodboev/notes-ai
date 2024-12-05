@@ -131,61 +131,19 @@ verify_sql_connection() {
     fi
 }
 
-# Function to start the SSH tunnel
+# Function to start the SQL connection
 start_tunnel() {
-    echo "Starting tunnel..."
+    echo "Starting SQL connection..."
     kill_existing_tunnels
     
-    # Create SSH key file from environment variable
-    mkdir -p ~/.ssh
-    echo "$PRIVATE_SSH_KEY" > ~/.ssh/tunnel_key
-    chmod 600 ~/.ssh/tunnel_key
-    
-    # Add remote host to known hosts if not already there
-    ssh-keyscan -H "$SSH_TUNNEL_SERVER" >> ~/.ssh/known_hosts 2>/dev/null
-    
-    # Parse SSH_TUNNEL_FORWARD into components
-    IFS=':' read -r local_port target_host target_port <<< "$SSH_TUNNEL_FORWARD"
-    
-    echo "Setting up tunnel: $SSH_TUNNEL_SERVER:$SSH_TUNNEL_PORT -> $SQL_SERVER_PRIVATE_IP:$SQL_SERVER_PORT"
-    
-    # Connect to Alex's machine (SSH_TUNNEL_SERVER) instead of localhost
-    ssh -v -N \
-        -L "127.0.0.1:$SSH_TUNNEL_PORT:$SQL_SERVER_PRIVATE_IP:$SQL_SERVER_PORT" \
-        -L "[::1]:$SSH_TUNNEL_PORT:$SQL_SERVER_PRIVATE_IP:$SQL_SERVER_PORT" \
-        "alex@$SSH_TUNNEL_SERVER" \
-        -p 1022 \
-        -i ~/.ssh/tunnel_key \
-        -o StrictHostKeyChecking=accept-new \
-        -o ServerAliveInterval=60 \
-        -o ExitOnForwardFailure=yes \
-        -o GatewayPorts=yes \
-        -o PreferredAuthentications=publickey \
-        -o PasswordAuthentication=no \
-        -o UserKnownHostsFile=~/.ssh/known_hosts > ~/ssh_tunnel.log 2>&1 &
-        
-    local tunnel_pid=$!
-    echo $tunnel_pid > ~/ssh_tunnel.pid
-    
-    echo "Waiting for tunnel to establish..."
-    sleep 5
-    
-    # Clean up the temporary key file
-    rm -f ~/.ssh/tunnel_key
-    
-    # Verify the tunnel is working
-    if ! check_port "$SSH_TUNNEL_PORT"; then
-        echo "❌ Tunnel failed to start. Port $SSH_TUNNEL_PORT is not listening. Logs:"
-        cat ~/ssh_tunnel.log
-        return 1
-    fi
+    echo "Connecting to SQL Server through tunnel at $SSH_TUNNEL_SERVER:$SSH_TUNNEL_PORT"
     
     # Verify SQL connection using environment variables
-    if verify_sql_connection "127.0.0.1" "$SSH_TUNNEL_PORT" "$SQL_USERNAME" "$SQL_PASSWORD"; then
-        echo "✅ Tunnel and SQL connection verified"
+    if verify_sql_connection "$SSH_TUNNEL_SERVER" "$SSH_TUNNEL_PORT" "$SQL_USERNAME" "$SQL_PASSWORD"; then
+        echo "✅ SQL connection successful through tunnel"
         return 0
     else
-        echo "❌ Tunnel established but SQL connection failed"
+        echo "❌ Could not connect to SQL Server through tunnel"
         return 1
     fi
 }

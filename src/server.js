@@ -9,6 +9,7 @@ import path from 'node:path'
 import fetch from 'node-fetch'
 import https from 'node:https'
 import net from 'node:net'
+import sql from 'mssql/msnodesqlv8.js'
 
 dotenv.config({ path: path.resolve(process.cwd(), '.env') })
 dotenv.config({ path: path.resolve(process.cwd(), '.env.local'), override: true })
@@ -211,9 +212,15 @@ const startServer = async (port) => {
         socket.destroy()
       }
     })
-    .listen(port, () => {
+    .listen(port, hostname, () => {
       const protocol = isHttps ? 'https' : 'http'
-      console.log(`▲ Ready on ${protocol}://${hostname}:${port}`)
+      const wsProtocol = isHttps ? 'wss' : 'ws'
+      console.log(`▲ Server listening on:`)
+      console.log(`- ${protocol}://${hostname}:${port}`)
+      console.log(`- ${wsProtocol}://${hostname}:${port}/api/ws`)
+      console.log(`- Host: ${hostname}`)
+      console.log(`- Port: ${port}`)
+      console.log(`- HTTPS: ${isHttps ? 'enabled' : 'disabled'}`)
     })
     .on('error', (err) => {
       if (err.code === 'EADDRINUSE') {
@@ -246,8 +253,40 @@ const startServer = async (port) => {
   }
 }
 
+const config = {
+  server: process.env.SQL_SERVER,
+  port: process.env.SQL_PORT,
+  database: process.env.SQL_DATABASE,
+  user: process.env.SQL_USERNAME,
+  password: process.env.SQL_PASSWORD,
+  driver: 'msnodesqlv8',
+  options: {
+    trustedConnection: false,
+    enableArithAbort: true,
+    encrypt: false,
+    trustServerCertificate: true,
+  },
+}
+
+async function connectDB() {
+  try {
+    const pool = await sql.connect(config)
+    console.log('Connected to SQL Server')
+    return pool
+  } catch (err) {
+    console.error('Database connection error:', err)
+    throw err
+  }
+}
+
 ;(async () => {
   await app.prepare()
+  try {
+    await connectDB()
+  } catch (err) {
+    console.error('Failed to connect to database:', err)
+    // Continue starting the server even if DB fails
+  }
   startServer(port)
 })().catch((err) => {
   console.error('Failed to start server:', err)
