@@ -1,7 +1,7 @@
 // src/app/api/notes/route.js
 
 import { NextResponse } from 'next/server'
-import { connectDB } from '@/lib/db'
+import { getPool } from '@/lib/db'
 import hash from 'object-hash'
 import { readFromDisk, writeToDisk } from '../../utils/diskStorage'
 import { firestore } from '../../../firebase'
@@ -25,15 +25,9 @@ function formatDate(dateString) {
   return date.toISOString().split('T')[0]
 }
 
-async function runQuery(pool, query) {
+async function runQuery(query) {
   try {
-    console.log('Executing query with connection:', {
-      server: '70.19.53.6',
-      port: 1022,
-      database: process.env.SQL_DATABASE,
-      user: process.env.SQL_USERNAME,
-    })
-
+    const pool = await getPool()
     const result = await pool.request().query(query)
     console.log('Query successful')
     return result.recordset
@@ -90,7 +84,7 @@ async function getJoinedNotes(pool, startDate, endDate, limit = 500) {
     ORDER BY Notes.NoteDate ASC
   `
 
-  return await runQuery(pool, query)
+  return await runQuery(query)
 }
 
 function transformNotes(notes) {
@@ -237,7 +231,7 @@ export async function GET(request) {
   let pool
   try {
     console.log('Fetching notes from database...')
-    pool = await connectDB()
+    pool = await getPool()
 
     notes = await getJoinedNotes(pool, startDate, formattedQueryEndDate)
 

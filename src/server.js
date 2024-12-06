@@ -8,7 +8,7 @@ import dotenv from 'dotenv'
 import path from 'node:path'
 import fetch from 'node-fetch'
 import https from 'node:https'
-import { connectDB } from './lib/db.js'
+import { getPool } from './lib/db.js'
 
 dotenv.config({ path: path.resolve(process.cwd(), '.env') })
 dotenv.config({ path: path.resolve(process.cwd(), '.env.local'), override: true })
@@ -224,9 +224,12 @@ const startServer = async (port) => {
 ;(async () => {
   await app.prepare()
   try {
-    await connectDB()
+    // Test SQL connection
+    const pool = await getPool()
+    const result = await pool.request().query('SELECT TOP 5 * FROM Notes ORDER BY NoteDate DESC')
+    console.log('SQL Test Query Result:', result.recordset)
   } catch (err) {
-    console.error('Failed to connect to database:', err)
+    console.error('Database connection error:', err)
     // Continue starting the server even if DB fails
   }
   startServer(port)
