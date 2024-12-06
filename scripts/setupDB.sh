@@ -8,7 +8,7 @@ if [[ "$OSTYPE" == "msys" || "$OSTYPE" == "win32" ]]; then
     DRIVER_PATH="C:/Windows/System32/libsybdb-5.dll"
 else
     IS_WINDOWS=false
-    CONFIG_DIR="/app/.apt/etc"  # Changed to match Heroku's apt buildpack path
+    CONFIG_DIR="/app/.apt/etc"
     DRIVER_PATH="/app/.apt/usr/lib/x86_64-linux-gnu/odbc/libtdsodbc.so"
 fi
 
@@ -44,7 +44,7 @@ cat > "$CONFIG_DIR/odbc.ini" << EOL
 PestPac6681=FreeTDS
 
 [PestPac6681]
-Driver = FreeTDS
+Driver = /app/.apt/usr/lib/x86_64-linux-gnu/odbc/libtdsodbc.so
 Description = PestPac SQL Connection
 Server = 70.19.53.6
 Port = 1022
