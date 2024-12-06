@@ -8,7 +8,7 @@ if [[ "$OSTYPE" == "msys" || "$OSTYPE" == "win32" ]]; then
     DRIVER_PATH="C:/Windows/System32/libsybdb-5.dll"
 else
     IS_WINDOWS=false
-    CONFIG_DIR="/app/freetds"  # Changed from /app/.apt/etc
+    CONFIG_DIR="/app/.apt/etc"  # Changed to match Heroku's apt buildpack path
     DRIVER_PATH="/app/.apt/usr/lib/x86_64-linux-gnu/odbc/libtdsodbc.so"
 fi
 
@@ -53,11 +53,14 @@ TDS_Version = 7.4
 EOL
 
 # Set environment variables
-export ODBCSYSINI="$CONFIG_DIR"
-export ODBCINI="$CONFIG_DIR/odbc.ini"
-export FREETDSCONF="$CONFIG_DIR/freetds/freetds.conf"
-
-if [ "$IS_WINDOWS" = false ]; then
+if [ "$IS_WINDOWS" = true ]; then
+    export ODBCINI="$CONFIG_DIR/odbc.ini"
+    export ODBCINSTINI="$CONFIG_DIR/odbcinst.ini"
+    export FREETDSCONF="$CONFIG_DIR/freetds/freetds.conf"
+else
+    export ODBCSYSINI="$CONFIG_DIR"
+    export ODBCINI="$CONFIG_DIR/odbc.ini"
+    export FREETDSCONF="$CONFIG_DIR/freetds/freetds.conf"
     export LD_LIBRARY_PATH="/app/.apt/usr/lib/x86_64-linux-gnu:/app/.apt/usr/lib/x86_64-linux-gnu/odbc:$LD_LIBRARY_PATH"
 fi
 
