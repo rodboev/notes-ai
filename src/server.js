@@ -37,6 +37,13 @@ if (dev) {
   }
 } else {
   httpServer = createHttpServer()
+  isHttps = true
+  app.set('trust proxy', 1)
+}
+
+if (process.env.NODE_ENV === 'production') {
+  httpServer.set('trust proxy', 1)
+  httpServer.set('trust proxy', ['loopback', 'linklocal', 'uniquelocal'])
 }
 
 const webSocketServer = new WebSocketServer({ noServer: true })
@@ -54,9 +61,47 @@ let connectedClients = 0
 
 const log = (...args) => console.log('[WebSocket]', ...args)
 
-const handleWebSocketConnection = async (ws) => {
+const handleWebSocketConnection = async (ws, req) => {
+  if (process.env.NODE_ENV === 'production') {
+    console.log('WebSocket Headers:', {
+      'x-forwarded-proto': req.headers['x-forwarded-proto'],
+      'x-forwarded-for': req.headers['x-forwarded-for'],
+      'x-forwarded-port': req.headers['x-forwarded-port'],
+      host: req.headers.host,
+    })
+  }
+
+  const protocol = req.headers['x-forwarded-proto'] || 'ws'
+  log(`New WebSocket connection (${protocol}) established. Total clients: ${connectedClients + 1}`)
+
   connectedClients++
-  log(`New WebSocket connection established. Total clients: ${connectedClients}`)
+
+  // Add ping interval for Heroku
+  const pingInterval = setInterval(() => {
+    if (ws.readyState === ws.OPEN) {
+      ws.ping(() => {}) // Empty callback to handle pong response
+    }
+  }, 30000) // Send ping every 30 seconds
+
+  // Handle pong responses
+  ws.on('pong', () => {
+    log('Received pong from client')
+  })
+
+  // Clear ping interval on close
+  ws.on('close', () => {
+    clearInterval(pingInterval)
+    log('WebSocket connection closed')
+    client.disconnect()
+    connectedClients--
+  })
+
+  // Add error handling for failed pings
+  ws.on('error', (error) => {
+    log('WebSocket error:', error)
+    clearInterval(pingInterval)
+    ws.terminate()
+  })
 
   let RealtimeClient
   try {
@@ -98,12 +143,6 @@ const handleWebSocketConnection = async (ws) => {
     } else {
       messageHandler(data)
     }
-  })
-
-  ws.on('close', () => {
-    log('WebSocket connection closed')
-    client.disconnect()
-    connectedClients--
   })
 
   // Connect to OpenAI Realtime API
@@ -185,6 +224,15 @@ const startServer = async (port) => {
       const { pathname } = parse(req.url)
 
       if (pathname === '/api/ws') {
+        // Check if the connection is coming through Heroku's proxy
+        const isSecure = req.headers['x-forwarded-proto'] === 'https'
+
+        // Add headers that WebSocket clients will need
+        if (process.env.NODE_ENV === 'production') {
+          req.headers['x-forwarded-proto'] = 'wss'
+          socket.encrypted = true
+        }
+
         webSocketServer.handleUpgrade(req, socket, head, (ws) => {
           webSocketServer.emit('connection', ws, req)
         })
@@ -193,14 +241,21 @@ const startServer = async (port) => {
       }
     })
     .listen(port, hostname, () => {
-      const protocol = isHttps ? 'https' : 'http'
-      const wsProtocol = isHttps ? 'wss' : 'ws'
+      // In production, always log WSS since clients will connect via Heroku's SSL
+      const wsProtocol = process.env.NODE_ENV === 'production' ? 'wss' : isHttps ? 'wss' : 'ws'
+      const wsUrl =
+        process.env.NODE_ENV === 'production'
+          ? `${wsProtocol}://${hostname}/api/ws` // Remove port in production
+          : `${wsProtocol}://${hostname}:${port}/api/ws`
+
       console.log(`▲ Server listening on:`)
-      console.log(`- ${protocol}://${hostname}:${port}`)
-      console.log(`- ${wsProtocol}://${hostname}:${port}/api/ws`)
+      console.log(`- ${isHttps ? 'https' : 'http'}://${hostname}:${port}`)
+      console.log(`- ${wsUrl}`)
       console.log(`- Host: ${hostname}`)
       console.log(`- Port: ${port}`)
-      console.log(`- HTTPS: ${isHttps ? 'enabled' : 'disabled'}`)
+      console.log(
+        `- HTTPS: ${process.env.NODE_ENV === 'production' ? 'enabled (Heroku)' : isHttps ? 'enabled' : 'disabled'}`,
+      )
     })
     .on('error', (err) => {
       if (err.code === 'EADDRINUSE') {

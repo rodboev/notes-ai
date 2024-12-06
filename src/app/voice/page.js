@@ -22,11 +22,15 @@ const ConnectionIndicator = ({ url, wsStatus }) => {
   )
 }
 
-const getWsUrl = () => {
+export const getWsUrl = () => {
   if (typeof window === 'undefined') return 'ws://localhost/api/ws'
 
   const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:'
-  const host = window.location.host // This includes the port if it's not the default
+  const host =
+    process.env.NODE_ENV === 'production'
+      ? window.location.host // Uses Heroku domain without port
+      : `${window.location.hostname}:${process.env.PORT || 3000}`
+
   return `${protocol}//${host}/api/ws`
 }
 
@@ -50,9 +54,14 @@ export default function VoiceChat() {
         const response = await fetch('/api/ws')
         const data = await response.json()
         console.log('Server availability response:', data)
+
+        // Get the WebSocket URL
+        const wsUrl = getWsUrl()
+        console.log('WebSocket URL:', wsUrl)
+
         setIsServerAvailable(true)
         setWsStatus(`Available (${data.count} clients connected)`)
-        setRelayServerUrl(getWsUrl())
+        setRelayServerUrl(wsUrl)
       } catch (error) {
         console.error('Error checking server availability:', error)
         setIsServerAvailable(false)
@@ -69,7 +78,26 @@ export default function VoiceChat() {
   useEffect(() => {
     if (!relayServerUrl) return
 
-    clientRef.current = new RealtimeClient({ url: relayServerUrl })
+    console.log('Initializing RealtimeClient with URL:', relayServerUrl)
+
+    clientRef.current = new RealtimeClient({
+      url: relayServerUrl,
+      // Add WebSocket options for better connection handling
+      wsOptions: {
+        // Reconnection options
+        reconnect: true,
+        reconnectionAttempts: 5,
+        reconnectionDelay: 1000,
+        // Add custom headers if needed for Heroku
+        headers:
+          process.env.NODE_ENV === 'production'
+            ? {
+                'X-Forwarded-Proto': 'wss',
+              }
+            : undefined,
+      },
+    })
+
     const client = clientRef.current
     const wavStreamPlayer = wavStreamPlayerRef.current
 

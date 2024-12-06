@@ -40,7 +40,28 @@ export const useVoice = () => {
       try {
         await disconnectCurrentCall()
 
-        const client = new RealtimeClient({ url: getWsUrl() })
+        const client = new RealtimeClient({
+          url: getWsUrl(),
+          wsOptions: {
+            handshakeTimeout: 15000,
+            maxPayload: 64 * 1024,
+            perMessageDeflate: {
+              zlibDeflateOptions: {
+                chunkSize: 1024,
+                memLevel: 7,
+                level: 3,
+              },
+              zlibInflateOptions: {
+                chunkSize: 10 * 1024,
+              },
+              clientNoContextTakeover: true,
+              serverNoContextTakeover: true,
+              serverMaxWindowBits: 10,
+              concurrencyLimit: 10,
+              threshold: 1024,
+            },
+          },
+        })
         clientRef.current = client
         activeClientRef = client
         activeCall = note.fingerprint
