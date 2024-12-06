@@ -124,51 +124,63 @@ const handleWebSocketConnection = async (ws) => {
 
 webSocketServer.on('connection', handleWebSocketConnection)
 
+const handleRequest = async (req, res) => {
+  const { pathname, query } = parse(req.url, true)
+
+  // Add SSL redirect for production
+  if (process.env.NODE_ENV === 'production') {
+    const proto = req.headers['x-forwarded-proto']
+    if (proto && proto !== 'https') {
+      res.writeHead(301, { Location: `https://${req.headers.host}${req.url}` })
+      res.end()
+      return
+    }
+  }
+
+  // Prepare the log message
+  let logMessage = `${req.method} ${req.url}`
+
+  // Truncate fingerprints query string
+  if (logMessage.includes('?fingerprints=')) {
+    logMessage = `${logMessage.substring(0, 60)}...`
+  }
+
+  // Skip logging for specific routes
+  if (
+    pathname !== '/_next/webpack-hmr' &&
+    !(pathname === '/api/tinymce/' && req.method === 'GET')
+  ) {
+    console.log(logMessage)
+  }
+
+  if (pathname === '/_next/webpack-hmr') {
+    console.log('Webpack HMR request received')
+    console.log(req)
+  } else if (pathname === '/api/ws') {
+    // Handle the /api/ws request directly
+    res.writeHead(200, { 'Content-Type': 'application/json' })
+    const responseData = JSON.stringify({
+      status: 'available',
+      count: connectedClients,
+      port,
+    })
+    console.log('Sending response for /api/ws:', responseData)
+    res.end(responseData)
+  } else {
+    // Handle fingerprint for other routes
+    if (query.fingerprints) {
+      // Keep the original fingerprint in the request header
+      req.headers['x-fingerprint'] = query.fingerprints
+    }
+
+    // For all other routes, let Next.js handle the request
+    await handle(req, res, { pathname, query })
+  }
+}
+
 const startServer = async (port) => {
   httpServer
-    .on('request', async (req, res) => {
-      const { pathname, query } = parse(req.url, true)
-
-      // Prepare the log message
-      let logMessage = `${req.method} ${req.url}`
-
-      // Truncate fingerprints query string
-      if (logMessage.includes('?fingerprints=')) {
-        logMessage = `${logMessage.substring(0, 60)}...`
-      }
-
-      // Skip logging for specific routes
-      if (
-        pathname !== '/_next/webpack-hmr' &&
-        !(pathname === '/api/tinymce/' && req.method === 'GET')
-      ) {
-        console.log(logMessage)
-      }
-
-      if (pathname === '/_next/webpack-hmr') {
-        console.log('Webpack HMR request received')
-        console.log(req)
-      } else if (pathname === '/api/ws') {
-        // Handle the /api/ws request directly
-        res.writeHead(200, { 'Content-Type': 'application/json' })
-        const responseData = JSON.stringify({
-          status: 'available',
-          count: connectedClients,
-          port,
-        })
-        console.log('Sending response for /api/ws:', responseData)
-        res.end(responseData)
-      } else {
-        // Handle fingerprint for other routes
-        if (query.fingerprints) {
-          // Keep the original fingerprint in the request header
-          req.headers['x-fingerprint'] = query.fingerprints
-        }
-
-        // For all other routes, let Next.js handle the request
-        await handle(req, res, { pathname, query })
-      }
-    })
+    .on('request', handleRequest)
     .on('upgrade', (req, socket, head) => {
       const { pathname } = parse(req.url)
 
