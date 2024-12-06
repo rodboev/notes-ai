@@ -38,12 +38,6 @@ if (dev) {
 } else {
   httpServer = createHttpServer()
   isHttps = true
-  app.set('trust proxy', 1)
-}
-
-if (process.env.NODE_ENV === 'production') {
-  httpServer.set('trust proxy', 1)
-  httpServer.set('trust proxy', ['loopback', 'linklocal', 'uniquelocal'])
 }
 
 const webSocketServer = new WebSocketServer({ noServer: true })
