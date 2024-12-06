@@ -13,8 +13,8 @@ import { getPool } from './lib/db.js'
 dotenv.config({ path: path.resolve(process.cwd(), '.env') })
 dotenv.config({ path: path.resolve(process.cwd(), '.env.local'), override: true })
 
-const hostname = process.env.HOSTNAME || 'localhost'
-const port = process.env.PORT || 3000
+const hostname = process.env.NODE_ENV === 'production' ? '0.0.0.0' : 'localhost'
+const port = parseInt(process.env.PORT || '3000', 10)
 const dev = process.env.NODE_ENV !== 'production'
 
 let httpServer
