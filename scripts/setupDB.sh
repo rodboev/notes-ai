@@ -8,7 +8,7 @@ if [[ "$OSTYPE" == "msys" || "$OSTYPE" == "win32" ]]; then
     DRIVER_PATH="C:/Windows/System32/libsybdb-5.dll"
 else
     IS_WINDOWS=false
-    CONFIG_DIR="/app/.apt/etc"
+    CONFIG_DIR="/app/freetds"  # Changed from /app/.apt/etc
     DRIVER_PATH="/app/.apt/usr/lib/x86_64-linux-gnu/odbc/libtdsodbc.so"
 fi
 
@@ -46,21 +46,18 @@ PestPac6681=FreeTDS
 [PestPac6681]
 Driver = FreeTDS
 Description = PestPac SQL Connection
-Servername = 70.19.53.6
+Server = 70.19.53.6
 Port = 1022
 Database = ${SQL_DATABASE}
 TDS_Version = 7.4
 EOL
 
 # Set environment variables
-if [ "$IS_WINDOWS" = true ]; then
-    export ODBCINI="$CONFIG_DIR/odbc.ini"
-    export ODBCINSTINI="$CONFIG_DIR/odbcinst.ini"
-    export FREETDSCONF="$CONFIG_DIR/freetds/freetds.conf"
-else
-    export ODBCSYSINI="$CONFIG_DIR"
-    export ODBCINI="$CONFIG_DIR/odbc.ini"
-    export FREETDSCONF="$CONFIG_DIR/freetds/freetds.conf"
+export ODBCSYSINI="$CONFIG_DIR"
+export ODBCINI="$CONFIG_DIR/odbc.ini"
+export FREETDSCONF="$CONFIG_DIR/freetds/freetds.conf"
+
+if [ "$IS_WINDOWS" = false ]; then
     export LD_LIBRARY_PATH="/app/.apt/usr/lib/x86_64-linux-gnu:/app/.apt/usr/lib/x86_64-linux-gnu/odbc:$LD_LIBRARY_PATH"
 fi
 

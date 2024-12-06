@@ -32,6 +32,12 @@ async function getPool() {
         pool = null
       }
     }
+
+    console.log('Connecting with config:', {
+      ...config,
+      password: process.env.SQL_PASSWORD,
+    })
+
     pool = await sql.connect(config)
     return pool
   } catch (err) {
