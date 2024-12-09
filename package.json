@@ -7,10 +7,10 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "dev": "concurrently -n \"DB,Server\" -c \"cyan,green\" \"bash scripts/testDB.sh\" \"nodemon src/server.js\"",
+    "dev": "concurrently -n \"DB,Server\" -c \"cyan,green\" \"bash scripts/setupDB.sh\" \"nodemon src/server.js\"",
     "clean": "rimraf .next",
     "build": "yarn clean && next build",
-    "start": "bash scripts/testDB.sh && node src/server.js",
+    "start": "bash scripts/setupDB.sh && node src/server.js",
     "lint": "next lint",
     "postinstall": "node scripts/copyTinyMCE.js"
   },
