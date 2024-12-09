@@ -146,18 +146,12 @@ for file in "${files_to_check[@]}"; do
     fi
 done
 
-# Modify the sqlcmd test to include error handling
-if command -v sqlcmd &> /dev/null; then
-    echo "Testing SQL connection with sqlcmd..."
-    if sqlcmd -S "70.19.53.6,1022" -U "${SQL_USERNAME}" -P "${SQL_PASSWORD}" -d "${SQL_DATABASE}" \
-        -Q "SELECT TOP 1 * FROM Notes ORDER BY NoteDate DESC"; then
-        echo "✅ SQL connection test successful"
-    else
-        echo "❌ SQL connection test failed"
-        exit 1
-    fi
+# Test DB connection using existing db.js module
+echo "Testing SQL connection..."
+if node -e "import('./src/lib/db.js').then(({getPool}) => getPool().then(() => process.exit(0)).catch(() => process.exit(1)))"; then
+    echo "✅ SQL connection test successful"
 else
-    echo "⚠️ dbmate not found - please install it from https://github.com/amacneil/dbmate"
+    echo "❌ SQL connection test failed"
     exit 1
 fi
 
