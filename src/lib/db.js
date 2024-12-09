@@ -15,30 +15,19 @@ dotenv.config({
   override: true,
 })
 
-// Determine if we're on Windows or Linux
-const isWindows = process.platform === 'win32'
-
-// Different connection configs for Windows and Linux
-const config = isWindows
-  ? {
-      // Windows uses DSN
-      connectionString: `DSN=${process.env.SQL_DATABASE};UID=${process.env.SQL_USERNAME};PWD=${process.env.SQL_PASSWORD}`,
-      options: {
-        trustServerCertificate: true,
-        encrypt: false,
-        enableArithAbort: true,
-      },
-    }
-  : {
-      // Linux uses direct connection with FreeTDS
-      driver: '/app/.apt/usr/lib/x86_64-linux-gnu/odbc/libtdsodbc.so',
-      connectionString: `Driver=/app/.apt/usr/lib/x86_64-linux-gnu/odbc/libtdsodbc.so;Server=${process.env.FORWARDING_SERVER};Port=${process.env.SSH_TUNNEL_PORT};Database=${process.env.SQL_DATABASE};Uid=${process.env.SQL_USERNAME};Pwd=${process.env.SQL_PASSWORD};TDS_Version=7.4;`,
-      options: {
-        trustServerCertificate: true,
-        encrypt: false,
-        enableArithAbort: true,
-      },
-    }
+// Single connection config using SSH tunnel
+const config = {
+  server: process.env.SSH_TUNNEL_SERVER,
+  port: parseInt(process.env.SSH_TUNNEL_PORT),
+  database: process.env.SQL_DATABASE,
+  user: process.env.SQL_USERNAME,
+  password: process.env.SQL_PASSWORD,
+  options: {
+    trustServerCertificate: true,
+    encrypt: false,
+    enableArithAbort: true,
+  },
+}
 
 let pool = null
 
@@ -56,7 +45,7 @@ async function getPool() {
 
     console.log('Connecting with config:', {
       ...config,
-      connectionString: config.connectionString.replace(process.env.SQL_PASSWORD, '***hidden***'),
+      password: '***hidden***',
     })
 
     pool = await sql.connect(config)
