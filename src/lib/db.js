@@ -32,7 +32,7 @@ const config = isWindows
   : {
       // Linux uses direct connection with FreeTDS
       driver: '/app/.apt/usr/lib/x86_64-linux-gnu/odbc/libtdsodbc.so',
-      connectionString: `Driver=/app/.apt/usr/lib/x86_64-linux-gnu/odbc/libtdsodbc.so;Server=${process.env.FORWARDING_SERVER};Port=${process.env.SSH_TUNNEL_PORT};Database=${process.env.SQL_DATABASE};Uid=${process.env.SQL_USERNAME};Pwd=${process.env.SQL_PASSWORD};TDS_Version=7.4;`,
+      connectionString: `Driver=/app/.apt/usr/lib/x86_64-linux-gnu/odbc/libtdsodbc.so;Server=${process.env.SSH_TUNNEL_SERVER};Port=${process.env.SSH_TUNNEL_PORT};Database=${process.env.SQL_DATABASE};Uid=${process.env.SQL_USERNAME};Pwd=${process.env.SQL_PASSWORD};TDS_Version=7.4;`,
       options: {
         trustServerCertificate: true,
         encrypt: false,
